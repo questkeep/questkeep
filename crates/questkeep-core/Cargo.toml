@@ -14,7 +14,7 @@ base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
 # Watches the folders installed games are in (installs done in the store clients).
-notify = "8.2.1"
+notify = "9.0.0"
 # Text filters: regular expressions, matched in a custom SQL function; the version is the one
 # already locked.
 regex = "1.13.1"
