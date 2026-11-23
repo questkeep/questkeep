@@ -58,7 +58,7 @@ importers:
         version: 3.4.18
       lucide-solid:
         specifier: ^1.0.0
-        version: 1.75.0(solid-js@1.9.19)
+        version: 1.77.0(solid-js@1.9.19)
       marked:
         specifier: ^18.0.0
         version: 18.2.1
@@ -92,7 +92,7 @@ importers:
         version: 8.3.8(@types/node@26.6.6)
       vite-plugin-solid:
         specifier: ^2.0.0
-        version: 2.11.16(@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.2)(vitest@5.1.1(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6))))(solid-js@1.9.19)(vite@8.3.8(@types/node@26.6.6))
+        version: 2.11.17(@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.2)(vitest@5.1.1(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6))))(solid-js@1.9.19)(vite@8.3.8(@types/node@26.6.6))
       vitest:
         specifier: ^5.0.0
         version: 5.1.1(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6))
@@ -1180,8 +1180,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-solid@1.75.0:
-    resolution: {integrity: sha512-Udt2BCjNCtiWFJi2xXEc1wCL5JWNmn0Vl+b2xtz7Yxs8/F+XfpXqCsagfDu03A5kKzVPUajZYDyY+f/k27xbWw==}
+  lucide-solid@1.77.0:
+    resolution: {integrity: sha512-VHbTICLAwYdSbhlLJp1mEfOS1gjWL8MEXyGbqgh4oFd/si6RTBCM4B8B8D3T5ag2fDUJtUr2xEVJq4zdFSt0og==}
     peerDependencies:
       solid-js: ^1.4.7
 
@@ -1382,8 +1382,8 @@ packages:
     peerDependencies:
       browserslist: '>= 4.21.0'
 
-  vite-plugin-solid@2.11.16:
-    resolution: {integrity: sha512-qguFUmqY2ICuoGHrZjm+cWpvKkqVyWDMptipC/BIEGr9q6wEzwTWYOjM9pEWJ+yoTuF6T5OpysI2Okdy7rsVlQ==}
+  vite-plugin-solid@2.11.17:
+    resolution: {integrity: sha512-RBFS1nSdsL+X9zQ6gXdQ6SZJJnGykmQ5GIlFHcX/rD+9wfR69Ip+vhAFyWEgk9ya74VRPLjo544gCTyju4diqw==}
     peerDependencies:
       '@testing-library/jest-dom': ^5.16.6 || ^5.17.0 || ^6.0.0 || ^7.0.0
       solid-js: ^1.7.2
@@ -2344,7 +2344,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-solid@1.75.0(solid-js@1.9.19):
+  lucide-solid@1.77.0(solid-js@1.9.19):
     dependencies:
       solid-js: 1.9.19
 
@@ -2573,7 +2573,7 @@ snapshots:
       escalade: 3.2.0
       picocolors: 1.1.1
 
-  vite-plugin-solid@2.11.16(@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.2)(vitest@5.1.1(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6))))(solid-js@1.9.19)(vite@8.3.8(@types/node@26.6.6)):
+  vite-plugin-solid@2.11.17(@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.2)(vitest@5.1.1(@types/node@26.6.6)(jsdom@31.0.1)(vite@8.3.8(@types/node@26.6.6))))(solid-js@1.9.19)(vite@8.3.8(@types/node@26.6.6)):
     dependencies:
       '@babel/core': 7.29.13
       '@types/babel__core': 7.20.5
