@@ -24,7 +24,7 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"
 ureq = "3.4.2"
 url = "2.5.8"
 # Only what running components needs: no wat parser, cache, profiling or async support.
-wasmtime = { version = "50.0.1", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
+wasmtime = { version = "51.0.0", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
 wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2"] }
 zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
