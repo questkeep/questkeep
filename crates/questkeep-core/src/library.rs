@@ -2439,7 +2439,10 @@ mod tests {
         use crate::notifications::NotificationAction;
         let (_tmp, lib) = test_library();
         lib.notice_moved_stores();
-        assert!(lib.notifications().list().is_empty(), "no Prism games, no notice");
+        assert!(
+            lib.notifications().list().is_empty(),
+            "no Prism games, no notice"
+        );
 
         lib.db
             .upsert_imported(

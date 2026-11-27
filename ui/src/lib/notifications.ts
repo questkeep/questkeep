@@ -78,5 +78,7 @@ export function actionLabel(action: NotificationAction): string {
       return tr("storeSettings");
     case "pluginUpdates":
       return tr("pluginUpdates");
+    case "installPlugin":
+      return tr("installPlugin");
   }
 }
