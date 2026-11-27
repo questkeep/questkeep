@@ -2,7 +2,7 @@ import type { GameQuery } from "../bindings/GameQuery";
 
 /** Where the window is: a page, the open view and the game whose page shows. */
 export interface NavLocation {
-  page: "home" | "statistics" | "library" | "settings" | `plugin:${string}`;
+  page: "home" | "statistics" | "activity" | "library" | "settings" | `plugin:${string}`;
   /** The open view (only on the library page). */
   viewId: string | null;
   /** The game whose details show (only on the library page). */
@@ -62,7 +62,7 @@ export function parseLocation(text: string | null | undefined): NavLocation | nu
   if (!text) return null;
   try {
     const value = JSON.parse(text) as Partial<NavLocation> | null;
-    const pages = ["home", "statistics", "library", "settings"];
+    const pages = ["home", "statistics", "activity", "library", "settings"];
     if (!value || typeof value.page !== "string" || !pages.includes(value.page)) return null;
     return {
       page: value.page,

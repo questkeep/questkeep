@@ -1,4 +1,5 @@
 import ArrowUpToLine from "lucide-solid/icons/arrow-up-to-line";
+import ActivityIcon from "lucide-solid/icons/activity";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import Combine from "lucide-solid/icons/combine";
 import Ellipsis from "lucide-solid/icons/ellipsis";
@@ -85,6 +86,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { gameSessions } from "../i18n/gameSessions";
 import { SessionsDialog } from "./SessionsDialog";
+import { RecentActivityCard } from "./RecentActivityCard";
+import { activity as activityDict } from "../i18n/activity";
 import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
 import { GameActionButtons } from "./GameActionButtons";
@@ -97,6 +100,7 @@ const tr = translator(gamePage);
 const trSessions = translator(gameSessions);
 const trSections = translator(gameSections);
 const trMenus = translator(shellMenus);
+const trActivity = translator(activityDict);
 
 /** A copy's store, and what tells it apart from another copy of the same store. */
 const label = (copy: GameCopy) => copyLabel(copy, sourceName);
@@ -412,6 +416,11 @@ export function DetailsPanel(props: DetailsPanelProps) {
       label: trSessions("edit"),
       icon: () => <Clock class="icon" aria-hidden="true" />,
       onSelect: () => setEditingSessions(true),
+    },
+    {
+      label: trActivity("activityEllipsis"),
+      icon: () => <ActivityIcon class="icon" aria-hidden="true" />,
+      onSelect: () => store.openActivityDrawer(props.game),
     },
     {
       label: tr("combine"),
@@ -899,6 +908,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                 )}
               </Show>
             </Card>
+            <RecentActivityCard game={props.game} />
           </div>
         </div>
       </div>

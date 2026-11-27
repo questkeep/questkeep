@@ -35,6 +35,8 @@ import { GameList } from "./components/GameList";
 import { HomePage } from "./components/HomePage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { StatisticsPage } from "./components/StatisticsPage";
+import { ActivityPage } from "./components/ActivityPage";
+import { ActivityDrawer } from "./components/ActivityDrawer";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
@@ -150,6 +152,11 @@ export function App() {
       store.showNotifications();
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      store.showActivity();
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       commandBar?.focus();
@@ -217,10 +224,17 @@ export function App() {
                   <Show
                     when={store.page() === "statistics"}
                     fallback={
-                      <Show when={isPluginPage(store.page())} fallback={<SettingsPage />}>
-                        <Show when={pluginPage()} keyed>
-                          {(entry) => <PluginPage entry={entry} />}
-                        </Show>
+                      <Show
+                        when={store.page() === "activity"}
+                        fallback={
+                          <Show when={isPluginPage(store.page())} fallback={<SettingsPage />}>
+                            <Show when={pluginPage()} keyed>
+                              {(entry) => <PluginPage entry={entry} />}
+                            </Show>
+                          </Show>
+                        }
+                      >
+                        <ActivityPage />
                       </Show>
                     }
                   >
@@ -366,6 +380,9 @@ export function App() {
       <Show when={store.scriptEditorId()}>{(id) => <ScriptEditorHost id={id()} />}</Show>
       <Show when={store.pluginUpdatesOpen()}>
         <PluginUpdatesDialog onClose={() => store.closePluginUpdates()} />
+      </Show>
+      <Show when={store.activityGame()} keyed>
+        {(game) => <ActivityDrawer game={game} onClose={() => store.closeActivityDrawer()} />}
       </Show>
       <ExtensionDialogs />
       <Show when={themeEditor.isOpen()}>

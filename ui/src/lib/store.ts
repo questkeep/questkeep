@@ -83,9 +83,26 @@ import {
   step,
   visit,
 } from "./history";
+import { activity } from "../i18n/activity";
+import { actorLabel, type LibraryFilter, type SystemFilter } from "./activity";
+import type { Actor } from "../bindings/Actor";
+import { formatClockTime } from "./format";
 
 const tr = translator(shellCommon);
 const trNotes = translator(shellNotifications);
+const trActivity = translator(activity);
+
+/** What the Activity page shows when a way in opens it (a filter, the System part). */
+export interface ActivityRequest {
+  /** Counts requests, so asking for the same filter again still applies it. */
+  seq: number;
+  tab: "library" | "system";
+  library: Partial<LibraryFilter>;
+  system: Partial<SystemFilter>;
+  /** Names for the scope filters: the game's, the batch's ("Steam · 14:02"). */
+  gameName?: string;
+  batchLabel?: string;
+}
 
 /** What "Save as new view" asks for. */
 export interface NewViewInput {
@@ -95,7 +112,7 @@ export interface NewViewInput {
 }
 
 /** A plugin page is `plugin:<plugin id>/<page id>` (an extension's `ui.addPage`). */
-export type Page = "home" | "statistics" | "library" | "settings" | `plugin:${string}`;
+export type Page = "home" | "statistics" | "activity" | "library" | "settings" | `plugin:${string}`;
 
 export interface Toast {
   id: number;
@@ -104,6 +121,13 @@ export interface Toast {
   /** A button on the toast (e.g. "Review"). */
   action?: { label: string; run: () => void };
 }
+
+/** The Activity page without a filter. */
+const blankActivity = (): Omit<ActivityRequest, "seq"> => ({
+  tab: "library",
+  library: {},
+  system: {},
+});
 
 const REFRESH_DEBOUNCE_MS = 60;
 /** How long UI state (panel, selection, collapsed groups) waits before it is saved. */
@@ -453,7 +477,13 @@ function createAppStore() {
   const syncTracker = createSyncTracker({
     onChange: setSyncState,
     onFinished: (state) => {
-      if (!state.background) pushToast("info", syncResultText(state));
+      if (!state.background) {
+        const stores = state.entries.filter((e) => e.status === "done").map((e) => e.provider);
+        pushToast("info", syncResultText(state), {
+          label: trActivity("details"),
+          run: () => void showSyncActivity(stores),
+        });
+      }
       void checkDuplicates();
       // The core records the end of a "sync all" right after its last store.
       setTimeout(() => void loadSyncTimes(), 500);
@@ -652,6 +682,7 @@ function createAppStore() {
       setPinnedGame(target ? null : game);
       setSelectedId(game.id);
       setDetailsOpen(true);
+      setActivityGame(null);
     });
     scheduleRefresh(0);
   }
@@ -699,6 +730,72 @@ function createAppStore() {
     batch(() => {
       setPage("statistics");
       setDetailsOpen(false);
+    });
+  }
+
+  /** The game whose activity drawer is open. */
+  const [activityGame, setActivityGame] = createSignal<Game | null>(null);
+  /** What the Activity page opened with. */
+  const [activityRequest, setActivityRequest] = createSignal<ActivityRequest>({
+    seq: 0,
+    tab: "library",
+    library: {},
+    system: {},
+  });
+  let activitySeq = 0;
+  /** The last `activityAdded` event (`seq` counts them): open logs reload. */
+  const [activityChange, setActivityChange] = createSignal<{
+    seq: number;
+    gameIds: readonly string[];
+  }>({ seq: 0, gameIds: [] });
+
+  /** Opens the Activity page, filtered as asked (unfiltered without a request). */
+  function showActivity(request: Omit<ActivityRequest, "seq"> = blankActivity()) {
+    batch(() => {
+      setActivityRequest({ ...request, seq: ++activitySeq });
+      setActivityGame(null);
+      setPage("activity");
+      setDetailsOpen(false);
+    });
+  }
+
+  /** Who a store's sync is recorded as: the store, or the plugin that brings it. */
+  function storeActor(provider: string): Actor {
+    const plugin = plugins().find((p) => p.providers.includes(provider));
+    return plugin ? { kind: "plugin", id: plugin.id } : { kind: "store", id: provider };
+  }
+
+  /** Names for activity texts, from the stores, plugins and statuses the app knows. */
+  const activityNames = {
+    store: (id: string) => sources().find((s) => s.id === id)?.name ?? id,
+    plugin: (id: string) => plugins().find((p) => p.id === id)?.name ?? id,
+    status: (id: string) => completion().statuses.find((s) => s.id === id)?.name ?? null,
+  };
+
+  /**
+   * The sync toast's "Details": the page filtered to that store's latest sync; for several
+   * stores, the page as it is (their syncs are on top).
+   */
+  async function showSyncActivity(stores: readonly string[]) {
+    const [only] = stores;
+    if (stores.length !== 1 || only === undefined) return showActivity();
+    const actor = storeActor(only);
+    const who = actor.kind === "plugin" ? `plugin:${actor.id}` : `store:${only}`;
+    const recent = await optional(() =>
+      api.activityPage({ actors: [actor], kinds: [], includeSessions: false, limit: 10 }),
+    );
+    const latest = recent?.items.find(
+      (item) => item.type === "batch" && (item.reason === "sync" || item.reason === "autoSync"),
+    );
+    if (!latest || latest.type !== "batch") {
+      return showActivity({ ...blankActivity(), library: { who } });
+    }
+    showActivity({
+      ...blankActivity(),
+      library: { batchId: latest.id },
+      batchLabel: `${actorLabel(actor, activityNames)} · ${formatClockTime(
+        new Date(latest.startedAt).getTime(),
+      )}`,
     });
   }
 
@@ -760,6 +857,7 @@ function createAppStore() {
   async function goTo(location: NavLocation): Promise<void> {
     if (location.page === "home") return showHome();
     if (location.page === "statistics") return showStatistics();
+    if (location.page === "activity") return showActivity();
     if (location.page === "settings") {
       setPage("settings");
       return;
@@ -830,7 +928,8 @@ function createAppStore() {
   createEffect(
     on([started, page, activeViewId], ([ready, current, viewId]) => {
       // Plugin pages come and go with their plugin: never the page to reopen.
-      if (!ready || current === "settings" || current === "statistics") return;
+      if (!ready || current === "settings" || current === "statistics" || current === "activity")
+        return;
       if (isPluginPage(current)) return;
       const value = current === "home" ? HOME_PAGE : viewId;
       // Explore always starts fresh, so it is never reopened at startup.
@@ -1275,6 +1374,9 @@ function createAppStore() {
       case "quitDuringBackup":
         setQuitDuringBackup(true);
         break;
+      case "activityAdded":
+        setActivityChange((last) => ({ seq: last.seq + 1, gameIds: event.gameIds }));
+        break;
       case "siteIconsChanged":
         void loadSiteIcons();
         break;
@@ -1519,6 +1621,9 @@ function createAppStore() {
       setMulti(new Set<string>());
       setGroupJump(null);
       setSettingsSection(null);
+      setActivityGame(null);
+      setActivityRequest({ ...blankActivity(), seq: 0 });
+      setActivityChange({ seq: 0, gameIds: [] });
       setSeenSources(new Set<string>());
       setToasts([]);
     });
@@ -1687,6 +1792,15 @@ function createAppStore() {
     showHome,
     showStatisticsPage,
     showStatistics,
+    activityGame,
+    openActivityDrawer: (game: Game) => setActivityGame(game),
+    closeActivityDrawer: () => setActivityGame(null),
+    activityRequest,
+    activityChange,
+    activityNames,
+    showActivity,
+    showSyncActivity,
+    storeActor,
     showPluginPage,
     showStartPage,
     /** What the start page shows (Settings → General). */

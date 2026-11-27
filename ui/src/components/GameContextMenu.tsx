@@ -6,6 +6,7 @@ import Eye from "lucide-solid/icons/eye";
 import FolderOpen from "lucide-solid/icons/folder-open";
 import PackageMinus from "lucide-solid/icons/package-minus";
 import Clock from "lucide-solid/icons/clock";
+import ActivityIcon from "lucide-solid/icons/activity";
 import Pencil from "lucide-solid/icons/pencil";
 import Play from "lucide-solid/icons/play";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
@@ -33,6 +34,7 @@ import { createGameActions, runAction } from "../lib/gameActions";
 import { copyLabel, launcherPageCopies, playCopy } from "../lib/copies";
 import { store } from "../lib/store";
 import { gameSessions } from "../i18n/gameSessions";
+import { activity } from "../i18n/activity";
 import { SessionsDialog } from "./SessionsDialog";
 import { CombinePicker } from "./CombinePicker";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -46,6 +48,7 @@ import { SourceIcon, sourceName } from "./SourceIcon";
 const tr = translator(shellMenus);
 const trScripts = translator(scriptsText);
 const trSessions = translator(gameSessions);
+const trActivity = translator(activity);
 
 type Step = "menu" | "edit" | "sessions" | "combine" | "uninstall" | "remove";
 
@@ -211,6 +214,11 @@ export function GameContextMenu(props: {
       label: trSessions("edit"),
       icon: iconOf(Clock),
       onSelect: () => setStep("sessions"),
+    },
+    {
+      label: trActivity("activityEllipsis"),
+      icon: iconOf(ActivityIcon),
+      onSelect: () => store.openActivityDrawer(game()),
     },
     {
       label: tr("combineWith"),

@@ -70,6 +70,25 @@ function entry(over: Partial<Extract<ActivityItem, { type: "entry" }>> = {}): Ac
   };
 }
 
+const view = (change: Partial<ActivityChange>) =>
+  changeView({ field: "name", mode: "value", before: null, after: null, ...change }, names);
+
+const event = (over: Partial<SystemEvent>): SystemEvent => ({
+  id: 1,
+  at: "2026-11-27T11:58:00Z",
+  level: "info",
+  sourceKind: "app",
+  sourceId: null,
+  kind: "log",
+  message: "raw message",
+  details: null,
+  cursor,
+  ...over,
+});
+
+const msg = (kind: string, details: Record<string, unknown> | null = null) =>
+  systemMessage(event({ kind, details }), names);
+
 const why = (
   reason: string,
   kind: ActivityKind = "other",
@@ -281,9 +300,6 @@ describe("batches", () => {
 });
 
 describe("changes", () => {
-  const view = (change: Partial<ActivityChange>) =>
-    changeView({ field: "name", mode: "value", before: null, after: null, ...change }, names);
-
   it("labels fields", () => {
     expect(fieldLabel("genres")).toBe("Genres");
     expect(fieldLabel("copies")).toBe("Stores");
@@ -545,19 +561,6 @@ describe("filters", () => {
 });
 
 describe("system events", () => {
-  const event = (over: Partial<SystemEvent>): SystemEvent => ({
-    id: 1,
-    at: "2026-11-27T11:58:00Z",
-    level: "info",
-    sourceKind: "app",
-    sourceId: null,
-    kind: "log",
-    message: "raw message",
-    details: null,
-    cursor,
-    ...over,
-  });
-
   it("finds the source", () => {
     expect(systemActor(event({}))).toEqual({ kind: "app" });
     expect(systemActor(event({ sourceKind: "store", sourceId: "epic" }))).toEqual({
@@ -572,8 +575,6 @@ describe("system events", () => {
   });
 
   it("translates known kinds from their details", () => {
-    const msg = (kind: string, details: Record<string, unknown> | null = null) =>
-      systemMessage(event({ kind, details }), names);
     expect(msg("sync", { added: 3, updated: 12 })).toBe("Synced: 3 added, 12 updated");
     expect(msg("sync", {})).toBe("Synced, no changes");
     expect(msg("backup", { size: 4 * 1024 * 1024 })).toBe("Backup written · 4 MB");

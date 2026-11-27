@@ -576,6 +576,17 @@
   /* Plugin browser: icons of registry plugins. */
   --qk-plugin-icon-size: 40px;
   --qk-plugin-icon-size-large: 64px;
+  /* Activity log: drawer, page, rows, change table, storage bar in Settings. */
+  --qk-alog-drawer-width: 480px;
+  --qk-alog-content-width: 980px;
+  --qk-alog-time-width: 44px;
+  --qk-alog-level-width: 64px;
+  --qk-alog-field-width: 140px;
+  --qk-alog-filter-width: 180px;
+  --qk-alog-search-width: 220px;
+  --qk-alog-bar-height: 8px;
+  --qk-alog-swatch: 8px;
+  --qk-alog-card-when-width: 76px;
 }
 
 @media (prefers-reduced-motion: reduce) {
