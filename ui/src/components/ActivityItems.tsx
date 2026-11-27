@@ -46,6 +46,8 @@ import { store } from "../lib/store";
 
 const tr = translator(dict);
 
+const SYNC_REASONS = new Set(["sync", "autoSync"]);
+
 const clock = (iso: string) => formatClockTime(new Date(iso).getTime());
 
 /** Who made a change, as a small colored label. */
@@ -292,7 +294,14 @@ export function EntryRow(props: {
           />
         ) : undefined
       }
-      summary={<Summary action={action()} detail={detail()} />}
+      summary={
+        // Inside a batch the batch already says why, except for a sync's added/updated/removed.
+        props.nested && !SYNC_REASONS.has(props.entry.reason) ? (
+          <></>
+        ) : (
+          <Summary action={action()} detail={detail()} />
+        )
+      }
       count={changeCountText(props.entry.changeCount)}
       onOpen={load}
       details={() => (

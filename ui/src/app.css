@@ -8488,7 +8488,8 @@ label[for="quick-launch-add"] {
   visibility: hidden;
 }
 .alog-row__time {
-  width: var(--qk-alog-time-width);
+  min-width: var(--qk-alog-time-width);
+  white-space: nowrap;
   color: var(--qk-color-text-faint);
   font-size: var(--qk-font-size-sm);
   font-variant-numeric: tabular-nums;
@@ -8504,6 +8505,9 @@ label[for="quick-launch-add"] {
 }
 .alog-row__sep {
   color: var(--qk-color-text-faint);
+}
+.alog-row__sep:last-child {
+  display: none;
 }
 .alog-row__detail {
   color: var(--qk-color-text-muted);
@@ -8894,4 +8898,11 @@ label[for="quick-launch-add"] {
   flex-direction: column;
   gap: var(--qk-space-2);
   margin-top: var(--qk-space-3);
+}
+.settings-group > .alog-storage {
+  padding: var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+}
+.settings-group .alog-storage .field__hint {
+  padding: 0;
 }

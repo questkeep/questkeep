@@ -212,3 +212,24 @@ describe("Activity page", () => {
     expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument();
   });
 });
+
+describe("sync toast details", () => {
+  it("opens the page on the store's latest sync", async () => {
+    vi.mocked(api.activityPage).mockResolvedValue({ items: [session, sync], next: null });
+    await store.showSyncActivity(["steam"]);
+    expect(api.activityPage).toHaveBeenCalledWith(
+      expect.objectContaining({ actors: [{ kind: "store", id: "steam" }], includeSessions: false }),
+    );
+    expect(store.page()).toBe("activity");
+    expect(store.activityRequest().library).toEqual({ batchId: 7 });
+    expect(store.activityRequest().batchLabel).toMatch(/^steam · /);
+  });
+
+  it("filters to the store when no sync is recorded, and shows everything for several", async () => {
+    vi.mocked(api.activityPage).mockResolvedValue({ items: [], next: null });
+    await store.showSyncActivity(["epic"]);
+    expect(store.activityRequest().library).toEqual({ who: "store:epic" });
+    await store.showSyncActivity(["epic", "steam"]);
+    expect(store.activityRequest().library).toEqual({});
+  });
+});

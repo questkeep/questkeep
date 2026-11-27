@@ -82,7 +82,7 @@ export function RecentActivityCard(props: { game: Game }) {
                     <ActorChip actor={item.type === "session" ? "session" : item.actor} />
                     <span>{shown.text}</span>
                     <Show when={shown.count}>
-                      <small class="alog-row__detail">{shown.count}</small>
+                      <small class="alog-row__detail">· {shown.count}</small>
                     </Show>
                   </span>
                 </li>
