@@ -266,7 +266,7 @@ export function ActivityCard(props: { activity: GameActivity | null | undefined 
   return (
     <Show when={props.activity && summary()}>
       {(s) => (
-        <Card title={tr("activity")} order={5}>
+        <Card title={tr("runningTime")} order={5}>
           <dl class="act__sum">
             <div>
               <dt>{tr("last12Weeks")}</dt>

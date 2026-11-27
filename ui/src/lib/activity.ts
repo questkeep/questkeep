@@ -187,8 +187,10 @@ export function entryAction(entry: Why, names: ActivityNames): string {
         default:
           return tr("r_edit");
       }
-    case "combine":
-      return tr("r_combine");
+    case "combine": {
+      const into = text(a.into);
+      return into ? tr("r_combinedInto", { name: into }) : tr("r_combine");
+    }
     case "separate":
       return tr("r_separate");
     case "preferCopy":
@@ -243,6 +245,31 @@ export function entryAction(entry: Why, names: ActivityNames): string {
     default:
       return tr("r_other");
   }
+}
+
+/** The changed fields' labels, at most `max` of them, then "+N" ("Favorite, Hidden +2"). */
+export function fieldsText(fields: readonly string[], max = 3): string {
+  const shown = fields
+    .slice(0, max)
+    .map((field) => fieldLabel(field))
+    .join(", ");
+  const rest = fields.length - max;
+  return rest > 0 ? `${shown} +${rest}` : shown;
+}
+
+/**
+ * What an entry inside a batch did: the batch already says why, so a sync's entry says
+ * added/updated/removed and any other one names the fields it changed.
+ */
+export function nestedAction(
+  entry: Why & Pick<ActivityEntry, "fields">,
+  names: ActivityNames,
+): string {
+  if (SYNC_REASONS.has(entry.reason) || entry.fields.length === 0) {
+    return entryAction(entry, names);
+  }
+  if (entry.reason === "combine" && text(args(entry.args).into)) return entryAction(entry, names);
+  return fieldsText(entry.fields);
 }
 
 /** The small note after the action ("from IGDB", "automatic, at start"), if any. */

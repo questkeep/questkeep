@@ -31,6 +31,7 @@ const refresh: ActivityItem = {
   gameName: "Hades",
   kind: "metadata",
   changeCount: 2,
+  fields: ["genres", "cover"],
   cursor,
 };
 const session: ActivityItem = {
@@ -163,6 +164,11 @@ describe("Activity page", () => {
     await fireEvent.click(batch);
     expect(api.activityBatchEntries).toHaveBeenCalledWith(7, null);
     expect(await screen.findByRole("button", { name: "Hades" })).toBeInTheDocument();
+    // The batch says why; its entry says what changed for the game.
+    expect(
+      screen.getByRole("button", { name: "Hades · Genres, Cover · 2 fields" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Refreshed metadata")).not.toBeInTheDocument();
     await fireEvent.click(
       screen.getByRole("button", { name: "Remove the filter “Only Steam sync”" }),
     );
@@ -171,6 +177,27 @@ describe("Activity page", () => {
         expect.not.objectContaining({ batchId: expect.anything() }),
       ),
     );
+  });
+
+  it("shows library-level entries without a game", async () => {
+    const created: ActivityItem = {
+      ...refresh,
+      id: 9,
+      reason: "categoryCreate",
+      args: { name: "VR" },
+      gameId: null,
+      gameName: "",
+      kind: "other",
+      changeCount: 0,
+      fields: [],
+    };
+    vi.mocked(api.activityPage).mockResolvedValue({ items: [created], next: null });
+    store.showActivity();
+    render(() => <ActivityPage />);
+    expect(
+      await screen.findByRole("button", { name: "You created the category “VR”" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hades" })).not.toBeInTheDocument();
   });
 
   it("shows the System part with translated messages and details", async () => {

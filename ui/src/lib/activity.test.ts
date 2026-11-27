@@ -19,6 +19,7 @@ import {
   entryAction,
   entryDetail,
   fieldLabel,
+  fieldsText,
   fullValue,
   groupByDay,
   isFiltered,
@@ -27,6 +28,7 @@ import {
   itemKey,
   itemSentence,
   levelLabel,
+  nestedAction,
   libraryQuery,
   MAX_VALUE_LENGTH,
   sessionText,
@@ -65,6 +67,7 @@ function entry(over: Partial<Extract<ActivityItem, { type: "entry" }>> = {}): Ac
     gameName: "Beat Saber",
     kind: "edit",
     changeCount: 2,
+    fields: ["genres", "cover"],
     cursor,
     ...over,
   };
@@ -95,6 +98,9 @@ const why = (
   args: Record<string, unknown> | null = null,
 ) => ({ reason, kind, args, batchId: null }) as const;
 
+const nested = (reason: string, kind: ActivityKind, fields: string[], args = null) =>
+  nestedAction({ ...why(reason, kind, args), fields }, names);
+
 describe("actors", () => {
   it("names each kind of actor", () => {
     expect(actorLabel({ kind: "user" }, names)).toBe("You");
@@ -121,6 +127,9 @@ describe("entry summaries", () => {
     expect(entryAction(why("artworkRefetch"), names)).toBe("Fetched artwork again");
     expect(entryAction(why("resolveAll"), names)).toBe("Worked out the shown metadata again");
     expect(entryAction(why("combine"), names)).toBe("Combined entries");
+    expect(entryAction(why("combine", "combine", { into: "Hollow Crown" }), names)).toBe(
+      "Combined into “Hollow Crown”",
+    );
     expect(entryAction(why("separate"), names)).toBe("Separated a store copy");
     expect(entryAction(why("preferCopy"), names)).toBe("Chose the copy to start first");
     expect(entryAction(why("bulkChange"), names)).toBe("Changed several games at once");
@@ -236,6 +245,26 @@ describe("entry summaries", () => {
     };
     expect(itemSentence(session, names)).toBe("Ran for 1h 12m");
     expect(sessionText(2880)).toBe("Ran for 48m");
+  });
+});
+
+describe("entries inside a batch", () => {
+  it("name the changed fields instead of repeating the batch's reason", () => {
+    expect(nested("bulkChange", "edit", ["favorite", "hidden"])).toBe("Favorite, Hidden");
+    expect(
+      nested("metadataFetch", "metadata", ["genres", "tags", "series", "links", "cover"]),
+    ).toBe("Genres, Tags, Series +2");
+  });
+
+  it("keep a sync's added/updated/removed wording and fall back to the reason", () => {
+    expect(nested("autoSync", "added", ["name", "installed"])).toBe("Added to the library");
+    expect(nested("sync", "edit", ["installed"])).toBe(entryAction(why("sync", "edit"), names));
+    expect(nested("bulkChange", "edit", [])).toBe("Changed several games at once");
+  });
+
+  it("lists fields with a +N tail", () => {
+    expect(fieldsText(["hidden"])).toBe("Hidden");
+    expect(fieldsText(["a", "b", "c", "d"], 2)).toBe("a, b +2");
   });
 });
 

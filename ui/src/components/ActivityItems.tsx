@@ -29,6 +29,7 @@ import {
   changeView,
   entryAction,
   entryDetail,
+  nestedAction,
   fullValue,
   groupByDay,
   itemAt,
@@ -45,8 +46,6 @@ import { formatClockTime } from "../lib/format";
 import { store } from "../lib/store";
 
 const tr = translator(dict);
-
-const SYNC_REASONS = new Set(["sync", "autoSync"]);
 
 const clock = (iso: string) => formatClockTime(new Date(iso).getTime());
 
@@ -257,14 +256,17 @@ export function EntryRow(props: {
   const [details, setDetails] = createSignal<ActivityDetails | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const names = store.activityNames;
-  const action = () => entryAction(props.entry, names);
+  // Inside a batch the batch already says why: say what changed for this game instead.
+  const action = () =>
+    props.nested ? nestedAction(props.entry, names) : entryAction(props.entry, names);
   const detail = () => (props.nested ? null : entryDetail(props.entry, names));
   const actor = () => actorLabel(props.entry.actor, names);
   const hasGame = () => props.showGame && props.entry.gameName !== "";
   const label = () =>
     [
-      sentence(actor(), action()),
+      props.nested ? null : sentence(actor(), action()),
       hasGame() ? props.entry.gameName : null,
+      props.nested ? action() : null,
       detail(),
       changeCountText(props.entry.changeCount),
     ]
@@ -294,14 +296,7 @@ export function EntryRow(props: {
           />
         ) : undefined
       }
-      summary={
-        // Inside a batch the batch already says why, except for a sync's added/updated/removed.
-        props.nested && !SYNC_REASONS.has(props.entry.reason) ? (
-          <></>
-        ) : (
-          <Summary action={action()} detail={detail()} />
-        )
-      }
+      summary={<Summary action={action()} detail={detail()} />}
       count={changeCountText(props.entry.changeCount)}
       onOpen={load}
       details={() => (
