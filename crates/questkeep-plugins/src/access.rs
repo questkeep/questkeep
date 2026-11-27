@@ -10,7 +10,9 @@ use questkeep_store_api::auth::{
     CAPTURE_PREFIX, CaptureRule, KeyringTokenStore, LoginWindow, TokenStore, WebSession,
     WebSessionPage,
 };
-use questkeep_store_api::model::{ActionKind, AddGameOption, LauncherClose, LauncherProcess};
+use questkeep_store_api::model::{
+    ActionKind, AddGameOption, AddGameTarget, LauncherClose, LauncherProcess,
+};
 
 use crate::error::{PluginError, Result};
 use crate::manifest::{LoginPermission, PluginManifest};
@@ -228,17 +230,19 @@ pub fn is_protected(path: &Path, protected: &[PathBuf]) -> bool {
 
 // ---- the launcher ----------------------------------------------------------------------
 
-/// A plugin store's add-game option: its launcher shortcut (keys pressed in another program's
-/// window) is kept only when the manifest declares that process
-/// (`permissions.launcher.processNames`); otherwise the option just opens the launcher.
+/// A plugin store's add-game option: its launcher keys (pressed in another program's window) are
+/// kept only when the manifest declares that process (`permissions.launcher.processNames`);
+/// otherwise the option just opens the launcher.
 pub fn gate_add_game_option(mut option: AddGameOption, declared: &[String]) -> AddGameOption {
-    let allowed = option.launcher_shortcut.as_ref().is_some_and(|shortcut| {
-        declared
-            .iter()
-            .any(|d| d.eq_ignore_ascii_case(&shortcut.process))
-    });
-    if !allowed {
-        option.launcher_shortcut = None;
+    if let AddGameTarget::Launcher { keys, .. } = &mut option.opens {
+        let allowed = keys.as_ref().is_some_and(|keys| {
+            declared
+                .iter()
+                .any(|d| d.eq_ignore_ascii_case(&keys.process))
+        });
+        if !allowed {
+            *keys = None;
+        }
     }
     option
 }
@@ -287,21 +291,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn launcher_shortcuts_need_a_declared_process() {
-        let option = AddGameOption::new("new", "New")
-            .opening_launcher("--show-window")
-            .pressing_ctrl("PrismLauncher.exe", "Prism Launcher", 'N');
+    fn launcher_keys_need_a_declared_process() {
+        use questkeep_store_api::model::LauncherKeys;
+        let option = AddGameOption::new("new", "New").opening_launcher_with_keys(
+            "--show-window",
+            LauncherKeys::new("PrismLauncher.exe", "Prism Launcher").press("Ctrl+N"),
+        );
         let declared = vec!["prismlauncher.exe".to_string()];
         let kept = gate_add_game_option(option.clone(), &declared);
         assert_eq!(kept, option, "declared (any case): kept");
-        let dropped = gate_add_game_option(option.clone(), &["other.exe".to_string()]);
-        assert_eq!(dropped.launcher_shortcut, None);
+        let still_opens = AddGameOption::new("new", "New").opening_launcher("--show-window");
         assert_eq!(
-            dropped.launcher_args.as_deref(),
-            Some("--show-window"),
-            "still opens"
+            gate_add_game_option(option.clone(), &["other.exe".to_string()]),
+            still_opens,
+            "keys dropped, the launcher still opens"
         );
-        assert_eq!(gate_add_game_option(option, &[]).launcher_shortcut, None);
+        assert_eq!(gate_add_game_option(option, &[]), still_opens);
+        let browser = AddGameOption::new("web", "Web").opening_browser("https://example.com");
+        assert_eq!(gate_add_game_option(browser.clone(), &[]), browser);
     }
     use questkeep_store_api::model::PlayAction;
 

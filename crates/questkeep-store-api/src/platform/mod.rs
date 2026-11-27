@@ -101,23 +101,25 @@ pub fn allow_foreground_handoff() {
     foreground::allow_foreground_handoff();
 }
 
-/// Presses Ctrl+`key` (a Windows virtual-key code, e.g. `b'N'`) in the program `exe` once one of
-/// its windows whose title starts with `title_prefix` is in front, waiting up to `timeout`. It
-/// never types into another program; false when that window did not come up. Windows only.
-pub fn press_ctrl_key_in(
+/// Presses key combinations in the program `exe` once one of its windows whose title starts with
+/// `title_prefix` is in front, waiting up to `timeout` for it; `steps` are (wait in
+/// milliseconds, combination), see [`crate::model::LauncherKeys`]. Before every combination a
+/// window of `exe` must be in front, otherwise it stops: it never types into another program.
+/// The error says why not everything was pressed. Windows only.
+pub fn press_keys_in(
     exe: &str,
     title_prefix: &str,
-    key: u8,
+    steps: &[(u32, crate::model::KeyCombo)],
     timeout: std::time::Duration,
-) -> bool {
+) -> Result<(), String> {
     #[cfg(windows)]
     {
-        foreground::press_ctrl_key_in(exe, title_prefix, u16::from(key), timeout)
+        foreground::press_keys_in(exe, title_prefix, steps, timeout)
     }
     #[cfg(not(windows))]
     {
-        let _ = (exe, title_prefix, key, timeout);
-        false
+        let _ = (exe, title_prefix, steps, timeout);
+        Err("key presses are only supported on Windows".into())
     }
 }
 

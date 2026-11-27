@@ -6,6 +6,8 @@ export interface AddGameMenuItem {
   providerName: string;
   optionId: string;
   label: string;
+  /** The option opens a web page in the browser (not the store's launcher). */
+  inBrowser: boolean;
 }
 
 /** Every provider's add-game options, in provider order. */
@@ -16,6 +18,7 @@ export function addGameMenuItems(providers: ProviderInfo[]): AddGameMenuItem[] {
       providerName: provider.name,
       optionId: option.id,
       label: option.label,
+      inBrowser: option.opens.kind === "browser",
     })),
   );
 }

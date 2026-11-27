@@ -72,7 +72,10 @@ function shopEntries(): MenuEntry[] {
 async function runAddOption(item: AddGameMenuItem) {
   try {
     await api.addGameWithOption(item.providerId, item.optionId);
-    store.pushToast("info", tr("opened", { provider: item.providerName }));
+    store.pushToast(
+      "info",
+      tr(item.inBrowser ? "openedInBrowser" : "opened", { provider: item.providerName }),
+    );
   } catch (error) {
     store.pushToast("error", errorMessage(error));
   }

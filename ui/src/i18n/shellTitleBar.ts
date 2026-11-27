@@ -2,6 +2,7 @@ import type { Translations } from ".";
 
 const en = {
   opened: "Opened {provider}. The new game appears here once it is set up there.",
+  openedInBrowser: "Opened in your browser. The new game appears here once {provider} has it.",
   noLaunchers: "No store launchers found",
   syncAll: "Sync all",
   sync: "Sync",
@@ -35,6 +36,8 @@ export const shellTitleBar: Translations<typeof en> = {
   de: {
     opened:
       "{provider} wurde geöffnet. Das neue Spiel erscheint hier, sobald es dort eingerichtet ist.",
+    openedInBrowser:
+      "Im Browser geöffnet. Das neue Spiel erscheint hier, sobald {provider} es hat.",
     noLaunchers: "Keine Store-Launcher gefunden",
     syncAll: "Alle synchronisieren",
     sync: "Synchronisieren",
@@ -63,6 +66,8 @@ export const shellTitleBar: Translations<typeof en> = {
   },
   fr: {
     opened: "{provider} a été ouvert. Le nouveau jeu apparaîtra ici une fois configuré là-bas.",
+    openedInBrowser:
+      "Ouvert dans votre navigateur. Le nouveau jeu apparaîtra ici dès que {provider} l'aura.",
     noLaunchers: "Aucun lanceur de boutique trouvé",
     syncAll: "Tout synchroniser",
     sync: "Synchroniser",
@@ -91,6 +96,7 @@ export const shellTitleBar: Translations<typeof en> = {
   },
   it: {
     opened: "{provider} è stato aperto. Il nuovo gioco compare qui non appena è configurato lì.",
+    openedInBrowser: "Aperto nel browser. Il nuovo gioco compare qui non appena {provider} lo ha.",
     noLaunchers: "Nessun launcher di store trovato",
     syncAll: "Sincronizza tutto",
     sync: "Sincronizza",
@@ -119,6 +125,8 @@ export const shellTitleBar: Translations<typeof en> = {
   },
   es: {
     opened: "Se abrió {provider}. El juego nuevo aparecerá aquí cuando esté configurado allí.",
+    openedInBrowser:
+      "Se abrió en tu navegador. El juego nuevo aparecerá aquí cuando {provider} lo tenga.",
     noLaunchers: "No se encontraron lanzadores de tiendas",
     syncAll: "Sincronizar todo",
     sync: "Sincronizar",
@@ -147,6 +155,7 @@ export const shellTitleBar: Translations<typeof en> = {
   },
   pt: {
     opened: "{provider} foi aberto. O novo jogo aparece aqui assim que for configurado lá.",
+    openedInBrowser: "Aberto no navegador. O novo jogo aparece aqui assim que {provider} o tiver.",
     noLaunchers: "Nenhum inicializador de loja encontrado",
     syncAll: "Sincronizar tudo",
     sync: "Sincronizar",

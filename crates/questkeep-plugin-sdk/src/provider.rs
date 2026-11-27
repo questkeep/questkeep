@@ -188,9 +188,14 @@ pub trait Provider {
     fn settings(&self) -> StoreSettings {
         StoreSettings::default()
     }
-    /// Extra ways to add games that this provider offers next to "Add game". An option made
-    /// with [`AddGameOption::opening_launcher`] opens the store's [`launcher`](Self::launcher) with
-    /// extra arguments instead of calling [`run_add_game_option`](Self::run_add_game_option).
+    /// Extra ways to add games that this provider offers next to "Add game". A plugin cannot start
+    /// programs, so its options open something for the user instead of calling
+    /// [`run_add_game_option`](Self::run_add_game_option):
+    /// [`AddGameOption::opening_launcher`] opens the store's [`launcher`](Self::launcher) with extra
+    /// arguments, [`AddGameOption::opening_launcher_with_keys`] also presses keys in its window
+    /// ([`LauncherKeys`](crate::model::LauncherKeys), the process must be listed in
+    /// `permissions.launcher.processNames`), and [`AddGameOption::opening_browser`] opens an
+    /// https page in the user's browser.
     fn add_game_options(&self) -> Vec<AddGameOption> {
         Vec::new()
     }

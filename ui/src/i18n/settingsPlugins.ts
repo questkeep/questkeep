@@ -55,7 +55,7 @@ const en = {
   permFilesystem: "Can read every file on this PC (read-only)",
   permRegistry: "Can read the Windows registry (read-only)",
   permLauncher:
-    "Questkeep may close these programs after a game and press a shortcut in them when you add a game",
+    "Questkeep may close these programs after a game and press keys in them when you add a game",
   permLogin: "Sign-in windows may visit these web domains",
   unreviewedWarning:
     "This plugin does not come from the plugin registry, so nobody has reviewed it. Only install plugins from authors and sources you trust.",
@@ -151,7 +151,7 @@ export const settingsPlugins: Translations<typeof en> = {
     permFilesystem: "Darf jede Datei auf diesem PC lesen (nur lesend)",
     permRegistry: "Darf die Windows-Registry lesen (nur lesend)",
     permLauncher:
-      "Questkeep darf diese Programme nach einem Spiel schließen und beim Hinzufügen eines Spiels ein Tastenkürzel darin drücken",
+      "Questkeep darf diese Programme nach einem Spiel schließen und beim Hinzufügen eines Spiels Tasten darin drücken",
     permLogin: "Anmeldefenster dürfen diese Web-Domains besuchen",
     unreviewedWarning:
       "Dieses Plugin stammt nicht aus der Plugin-Registry und wurde deshalb von niemandem geprüft. Installiere nur Plugins von Autoren und Quellen, denen du vertraust.",
@@ -245,7 +245,7 @@ export const settingsPlugins: Translations<typeof en> = {
     permFilesystem: "Peut lire tous les fichiers de ce PC (lecture seule)",
     permRegistry: "Peut lire le registre Windows (lecture seule)",
     permLauncher:
-      "Questkeep peut fermer ces programmes après une partie et y presser un raccourci quand vous ajoutez un jeu",
+      "Questkeep peut fermer ces programmes après une partie et y appuyer sur des touches quand vous ajoutez un jeu",
     permLogin: "Les fenêtres de connexion peuvent visiter ces domaines web",
     unreviewedWarning:
       "Ce plugin ne vient pas du registre des plugins, personne ne l'a donc vérifié. N'installez que des plugins d'auteurs et de sources de confiance.",
@@ -340,7 +340,7 @@ export const settingsPlugins: Translations<typeof en> = {
     permFilesystem: "Può leggere tutti i file di questo PC (sola lettura)",
     permRegistry: "Può leggere il registro di Windows (sola lettura)",
     permLauncher:
-      "Questkeep può chiudere questi programmi dopo una partita e premervi una scorciatoia quando aggiungi un gioco",
+      "Questkeep può chiudere questi programmi dopo una partita e premervi dei tasti quando aggiungi un gioco",
     permLogin: "Le finestre di accesso possono visitare questi domini web",
     unreviewedWarning:
       "Questo plugin non proviene dal registro dei plugin, quindi nessuno lo ha controllato. Installa solo plugin di autori e fonti di cui ti fidi.",
@@ -433,7 +433,7 @@ export const settingsPlugins: Translations<typeof en> = {
     permFilesystem: "Puede leer todos los archivos de este equipo (solo lectura)",
     permRegistry: "Puede leer el registro de Windows (solo lectura)",
     permLauncher:
-      "Questkeep puede cerrar estos programas después de una partida y pulsar un atajo en ellos al añadir un juego",
+      "Questkeep puede cerrar estos programas después de una partida y pulsar teclas en ellos al añadir un juego",
     permLogin: "Las ventanas de inicio de sesión pueden visitar estos dominios web",
     unreviewedWarning:
       "Este complemento no viene del registro de complementos, así que nadie lo ha revisado. Instala solo complementos de autores y fuentes en los que confíes.",
@@ -527,7 +527,7 @@ export const settingsPlugins: Translations<typeof en> = {
     permFilesystem: "Pode ler todos os arquivos deste PC (somente leitura)",
     permRegistry: "Pode ler o registro do Windows (somente leitura)",
     permLauncher:
-      "O Questkeep pode fechar estes programas depois de um jogo e pressionar um atalho neles ao adicionar um jogo",
+      "O Questkeep pode fechar estes programas depois de um jogo e pressionar teclas neles ao adicionar um jogo",
     permLogin: "As janelas de login podem visitar estes domínios web",
     unreviewedWarning:
       "Este plugin não vem do registro de plugins, então ninguém o revisou. Instale apenas plugins de autores e fontes em que você confia.",

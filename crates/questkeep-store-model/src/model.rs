@@ -310,74 +310,372 @@ pub struct AddGameOption {
     pub id: String,
     /// Menu text, e.g. `New Minecraft instance`.
     pub label: String,
-    /// When set, choosing the option opens the store's launcher (what the provider's
-    /// `launcher()` starts) with these command-line arguments added, e.g. `--show-window`, and
-    /// `run_add_game_option` is not called. This is how a store plugin, which cannot start
-    /// programs itself, opens its launcher for adding a game. Empty arguments open it as is.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub launcher_args: Option<String>,
-    /// A shortcut to press in the launcher once its window is in front, for a dialog that has no
-    /// command-line option (Prism Launcher's Ctrl+N "Add Instance"). Only with `launcher_args`,
-    /// Windows only. A store plugin must list the process in `permissions.launcher.processNames`,
-    /// otherwise the shortcut is dropped.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub launcher_shortcut: Option<LauncherShortcut>,
+    /// What choosing it does. Afterwards Questkeep watches the store's installed games for a few
+    /// minutes and adds the new one by itself.
+    #[serde(default)]
+    pub opens: AddGameTarget,
 }
 
-/// Ctrl+`key` pressed in a launcher window (see [`AddGameOption::launcher_shortcut`]). Pressed only
-/// while a window of `process` whose title starts with `window_title` is in front, within 20
-/// seconds of opening the launcher; nothing is typed into any other program.
+/// What an [`AddGameOption`] opens.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+#[ts(export)]
+pub enum AddGameTarget {
+    /// The provider's own `run_add_game_option` (built-in stores).
+    #[default]
+    Provider,
+    /// The store's launcher (what the provider's `launcher()` starts) with `args` added, e.g.
+    /// `--show-window`; empty arguments open it as it is. This is how a store plugin, which
+    /// cannot start programs itself, opens its launcher for adding a game. Optionally presses
+    /// `keys` in it, for a dialog that has no command-line option.
+    Launcher {
+        args: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        keys: Option<LauncherKeys>,
+    },
+    /// A web page (`https://` only) in the user's browser, e.g. a site to get games from.
+    Browser { url: String },
+}
+
+/// Key presses in the launcher's window after an add-game option opened it (Windows only).
+///
+/// Questkeep waits up to 20 seconds for a window of `process` whose title starts with
+/// `window_title` to come to the front. Then it goes through `steps` in order: it waits the
+/// step's delay, checks that a window of `process` is still in front (a dialog the previous step
+/// opened counts, whatever its title) and presses the step's keys. When another program is in
+/// front it stops: nothing is ever typed into another program. A store plugin must list `process`
+/// in `permissions.launcher.processNames`, otherwise the keys are dropped.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub struct LauncherShortcut {
+pub struct LauncherKeys {
     /// The launcher's process file name, e.g. `prismlauncher.exe`.
     pub process: String,
-    /// The start of the window's title, e.g. `Prism Launcher`.
+    /// The start of the launcher window's title, e.g. `Prism Launcher`.
     pub window_title: String,
-    /// One letter or digit, pressed together with Ctrl.
-    pub ctrl_key: char,
+    /// Pressed in order; at most [`LauncherKeys::MAX_STEPS`].
+    pub steps: Vec<KeyStep>,
+    /// A [`wait_ms`](LauncherKeys::wait_ms) that the next [`press`](LauncherKeys::press) takes.
+    #[serde(skip)]
+    #[ts(skip)]
+    pending_delay_ms: u32,
 }
 
-impl LauncherShortcut {
-    /// The Windows virtual-key code of `ctrl_key` (A–Z, 0–9), `None` for anything else.
-    pub fn virtual_key(&self) -> Option<u8> {
-        let key = self.ctrl_key.to_ascii_uppercase();
-        (key.is_ascii_uppercase() || key.is_ascii_digit()).then_some(key as u8)
+/// One key combination of [`LauncherKeys`] and the wait before it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct KeyStep {
+    /// A combination like `Ctrl+Shift+B`, `Alt+R` or `Enter` (see [`KeyCombo::parse`]).
+    pub keys: String,
+    /// Milliseconds to wait before pressing, at most [`LauncherKeys::MAX_DELAY_MS`].
+    #[serde(default)]
+    pub delay_ms: u32,
+}
+
+impl LauncherKeys {
+    /// The longest wait before one step (5 seconds).
+    pub const MAX_DELAY_MS: u32 = 5000;
+    /// The most steps one option may press.
+    pub const MAX_STEPS: usize = 16;
+
+    /// Keys for the window of `process` titled `window_title…`; add steps with
+    /// [`wait_ms`](Self::wait_ms) and [`press`](Self::press).
+    pub fn new(process: impl Into<String>, window_title: impl Into<String>) -> Self {
+        Self {
+            process: process.into(),
+            window_title: window_title.into(),
+            steps: Vec::new(),
+            pending_delay_ms: 0,
+        }
+    }
+
+    /// Waits `ms` milliseconds before the next [`press`](Self::press) (two waits add up).
+    pub fn wait_ms(mut self, ms: u32) -> Self {
+        self.pending_delay_ms = self.pending_delay_ms.saturating_add(ms);
+        self
+    }
+
+    /// Then presses `keys`, e.g. `Ctrl+Shift+B`.
+    pub fn press(mut self, keys: impl Into<String>) -> Self {
+        self.steps.push(KeyStep {
+            keys: keys.into(),
+            delay_ms: std::mem::take(&mut self.pending_delay_ms),
+        });
+        self
+    }
+
+    /// The steps as delays and parsed combinations, or what is wrong with them (an unknown key, a
+    /// wait over 5 seconds, no steps or too many).
+    pub fn parsed(&self) -> Result<Vec<(u32, KeyCombo)>, String> {
+        if self.steps.is_empty() {
+            return Err("no keys to press".into());
+        }
+        if self.steps.len() > Self::MAX_STEPS {
+            return Err(format!("more than {} key steps", Self::MAX_STEPS));
+        }
+        self.steps
+            .iter()
+            .map(|step| {
+                if step.delay_ms > Self::MAX_DELAY_MS {
+                    return Err(format!(
+                        "the wait before \"{}\" is longer than {} ms",
+                        step.keys,
+                        Self::MAX_DELAY_MS
+                    ));
+                }
+                Ok((step.delay_ms, KeyCombo::parse(&step.keys)?))
+            })
+            .collect()
+    }
+}
+
+/// A parsed key combination: modifiers plus one key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyCombo {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    /// The Windows key (Super, Command).
+    pub meta: bool,
+    pub key: Key,
+}
+
+/// The key a [`KeyCombo`] presses besides its modifiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Key {
+    /// `A`–`Z`, upper case.
+    Letter(char),
+    /// `0`–`9`.
+    Digit(char),
+    /// `F1`–`F24`.
+    Function(u8),
+    Enter,
+    Tab,
+    Escape,
+    Space,
+    Backspace,
+    Delete,
+    Insert,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl KeyCombo {
+    /// Parses `Ctrl+Shift+B`: modifiers (`Ctrl`/`Control`, `Shift`, `Alt`, `Win`/`Super`/`Cmd`/
+    /// `Command`/`Meta`), then exactly one key: a letter, a digit, `F1`–`F24`, `Enter`, `Tab`,
+    /// `Esc`, `Space`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown` or an
+    /// arrow (`Up`, `Down`, `Left`, `Right`). Case and spaces around `+` don't matter.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let (mut ctrl, mut shift, mut alt, mut meta) = (false, false, false, false);
+        let mut key = None;
+        for part in text.split('+').map(str::trim) {
+            let lower = part.to_ascii_lowercase();
+            let modifier = match lower.as_str() {
+                "ctrl" | "control" => Some(&mut ctrl),
+                "shift" => Some(&mut shift),
+                "alt" => Some(&mut alt),
+                "win" | "windows" | "super" | "cmd" | "command" | "meta" => Some(&mut meta),
+                _ => None,
+            };
+            if let Some(flag) = modifier {
+                if key.is_some() {
+                    return Err(format!("\"{text}\": modifiers come before the key"));
+                }
+                *flag = true;
+                continue;
+            }
+            if key.is_some() {
+                return Err(format!("\"{text}\" has more than one key"));
+            }
+            key = Some(Key::parse(&lower).ok_or_else(|| format!("unknown key \"{part}\""))?);
+        }
+        Ok(KeyCombo {
+            ctrl,
+            shift,
+            alt,
+            meta,
+            key: key.ok_or_else(|| format!("\"{text}\" has no key"))?,
+        })
+    }
+}
+
+impl Key {
+    fn parse(lower: &str) -> Option<Self> {
+        let mut chars = lower.chars();
+        if let (Some(c), None) = (chars.next(), chars.clone().next()) {
+            return match c {
+                'a'..='z' => Some(Key::Letter(c.to_ascii_uppercase())),
+                '0'..='9' => Some(Key::Digit(c)),
+                _ => None,
+            };
+        }
+        if let Some(n) = lower.strip_prefix('f').and_then(|n| n.parse::<u8>().ok()) {
+            return (1..=24).contains(&n).then_some(Key::Function(n));
+        }
+        Some(match lower {
+            "enter" | "return" => Key::Enter,
+            "tab" => Key::Tab,
+            "esc" | "escape" => Key::Escape,
+            "space" => Key::Space,
+            "backspace" => Key::Backspace,
+            "delete" | "del" => Key::Delete,
+            "insert" | "ins" => Key::Insert,
+            "home" => Key::Home,
+            "end" => Key::End,
+            "pageup" | "pgup" => Key::PageUp,
+            "pagedown" | "pgdn" => Key::PageDown,
+            "up" => Key::Up,
+            "down" => Key::Down,
+            "left" => Key::Left,
+            "right" => Key::Right,
+            _ => return None,
+        })
     }
 }
 
 impl AddGameOption {
+    /// An option handled by the provider's `run_add_game_option`.
     pub fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
-            launcher_args: None,
-            launcher_shortcut: None,
+            opens: AddGameTarget::Provider,
         }
     }
 
     /// Opens the store's launcher with `args` added instead of calling `run_add_game_option`.
     pub fn opening_launcher(mut self, args: impl Into<String>) -> Self {
-        self.launcher_args = Some(args.into());
+        self.opens = AddGameTarget::Launcher {
+            args: args.into(),
+            keys: None,
+        };
         self
     }
 
-    /// Then presses Ctrl+`key` once a window of `process` titled `window_title…` is in front.
-    pub fn pressing_ctrl(
+    /// Opens the store's launcher with `args` added, then presses `keys` in its window.
+    pub fn opening_launcher_with_keys(
         mut self,
-        process: impl Into<String>,
-        window_title: impl Into<String>,
-        key: char,
+        args: impl Into<String>,
+        keys: LauncherKeys,
     ) -> Self {
-        self.launcher_shortcut = Some(LauncherShortcut {
-            process: process.into(),
-            window_title: window_title.into(),
-            ctrl_key: key,
-        });
+        self.opens = AddGameTarget::Launcher {
+            args: args.into(),
+            keys: Some(keys),
+        };
         self
+    }
+
+    /// Opens `url` (`https://` only) in the user's browser instead of calling
+    /// `run_add_game_option`.
+    pub fn opening_browser(mut self, url: impl Into<String>) -> Self {
+        self.opens = AddGameTarget::Browser { url: url.into() };
+        self
+    }
+}
+
+#[cfg(test)]
+mod add_game_option_tests {
+    use super::*;
+
+    #[test]
+    fn key_combos_parse_modifiers_and_one_key() {
+        let combo = KeyCombo::parse("Ctrl + Shift+b").unwrap();
+        assert!(combo.ctrl && combo.shift && !combo.alt && !combo.meta);
+        assert_eq!(combo.key, Key::Letter('B'));
+        let combo = KeyCombo::parse("cmd+alt+F12").unwrap();
+        assert!(combo.meta && combo.alt && !combo.ctrl);
+        assert_eq!(combo.key, Key::Function(12));
+        assert_eq!(KeyCombo::parse("Enter").unwrap().key, Key::Enter);
+        assert_eq!(KeyCombo::parse("Win+7").unwrap().key, Key::Digit('7'));
+        for bad in [
+            "",
+            "Ctrl",
+            "Ctrl+A+B",
+            "A+Ctrl",
+            "Ctrl+ä",
+            "F25",
+            "F0",
+            "Ctrl+Plus",
+            "Hyper+A",
+        ] {
+            assert!(KeyCombo::parse(bad).is_err(), "{bad} must not parse");
+        }
+    }
+
+    #[test]
+    fn launcher_keys_check_delays_and_steps() {
+        let keys = LauncherKeys::new("a.exe", "A")
+            .wait_ms(500)
+            .press("Ctrl+Shift+B")
+            .wait_ms(3000)
+            .wait_ms(2000)
+            .press("Alt+R");
+        assert_eq!(
+            keys.parsed()
+                .unwrap()
+                .iter()
+                .map(|s| s.0)
+                .collect::<Vec<_>>(),
+            [500, 5000],
+            "waits add up"
+        );
+        let wait = |ms| LauncherKeys::new("a.exe", "A").wait_ms(ms).press("A");
+        assert!(wait(5001).parsed().is_err());
+        assert!(LauncherKeys::new("a.exe", "A").parsed().is_err(), "no keys");
+        assert!(
+            LauncherKeys::new("a.exe", "A")
+                .press("Ctrl+?")
+                .parsed()
+                .is_err()
+        );
+        let many = (0..=LauncherKeys::MAX_STEPS)
+            .fold(LauncherKeys::new("a.exe", "A"), |keys, _| keys.press("A"));
+        assert!(many.parsed().is_err());
+    }
+
+    #[test]
+    fn add_game_options_without_a_target_ask_the_provider() {
+        let option: AddGameOption = serde_json::from_str(r#"{"id":"x","label":"X"}"#).unwrap();
+        assert_eq!(option.opens, AddGameTarget::Provider);
+        let json = serde_json::to_value(AddGameOption::new("x", "X").opening_launcher_with_keys(
+            "--show-window",
+            LauncherKeys::new("p.exe", "P").wait_ms(100).press("Ctrl+N"),
+        ))
+        .unwrap();
+        assert_eq!(
+            json["opens"],
+            serde_json::json!({
+                "kind": "launcher",
+                "args": "--show-window",
+                "keys": {
+                    "process": "p.exe",
+                    "windowTitle": "P",
+                    "steps": [{ "keys": "Ctrl+N", "delayMs": 100 }]
+                }
+            })
+        );
+        let browser: AddGameOption = serde_json::from_value(serde_json::json!({
+            "id": "web", "label": "Web", "opens": { "kind": "browser", "url": "https://example.com" }
+        }))
+        .unwrap();
+        assert_eq!(
+            browser.opens,
+            AddGameTarget::Browser {
+                url: "https://example.com".into()
+            }
+        );
     }
 }
 

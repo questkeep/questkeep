@@ -3986,6 +3986,7 @@ version = "0.7.0"
 dependencies = [
  "chrono",
  "serde",
+ "serde_json",
  "ts-rs",
 ]
 

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { AddGameOption } from "../bindings/AddGameOption";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import { addGameMenuItems, nextMenuIndex } from "./addGameOptions";
 
-const provider = (id: string, options: { id: string; label: string }[]): ProviderInfo => ({
+const provider = (id: string, options: AddGameOption[]): ProviderInfo => ({
   id,
   name: id.toUpperCase(),
   icon: "",
@@ -22,10 +23,12 @@ describe("addGameMenuItems", () => {
   it("flattens the options of every provider in order", () => {
     const items = addGameMenuItems([
       provider("steam", []),
-      provider("prism", [{ id: "new-instance", label: "New Minecraft instance" }]),
+      provider("prism", [
+        { id: "new-instance", label: "New Minecraft instance", opens: { kind: "provider" } },
+      ]),
       provider("x", [
-        { id: "a", label: "A" },
-        { id: "b", label: "B" },
+        { id: "a", label: "A", opens: { kind: "provider" } },
+        { id: "b", label: "B", opens: { kind: "browser", url: "https://b.example" } },
       ]),
     ]);
     expect(items.map((i) => `${i.providerId}/${i.optionId}`)).toEqual([
@@ -33,7 +36,12 @@ describe("addGameMenuItems", () => {
       "x/a",
       "x/b",
     ]);
-    expect(items[0]).toMatchObject({ providerName: "PRISM", label: "New Minecraft instance" });
+    expect(items[0]).toMatchObject({
+      providerName: "PRISM",
+      label: "New Minecraft instance",
+      inBrowser: false,
+    });
+    expect(items[2]?.inBrowser).toBe(true);
   });
 
   it("is empty without options", () => {

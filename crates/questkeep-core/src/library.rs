@@ -34,6 +34,7 @@ use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderReg
 use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
+use questkeep_store_api::model::AddGameTarget;
 
 mod edit;
 
@@ -2523,6 +2524,25 @@ impl Library {
             .providers
             .get(provider_id)
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        let opens = provider
+            .add_game_options()
+            .into_iter()
+            .find(|o| o.id == option_id)
+            .map(|o| o.opens)
+            .unwrap_or_default();
+        if let AddGameTarget::Browser { url } = &opens {
+            if !is_https_url(url) {
+                return Err(CoreError::Invalid(format!(
+                    "{} gave a web address that isn't https: {url}",
+                    provider.name()
+                )));
+            }
+            let before = self.installed_ids(provider_id);
+            crate::platform::open_uri(url).map_err(|err| {
+                CoreError::Launch(format!("Could not open {url} in the browser: {err}"))
+            })?;
+            return Ok(before);
+        }
         if !provider.is_installed() {
             return Err(CoreError::Invalid(format!(
                 "{} isn't installed on this PC.",
@@ -2530,24 +2550,20 @@ impl Library {
             )));
         }
         let before = self.installed_ids(provider_id);
-        let option = provider
-            .add_game_options()
-            .into_iter()
-            .find(|o| o.id == option_id);
-        if let Some(option) = option.filter(|o| o.launcher_args.is_some()) {
+        if let AddGameTarget::Launcher { args, keys } = opens {
             let action = with_extra_args(
                 provider.launcher().ok_or_else(|| {
                     CoreError::Invalid(format!("{} isn't installed on this PC.", provider.name()))
                 })?,
-                option.launcher_args.as_deref().unwrap_or_default(),
+                &args,
             );
             // The user just chose this in the menu: the launcher may come to the front.
             crate::providers::platform::allow_foreground_handoff();
             run_store_action(&action).map_err(|err| {
                 CoreError::Launch(format!("Could not open {}: {err}", provider.name()))
             })?;
-            if let Some(shortcut) = option.launcher_shortcut {
-                press_launcher_shortcut(provider.name().to_string(), shortcut);
+            if let Some(keys) = keys {
+                press_launcher_keys(provider.name().to_string(), keys);
             }
             return Ok(before);
         }
@@ -2665,35 +2681,44 @@ fn note_restored_backup(paths: &DataPaths, activity: &ActivityLog) {
 }
 
 /// Opens a store URI or starts a program (installer or uninstaller) without tracking it.
-/// How long an add-game option's launcher shortcut waits for the launcher's window.
-const SHORTCUT_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long an add-game option's key presses wait for the launcher's window.
+const KEYS_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Presses an add-game option's shortcut in its launcher on a background thread, once the
-/// launcher's window is in front (never in another program's window).
-fn press_launcher_shortcut(store: String, shortcut: questkeep_store_api::model::LauncherShortcut) {
-    let Some(key) = shortcut.virtual_key() else {
-        tracing::warn!(store, key = %shortcut.ctrl_key, "launcher shortcut is not a letter or digit");
-        return;
+/// Presses an add-game option's keys in its launcher on a background thread, once the launcher's
+/// window is in front (never in another program's window). Invalid keys are logged, not pressed.
+fn press_launcher_keys(store: String, keys: questkeep_store_api::model::LauncherKeys) {
+    let steps = match keys.parsed() {
+        Ok(steps) => steps,
+        Err(err) => {
+            tracing::warn!(store, %err, "the add-game option's keys are not valid; none pressed");
+            return;
+        }
     };
     let spawned = std::thread::Builder::new()
-        .name("launcher-shortcut".into())
+        .name("launcher-keys".into())
         .spawn(move || {
-            if !crate::providers::platform::press_ctrl_key_in(
-                &shortcut.process,
-                &shortcut.window_title,
-                key,
-                SHORTCUT_TIMEOUT,
+            if let Err(err) = crate::providers::platform::press_keys_in(
+                &keys.process,
+                &keys.window_title,
+                &steps,
+                KEYS_TIMEOUT,
             ) {
-                tracing::info!(
-                    store,
-                    process = shortcut.process,
-                    "the launcher's window did not come to the front; shortcut not pressed"
-                );
+                tracing::info!(store, process = keys.process, %err, "launcher keys not pressed");
             }
         });
     if let Err(err) = spawned {
-        tracing::warn!(%err, "could not start the launcher shortcut");
+        tracing::warn!(%err, "could not start the launcher key presses");
     }
+}
+
+/// An `https://` address with a host: the only kind an add-game option may open in the browser.
+fn is_https_url(url: &str) -> bool {
+    url.get(..8)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
+        && url[8..]
+            .split(['/', '?', '#'])
+            .next()
+            .is_some_and(|host| !host.is_empty() && !host.contains(char::is_whitespace))
 }
 
 /// `action` with `extra` appended to its command-line arguments (a URI is left as it is).
@@ -3354,16 +3379,18 @@ mod tests {
         };
         assert_eq!(with_extra_args(uri.clone(), "--x"), uri);
 
-        let key = |k| {
-            questkeep_store_api::model::AddGameOption::new("x", "X")
-                .pressing_ctrl("a.exe", "A", k)
-                .launcher_shortcut
-                .and_then(|s| s.virtual_key())
-        };
-        assert_eq!(key('n'), Some(b'N'));
-        assert_eq!(key('7'), Some(b'7'));
-        assert_eq!(key('+'), None, "only letters and digits");
-        assert_eq!(key('ä'), None);
+        assert!(is_https_url("https://example.com/new?x=1"));
+        assert!(is_https_url("HTTPS://example.com"));
+        for bad in [
+            "http://example.com",
+            "https://",
+            "https:///x",
+            "file:///C:/x",
+            "steam://open",
+            "https://a b",
+        ] {
+            assert!(!is_https_url(bad), "{bad}");
+        }
     }
 
     #[test]

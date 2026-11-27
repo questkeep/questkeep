@@ -30,7 +30,10 @@ function provider(id: string, name: string, canScan = true): ProviderInfo {
     shopUrl: null,
     installed: true,
     syncable: canScan,
-    addGameOptions: id === "prism" ? [{ id: "new-instance", label: "New Minecraft instance" }] : [],
+    addGameOptions:
+      id === "prism"
+        ? [{ id: "new-instance", label: "New Minecraft instance", opens: { kind: "provider" } }]
+        : [],
     settings: { options: [], credentials: null, notice: null },
   };
 }

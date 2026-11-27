@@ -284,7 +284,7 @@ describe("PluginsSection", () => {
     expect(shown.getByText("new.example")).toBeInTheDocument();
     expect(
       shown.getByText(
-        "Questkeep may close these programs after a game and press a shortcut in them when you add a game",
+        "Questkeep may close these programs after a game and press keys in them when you add a game",
       ),
     ).toBeInTheDocument();
     expect(shown.getByText("steam.exe")).toBeInTheDocument();
