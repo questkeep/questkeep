@@ -779,7 +779,7 @@ impl ActivityLog {
             if matches!(part, ClearPart::System | ClearPart::All) {
                 conn.execute("DELETE FROM system_events", [])?;
             }
-            conn.execute_batch("PRAGMA incremental_vacuum;")?;
+            give_back(&conn)?;
         }
         self.publish(Vec::new());
         Ok(())
@@ -811,7 +811,7 @@ impl ActivityLog {
         let conn = self.conn();
         let cutoff = now_ms() - i64::from(settings.system_days) * 24 * 60 * 60 * 1000;
         conn.execute("DELETE FROM system_events WHERE at < ?1", [cutoff])?;
-        conn.execute_batch("PRAGMA incremental_vacuum;")?;
+        incremental_vacuum(&conn)?;
         // A few rounds at most: each deletes about the share of entries the limit is exceeded by.
         for _ in 0..16 {
             let sizes = sizes(&conn)?;
@@ -832,13 +832,32 @@ impl ActivityLog {
                  AND id NOT IN (SELECT id FROM batches WHERE finished_at IS NULL)",
                 [],
             )?;
-            conn.execute_batch("PRAGMA incremental_vacuum;")?;
+            incremental_vacuum(&conn)?;
             if deleted == 0 {
                 break;
             }
         }
+        give_back(&conn)?;
         Ok(())
     }
+}
+
+/// Frees the free pages at the end of the file. Each step of the statement frees one page, so it
+/// runs to the end (`execute_batch` would stop after the first).
+fn incremental_vacuum(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("PRAGMA incremental_vacuum")?;
+    let mut rows = stmt.query([])?;
+    while rows.next()?.is_some() {}
+    Ok(())
+}
+
+/// Gives free pages back to the file system: they leave the database file, and the write-ahead
+/// log that carried the change is copied in and emptied, so the files on disk shrink now.
+fn give_back(conn: &Connection) -> Result<()> {
+    incremental_vacuum(&conn)?;
+    // In memory (or without WAL) this does nothing and answers anyway.
+    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+    Ok(())
 }
 
 /// Bytes the library and system parts take: the used pages split by the size of their rows.

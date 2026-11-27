@@ -225,6 +225,8 @@ fn worker(shared: &Shared, receiver: &Mutex<Receiver<CoverJob>>) {
         let Ok(job) = job else {
             return; // queue closed
         };
+        // The web requests of plugins for this job: one activity line per host.
+        let _requests = crate::traffic::begin_run();
         let reason = if job.force {
             reason::ARTWORK_REFETCH
         } else {
@@ -565,6 +567,8 @@ impl Drop for MetadataFetcher {
 fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
     let mut last_request: Option<Instant> = None;
     while let Ok(job) = receiver.recv() {
+        // The web requests of plugins for this job: one activity line per host.
+        let _requests = crate::traffic::begin_run();
         match job {
             Job::Metadata(job) => {
                 let reason = if job.by.kind == ActorKind::App {

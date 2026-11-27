@@ -1655,6 +1655,8 @@ impl Library {
     }
 
     fn scan_provider(&self, provider_id: &str, trigger: SyncTrigger) -> Result<ScanSummary> {
+        // The plugin's web requests of this sync: one activity line per host.
+        let _requests = crate::traffic::begin_run();
         let provider = self
             .providers
             .get(provider_id)

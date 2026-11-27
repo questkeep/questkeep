@@ -180,4 +180,40 @@ mod tests {
         assert_eq!(events[1].kind, "restoreFailed");
         assert_eq!(events[1].level, SystemLevel::Error);
     }
+
+    #[test]
+    fn a_run_reports_one_http_event_per_plugin_and_host() {
+        use questkeep_core::traffic::{Traffic, begin_run, note};
+        let sink: &'static Sink = Box::leak(Box::default());
+        let log = Arc::new(ActivityLog::in_memory());
+        sink.attach(log.clone());
+        let subscriber = tracing_subscriber::registry().with(ActivityLayer::new(sink));
+        tracing::subscriber::with_default(subscriber, || {
+            let request = |bytes, failed| Traffic {
+                requests: 1,
+                bytes,
+                failed,
+            };
+            let run = begin_run();
+            for _ in 0..10 {
+                note("meta", "api.example.org", request(10, 0));
+            }
+            note("meta", "api.example.org", request(0, 1));
+            note("meta", "img.example.org", request(500, 0));
+            drop(run);
+        });
+        let events = log.system_events(&SystemQuery::default()).unwrap().items;
+        assert_eq!(events.len(), 2, "{events:?}");
+        let api = events
+            .iter()
+            .find(|e| e.details["host"] == "api.example.org")
+            .unwrap();
+        assert_eq!(api.kind, "http");
+        assert_eq!(api.source_id.as_deref(), Some("meta"));
+        assert_eq!(api.level, SystemLevel::Warn);
+        assert_eq!(api.details["requests"], 11);
+        assert_eq!(api.details["bytes"], 100);
+        assert_eq!(api.details["failed"], 1);
+        assert_eq!(api.message, "11 requests to api.example.org, 1 failed");
+    }
 }

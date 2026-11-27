@@ -43,13 +43,18 @@ where
     F: FnOnce(&AppState) -> Result<T, CoreError> + Send + 'static,
 {
     let state = Arc::clone(&state);
-    tauri::async_runtime::spawn_blocking(move || f(&state))
-        .await
-        .map_err(|e| format!("Internal error: {e}"))?
-        .map_err(|e| {
-            tracing::warn!(error = %e, "command failed");
-            e.to_string()
-        })
+    tauri::async_runtime::spawn_blocking(move || {
+        // Web requests of plugins during the command (an extension's action): one activity
+        // line per plugin and host.
+        let _requests = questkeep_core::traffic::begin_run();
+        f(&state)
+    })
+    .await
+    .map_err(|e| format!("Internal error: {e}"))?
+    .map_err(|e| {
+        tracing::warn!(error = %e, "command failed");
+        e.to_string()
+    })
 }
 
 /// Who calls a command: the user, or a plugin's JavaScript, which the extension host marks with

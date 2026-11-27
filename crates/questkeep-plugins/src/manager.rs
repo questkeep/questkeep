@@ -448,6 +448,8 @@ impl PluginManager {
         let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
         let id = staged.manifest().id.clone();
         let folders = self.check_install_folders(staged.manifest(), folders)?;
+        let old_version = self.installed_version(&id);
+        let new_version = staged.manifest().version.clone();
         // The running copy lets go of its files before they are replaced.
         self.inner.unload(&id);
         if let Err(err) = staged.commit() {
@@ -460,13 +462,7 @@ impl PluginManager {
         self.inner.load(&id);
         self.sync_watch(&id);
         self.inner.changed();
-        tracing::info!(
-            target: "activity",
-            source = %format_args!("plugin:{id}"),
-            kind = "pluginInstalled",
-            from = %source.display(),
-            "installed from a folder"
-        );
+        note_install(&id, old_version.as_deref(), &new_version, "a folder");
         saved?;
         self.info(&id)
     }
@@ -510,6 +506,7 @@ impl PluginManager {
             .iter()
             .find(|p| p.entry.id == id)
             .map(|p| p.manifest.as_ref().map(|m| m.version.clone()));
+        let previous = old_version.clone().flatten();
         // The running copy lets go of its files (and of its data folder) before anything moves.
         self.inner.unload(id);
         if let Some(old_version) = old_version {
@@ -538,16 +535,18 @@ impl PluginManager {
         self.inner.load(id);
         self.inner.changed();
         registry::prune_cache(&self.inner.paths, id, &source);
-        tracing::info!(
-            target: "activity",
-            source = %format_args!("plugin:{id}"),
-            kind = "pluginInstalled",
-            version,
-            pinned,
-            "installed version {version} from the plugin list"
-        );
+        note_install(id, previous.as_deref(), version, "the plugin list");
         saved?;
         self.info(id)
+    }
+
+    /// The version of the installed copy of `id`, if any.
+    fn installed_version(&self, id: &str) -> Option<String> {
+        self.inner
+            .plugins()
+            .iter()
+            .find(|p| p.entry.id == id)
+            .and_then(|p| p.manifest.as_ref().map(|m| m.version.clone()))
     }
 
     /// Notes an install in the list: a new entry, or the existing one pointed at the new source.
@@ -629,7 +628,12 @@ impl PluginManager {
         }
         self.inner.load(id);
         self.inner.changed();
-        tracing::info!(plugin = id, "plugin reloaded");
+        tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginReloaded",
+            "reloaded from its source"
+        );
         self.info(id)
     }
 
@@ -644,6 +648,13 @@ impl PluginManager {
             self.inner.unload(id);
         }
         self.inner.changed();
+        tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = if enabled { "pluginEnabled" } else { "pluginDisabled" },
+            "{}",
+            if enabled { "switched on" } else { "switched off" }
+        );
         saved?;
         self.info(id)
     }
@@ -1010,24 +1021,15 @@ impl Inner {
             Ok(manifest) => (Some(manifest), Ok(Vec::new())),
             Err(err) => (None, Err(err)),
         };
-        // The activity log notes what each start (and change) loaded.
-        match (&outcome, &manifest) {
-            (Err(err), _) => tracing::error!(
+        // A failed load is worth a line in the activity log; routine loads at every start are
+        // not (installs, updates and switching on note themselves).
+        if let Err(err) = &outcome {
+            tracing::error!(
                 target: "activity",
                 source = %format_args!("plugin:{id}"),
                 kind = "pluginFailed",
                 "the plugin could not be loaded: {err}"
-            ),
-            (Ok(_), Some(manifest)) if enabled => tracing::info!(
-                target: "activity",
-                source = %format_args!("plugin:{id}"),
-                kind = "pluginLoaded",
-                version = %manifest.version,
-                "loaded {} {}",
-                manifest.name,
-                manifest.version
-            ),
-            _ => {}
+            );
         }
         let mut plugins = self.plugins();
         let Some(plugin) = plugins.iter_mut().find(|p| p.entry.id == id) else {
@@ -1270,6 +1272,27 @@ impl std::fmt::Debug for PluginManager {
         f.debug_struct("PluginManager")
             .field("plugins", &ids)
             .finish()
+    }
+}
+
+/// The activity log line for an install: an update when another version was installed.
+fn note_install(id: &str, old: Option<&str>, new: &str, from: &str) {
+    match old {
+        Some(old) => tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginUpdated",
+            from = old,
+            to = new,
+            "updated from {old} to {new} (from {from})"
+        ),
+        None => tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginInstalled",
+            version = new,
+            "installed version {new} from {from}"
+        ),
     }
 }
 

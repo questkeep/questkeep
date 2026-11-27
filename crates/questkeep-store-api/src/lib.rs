@@ -6,6 +6,7 @@ pub mod auth;
 pub mod platform;
 mod provider;
 pub mod sqlite;
+pub mod traffic;
 
 pub use provider::*;
 pub use questkeep_store_model::{model, settings};

@@ -809,6 +809,16 @@ impl ActivityLog {
         Ok(SystemPage { items, next })
     }
 
+    /// What the log's files take on disk (the database and its write-ahead log); `None` in
+    /// memory.
+    fn disk_bytes(&self) -> Option<u64> {
+        let path = self.path.as_ref()?;
+        let size = |p: &std::path::Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        let mut wal = path.clone().into_os_string();
+        wal.push("-wal");
+        Some(size(path) + size(std::path::Path::new(&wal)))
+    }
+
     /// Sizes and counts for Settings › Activity.
     pub fn stats(&self) -> Result<ActivityStats> {
         let conn = self.conn();
@@ -825,7 +835,9 @@ impl ActivityLog {
         Ok(ActivityStats {
             library_bytes: sizes.library,
             system_bytes: sizes.system,
-            file_bytes: u64::try_from(pages * page_size).unwrap_or_default(),
+            file_bytes: self
+                .disk_bytes()
+                .unwrap_or_else(|| u64::try_from(pages * page_size).unwrap_or_default()),
             entries: count("entries")?,
             system_events: count("system_events")?,
             oldest_entry: oldest.map(from_ms),

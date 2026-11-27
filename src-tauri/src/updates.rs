@@ -80,9 +80,7 @@ pub async fn check(app: &AppHandle) -> CmdResult<Option<UpdateInfo>> {
     let info = if let Some(fake) = fake_update() {
         Some(fake)
     } else {
-        let found = find(app).await.inspect_err(|err| {
-            tracing::warn!(target: "activity", source = "app", kind = "updateCheckFailed", "{err}");
-        })?;
+        let found = find(app).await.inspect_err(|err| note_check(Err(err)))?;
         found.map(|update| UpdateInfo {
             version: update.version.clone(),
             notes: update.body.clone().filter(|b| !b.trim().is_empty()),
@@ -93,24 +91,34 @@ pub async fn check(app: &AppHandle) -> CmdResult<Option<UpdateInfo>> {
             manual: !crate::install_kind::self_updating(),
         })
     };
-    match &info {
-        Some(info) => tracing::info!(
+    note_check(Ok(info.as_ref().map(|i| i.version.as_str())));
+    remember(app, info.clone());
+    Ok(info)
+}
+
+/// The activity log line of an update check: the version found, none, or why it failed.
+fn note_check(result: Result<Option<&str>, &String>) {
+    match result {
+        Ok(Some(version)) => tracing::info!(
             target: "activity",
             source = "app",
             kind = "updateCheck",
-            version = %info.version,
-            "Questkeep {} is available",
-            info.version
+            version,
+            "Questkeep {version} is available"
         ),
-        None => tracing::info!(
+        Ok(None) => tracing::info!(
             target: "activity",
             source = "app",
             kind = "updateCheck",
             "Questkeep is up to date"
         ),
+        Err(err) => tracing::warn!(
+            target: "activity",
+            source = "app",
+            kind = "updateCheckFailed",
+            "{err}"
+        ),
     }
-    remember(app, info.clone());
-    Ok(info)
 }
 
 fn remember(app: &AppHandle, info: Option<UpdateInfo>) {
@@ -451,6 +459,46 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+
+    #[test]
+    fn update_checks_are_noted_in_the_activity_log() {
+        use questkeep_core::activity::{ActivityLog, SystemLevel, SystemQuery};
+        use tracing_subscriber::prelude::*;
+
+        let sink: &'static crate::activity_layer::Sink = Box::leak(Box::default());
+        let log = std::sync::Arc::new(ActivityLog::in_memory());
+        sink.attach(log.clone());
+        let subscriber =
+            tracing_subscriber::registry().with(crate::activity_layer::ActivityLayer::new(sink));
+        tracing::subscriber::with_default(subscriber, || {
+            note_check(Ok(Some("1.2.0")));
+            note_check(Ok(None));
+            note_check(Err(&"Could not check for updates: offline".to_string()));
+        });
+        let events = log.system_events(&SystemQuery::default()).unwrap().items;
+        let seen: Vec<(&str, SystemLevel, &str)> = events
+            .iter()
+            .map(|e| (e.kind.as_str(), e.level, e.message.as_str()))
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                (
+                    "updateCheckFailed",
+                    SystemLevel::Warn,
+                    "Could not check for updates: offline"
+                ),
+                ("updateCheck", SystemLevel::Info, "Questkeep is up to date"),
+                (
+                    "updateCheck",
+                    SystemLevel::Info,
+                    "Questkeep 1.2.0 is available"
+                ),
+            ]
+        );
+        assert_eq!(events[2].details["version"], "1.2.0");
+        assert!(events.iter().all(|e| e.source_kind == "app"));
+    }
 
     #[test]
     fn progress_is_reported_once_per_percent() {

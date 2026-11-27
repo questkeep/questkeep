@@ -570,6 +570,13 @@ fn retention_drops_old_system_events_and_the_oldest_entries_over_the_size_limit(
     assert!(after.library_bytes <= 1024 * 1024, "{after:?}");
     assert!(after.entries > 0 && after.entries < 300, "{after:?}");
     assert_eq!(after.system_events, 1, "the month-old event went");
+    // The pages went back to the file system, and the write-ahead log was emptied.
+    assert!(after.file_bytes < before.file_bytes, "{before:?} {after:?}");
+    assert!(after.file_bytes <= 3 * 1024 * 1024 / 2, "{after:?}");
+    let wal = tmp.path().join(format!("{FILE_NAME}-wal"));
+    assert_eq!(std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0), 0);
+    let main = std::fs::metadata(tmp.path().join(FILE_NAME)).unwrap().len();
+    assert_eq!(after.file_bytes, main, "the stats show the files on disk");
     // The newest entries stay.
     let newest: String = log
         .conn()

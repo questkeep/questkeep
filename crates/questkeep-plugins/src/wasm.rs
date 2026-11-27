@@ -18,6 +18,7 @@ use questkeep_store_api::model::{
     LauncherClose, LauncherProcess, PlayAction, TrackingMode,
 };
 use questkeep_store_api::settings::StoreSettings;
+use questkeep_store_api::traffic::Traffic;
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
 use serde::de::DeserializeOwned;
 use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
@@ -329,14 +330,6 @@ struct HostState {
     traffic: BTreeMap<String, Traffic>,
 }
 
-/// What a plugin asked of one host during one call.
-#[derive(Debug, Default, Clone, PartialEq)]
-struct Traffic {
-    requests: u64,
-    bytes: u64,
-    failed: u64,
-}
-
 /// What a store needs for its website session: its login setup, the service and the store id.
 type WebSessionParts<'a> = (&'a LoginSetup, &'a Arc<dyn WebSession>, &'a str);
 
@@ -543,17 +536,7 @@ impl host::Host for HostState {
             .and_then(|uri| uri.host().map(str::to_ascii_lowercase))
             .unwrap_or_default();
         let answer = self.send(request);
-        let traffic = self.traffic.entry(host).or_default();
-        traffic.requests += 1;
-        match &answer {
-            Ok(response) => {
-                traffic.bytes += response.body.len() as u64;
-                if response.status >= 400 {
-                    traffic.failed += 1;
-                }
-            }
-            Err(_) => traffic.failed += 1,
-        }
+        self.traffic.entry(host).or_default().add(counted(&answer));
         answer
     }
 }
@@ -595,6 +578,22 @@ impl HostState {
             headers,
             body,
         })
+    }
+}
+
+/// One request as the activity log counts it: an error or an error status counts as failed.
+fn counted(answer: &std::result::Result<host::Response, String>) -> Traffic {
+    match answer {
+        Ok(response) => Traffic {
+            requests: 1,
+            bytes: response.body.len() as u64,
+            failed: u64::from(response.status >= 400),
+        },
+        Err(_) => Traffic {
+            requests: 1,
+            bytes: 0,
+            failed: 1,
+        },
     }
 }
 
@@ -845,38 +844,11 @@ impl WasmProvider {
         }
     }
 
-    /// Notes a call's requests in the activity log: one event per host.
+    /// Hands a call's requests to the activity log, which sums them per run (a sync, a fetch
+    /// job, a command) and host.
     fn report_traffic(&self, traffic: BTreeMap<String, Traffic>) {
-        let source = format!("plugin:{}", self.sandbox.plugin_id);
-        for (host, t) in traffic {
-            let message = format!(
-                "{} request{} to {host}",
-                t.requests,
-                if t.requests == 1 { "" } else { "s" }
-            );
-            if t.failed > 0 {
-                tracing::warn!(
-                    target: "activity",
-                    source = source.as_str(),
-                    kind = "http",
-                    host = host.as_str(),
-                    requests = t.requests,
-                    bytes = t.bytes,
-                    failed = t.failed,
-                    "{message}, {} failed",
-                    t.failed
-                );
-            } else {
-                tracing::info!(
-                    target: "activity",
-                    source = source.as_str(),
-                    kind = "http",
-                    host = host.as_str(),
-                    requests = t.requests,
-                    bytes = t.bytes,
-                    "{message}"
-                );
-            }
+        for (host, counts) in traffic {
+            questkeep_store_api::traffic::note(&self.sandbox.plugin_id, &host, counts);
         }
     }
 
@@ -1300,6 +1272,29 @@ mod tests {
 
     fn rules(entries: &[&str]) -> Vec<HostRule> {
         entries.iter().filter_map(|e| HostRule::parse(e)).collect()
+    }
+
+    #[test]
+    fn requests_count_their_bytes_and_failures() {
+        let answer = |status: u16, body: &[u8]| {
+            Ok(host::Response {
+                status,
+                headers: Vec::new(),
+                body: body.to_vec(),
+            })
+        };
+        let mut total = Traffic::default();
+        total.add(counted(&answer(200, b"hello")));
+        total.add(counted(&answer(404, b"no")));
+        total.add(counted(&Err("offline".into())));
+        assert_eq!(
+            total,
+            Traffic {
+                requests: 3,
+                bytes: 7,
+                failed: 2
+            }
+        );
     }
 
     #[test]
