@@ -282,7 +282,11 @@ describe("PluginsSection", () => {
     expect(shown.getByText("api.new.example")).toBeInTheDocument();
     expect(shown.getByText("Sign-in windows may visit these web domains")).toBeInTheDocument();
     expect(shown.getByText("new.example")).toBeInTheDocument();
-    expect(shown.getByText("Questkeep may close these programs after a game")).toBeInTheDocument();
+    expect(
+      shown.getByText(
+        "Questkeep may close these programs after a game and press a shortcut in them when you add a game",
+      ),
+    ).toBeInTheDocument();
     expect(shown.getByText("steam.exe")).toBeInTheDocument();
     // From a folder, nobody has reviewed it.
     expect(shown.getByRole("alert")).toHaveTextContent(/not come from the plugin registry/);

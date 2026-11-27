@@ -6,6 +6,8 @@ use std::path::PathBuf;
 #[cfg(windows)]
 mod drives;
 #[cfg(windows)]
+mod foreground;
+#[cfg(windows)]
 mod windows;
 
 /// One program of the Windows "Apps" list (an `...\CurrentVersion\Uninstall\<key>` entry).
@@ -90,6 +92,33 @@ pub fn split_command_line(command: &str) -> Option<(String, String)> {
         }
     };
     (!program.is_empty()).then(|| (program, rest.trim().to_string()))
+}
+
+/// Lets the program started next come to the front: the user just asked for it (a launcher
+/// opened from a menu). Windows only; elsewhere nothing to do.
+pub fn allow_foreground_handoff() {
+    #[cfg(windows)]
+    foreground::allow_foreground_handoff();
+}
+
+/// Presses Ctrl+`key` (a Windows virtual-key code, e.g. `b'N'`) in the program `exe` once one of
+/// its windows whose title starts with `title_prefix` is in front, waiting up to `timeout`. It
+/// never types into another program; false when that window did not come up. Windows only.
+pub fn press_ctrl_key_in(
+    exe: &str,
+    title_prefix: &str,
+    key: u8,
+    timeout: std::time::Duration,
+) -> bool {
+    #[cfg(windows)]
+    {
+        foreground::press_ctrl_key_in(exe, title_prefix, u16::from(key), timeout)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (exe, title_prefix, key, timeout);
+        false
+    }
 }
 
 /// An installed AppX/MSIX package registered for the current user.

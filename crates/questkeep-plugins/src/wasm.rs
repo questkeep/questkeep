@@ -1161,7 +1161,12 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn add_game_options(&self) -> Vec<AddGameOption> {
-        self.described().add_game_options.clone()
+        self.described()
+            .add_game_options
+            .iter()
+            .cloned()
+            .map(|option| crate::access::gate_add_game_option(option, &self.sandbox.launcher_names))
+            .collect()
     }
 
     fn run_add_game_option(&self, option_id: &str) -> std::result::Result<(), ProviderError> {

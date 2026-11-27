@@ -317,6 +317,36 @@ pub struct AddGameOption {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub launcher_args: Option<String>,
+    /// A shortcut to press in the launcher once its window is in front, for a dialog that has no
+    /// command-line option (Prism Launcher's Ctrl+N "Add Instance"). Only with `launcher_args`,
+    /// Windows only. A store plugin must list the process in `permissions.launcher.processNames`,
+    /// otherwise the shortcut is dropped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub launcher_shortcut: Option<LauncherShortcut>,
+}
+
+/// Ctrl+`key` pressed in a launcher window (see [`AddGameOption::launcher_shortcut`]). Pressed only
+/// while a window of `process` whose title starts with `window_title` is in front, within 20
+/// seconds of opening the launcher; nothing is typed into any other program.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct LauncherShortcut {
+    /// The launcher's process file name, e.g. `prismlauncher.exe`.
+    pub process: String,
+    /// The start of the window's title, e.g. `Prism Launcher`.
+    pub window_title: String,
+    /// One letter or digit, pressed together with Ctrl.
+    pub ctrl_key: char,
+}
+
+impl LauncherShortcut {
+    /// The Windows virtual-key code of `ctrl_key` (A–Z, 0–9), `None` for anything else.
+    pub fn virtual_key(&self) -> Option<u8> {
+        let key = self.ctrl_key.to_ascii_uppercase();
+        (key.is_ascii_uppercase() || key.is_ascii_digit()).then_some(key as u8)
+    }
 }
 
 impl AddGameOption {
@@ -325,12 +355,28 @@ impl AddGameOption {
             id: id.into(),
             label: label.into(),
             launcher_args: None,
+            launcher_shortcut: None,
         }
     }
 
     /// Opens the store's launcher with `args` added instead of calling `run_add_game_option`.
     pub fn opening_launcher(mut self, args: impl Into<String>) -> Self {
         self.launcher_args = Some(args.into());
+        self
+    }
+
+    /// Then presses Ctrl+`key` once a window of `process` titled `window_title…` is in front.
+    pub fn pressing_ctrl(
+        mut self,
+        process: impl Into<String>,
+        window_title: impl Into<String>,
+        key: char,
+    ) -> Self {
+        self.launcher_shortcut = Some(LauncherShortcut {
+            process: process.into(),
+            window_title: window_title.into(),
+            ctrl_key: key,
+        });
         self
     }
 }

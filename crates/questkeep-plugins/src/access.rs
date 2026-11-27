@@ -10,7 +10,7 @@ use questkeep_store_api::auth::{
     CAPTURE_PREFIX, CaptureRule, KeyringTokenStore, LoginWindow, TokenStore, WebSession,
     WebSessionPage,
 };
-use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+use questkeep_store_api::model::{ActionKind, AddGameOption, LauncherClose, LauncherProcess};
 
 use crate::error::{PluginError, Result};
 use crate::manifest::{LoginPermission, PluginManifest};
@@ -228,6 +228,21 @@ pub fn is_protected(path: &Path, protected: &[PathBuf]) -> bool {
 
 // ---- the launcher ----------------------------------------------------------------------
 
+/// A plugin store's add-game option: its launcher shortcut (keys pressed in another program's
+/// window) is kept only when the manifest declares that process
+/// (`permissions.launcher.processNames`); otherwise the option just opens the launcher.
+pub fn gate_add_game_option(mut option: AddGameOption, declared: &[String]) -> AddGameOption {
+    let allowed = option.launcher_shortcut.as_ref().is_some_and(|shortcut| {
+        declared
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(&shortcut.process))
+    });
+    if !allowed {
+        option.launcher_shortcut = None;
+    }
+    option
+}
+
 /// What a plugin store may tell Questkeep to close after a game: only processes whose names the
 /// manifest declares (`permissions.launcher.processNames`), and only a clean-exit command whose
 /// program is one of them. Without a declaration the store has no launcher process.
@@ -270,6 +285,24 @@ fn file_name(path: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launcher_shortcuts_need_a_declared_process() {
+        let option = AddGameOption::new("new", "New")
+            .opening_launcher("--show-window")
+            .pressing_ctrl("PrismLauncher.exe", "Prism Launcher", 'N');
+        let declared = vec!["prismlauncher.exe".to_string()];
+        let kept = gate_add_game_option(option.clone(), &declared);
+        assert_eq!(kept, option, "declared (any case): kept");
+        let dropped = gate_add_game_option(option.clone(), &["other.exe".to_string()]);
+        assert_eq!(dropped.launcher_shortcut, None);
+        assert_eq!(
+            dropped.launcher_args.as_deref(),
+            Some("--show-window"),
+            "still opens"
+        );
+        assert_eq!(gate_add_game_option(option, &[]).launcher_shortcut, None);
+    }
     use questkeep_store_api::model::PlayAction;
 
     fn names(list: &[&str]) -> Vec<String> {

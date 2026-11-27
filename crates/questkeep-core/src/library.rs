@@ -2534,16 +2534,21 @@ impl Library {
             .add_game_options()
             .into_iter()
             .find(|o| o.id == option_id);
-        if let Some(args) = option.and_then(|o| o.launcher_args) {
+        if let Some(option) = option.filter(|o| o.launcher_args.is_some()) {
             let action = with_extra_args(
                 provider.launcher().ok_or_else(|| {
                     CoreError::Invalid(format!("{} isn't installed on this PC.", provider.name()))
                 })?,
-                &args,
+                option.launcher_args.as_deref().unwrap_or_default(),
             );
+            // The user just chose this in the menu: the launcher may come to the front.
+            crate::providers::platform::allow_foreground_handoff();
             run_store_action(&action).map_err(|err| {
                 CoreError::Launch(format!("Could not open {}: {err}", provider.name()))
             })?;
+            if let Some(shortcut) = option.launcher_shortcut {
+                press_launcher_shortcut(provider.name().to_string(), shortcut);
+            }
             return Ok(before);
         }
         provider
@@ -2660,6 +2665,37 @@ fn note_restored_backup(paths: &DataPaths, activity: &ActivityLog) {
 }
 
 /// Opens a store URI or starts a program (installer or uninstaller) without tracking it.
+/// How long an add-game option's launcher shortcut waits for the launcher's window.
+const SHORTCUT_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Presses an add-game option's shortcut in its launcher on a background thread, once the
+/// launcher's window is in front (never in another program's window).
+fn press_launcher_shortcut(store: String, shortcut: questkeep_store_api::model::LauncherShortcut) {
+    let Some(key) = shortcut.virtual_key() else {
+        tracing::warn!(store, key = %shortcut.ctrl_key, "launcher shortcut is not a letter or digit");
+        return;
+    };
+    let spawned = std::thread::Builder::new()
+        .name("launcher-shortcut".into())
+        .spawn(move || {
+            if !crate::providers::platform::press_ctrl_key_in(
+                &shortcut.process,
+                &shortcut.window_title,
+                key,
+                SHORTCUT_TIMEOUT,
+            ) {
+                tracing::info!(
+                    store,
+                    process = shortcut.process,
+                    "the launcher's window did not come to the front; shortcut not pressed"
+                );
+            }
+        });
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "could not start the launcher shortcut");
+    }
+}
+
 /// `action` with `extra` appended to its command-line arguments (a URI is left as it is).
 fn with_extra_args(mut action: PlayAction, extra: &str) -> PlayAction {
     let extra = extra.trim();
@@ -3317,6 +3353,17 @@ mod tests {
             ..PlayAction::file("steam://open/main")
         };
         assert_eq!(with_extra_args(uri.clone(), "--x"), uri);
+
+        let key = |k| {
+            questkeep_store_api::model::AddGameOption::new("x", "X")
+                .pressing_ctrl("a.exe", "A", k)
+                .launcher_shortcut
+                .and_then(|s| s.virtual_key())
+        };
+        assert_eq!(key('n'), Some(b'N'));
+        assert_eq!(key('7'), Some(b'7'));
+        assert_eq!(key('+'), None, "only letters and digits");
+        assert_eq!(key('ä'), None);
     }
 
     #[test]
