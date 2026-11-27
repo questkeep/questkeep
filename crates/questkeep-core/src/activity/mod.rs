@@ -854,7 +854,7 @@ fn incremental_vacuum(conn: &Connection) -> Result<()> {
 /// Gives free pages back to the file system: they leave the database file, and the write-ahead
 /// log that carried the change is copied in and emptied, so the files on disk shrink now.
 fn give_back(conn: &Connection) -> Result<()> {
-    incremental_vacuum(&conn)?;
+    incremental_vacuum(conn)?;
     // In memory (or without WAL) this does nothing and answers anyway.
     conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
     Ok(())
