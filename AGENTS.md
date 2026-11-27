@@ -72,7 +72,7 @@ crates/questkeep-store-api/    the store plugin interface: LibraryProvider (+ sc
                                sign-ins), settings.rs (StoreSettings: options, credentials),
                                platform/ (registry, uninstall entries, appx), sqlite (foreign DBs)
 crates/stores/<id>/            one crate per store (questkeep-store-<id>): steam, epic, gog, xbox,
-                               ubisoft, amazon, battlenet, ea, prism, lutris, heroic (shared Heroic
+                               ubisoft, amazon, battlenet, ea, meta, lutris, heroic (shared Heroic
                                helpers + sideloaded games); icon.svg, login/session scripts,
                                fixtures/ next to src/
 crates/questkeep-stores/       the built-in store list (`builtin`); only the app depends on it

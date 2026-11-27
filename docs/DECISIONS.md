@@ -543,7 +543,7 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Providers can offer extra ways to add games** (`add_game_options`, a split "Add game" button).
   After one runs, a worker scans that provider every 5 s for up to 10 min and imports the first new
   game, so nothing has to be synced by hand.
-- **Prism Launcher's "Add Instance" is opened with Ctrl+N**: Prism has no command-line option for
+- **(Superseded: Prism is now the `questkeep/plugin-prism` plugin, without the keystroke.)** **Prism Launcher's "Add Instance" is opened with Ctrl+N**: Prism has no command-line option for
   it. Questkeep starts Prism (`--show-window`, allowed to take the foreground) and sends Ctrl+N only
   once a `prismlauncher.exe` window titled "Prism Launcher…" is in front, so the keys never reach
   another program. Instances play through `--launch <id>`, tracked by the Java process name, since
@@ -729,7 +729,8 @@ Design: `docs/superpowers/specs/2026-11-21-plugin-permissions-design.md`.
 - **Secrets are keyring entries named `plugin/<plugin id>/<key>`:** with whole-disk read, a token in `/data` would be readable by every plugin. Plugin ids have no `/`, so entries cannot collide with each other or with the built-in stores (named by store id). Not done: Remove does not delete a plugin's entries (the keyring cannot list them and the keys are the plugin's own), so plugins delete theirs on sign-out.
 - **Login windows are data and locked to declared domains:** `permissions.login` describes the page, the capture rule and the scripts; the window may only visit `login.domains` (and subdomains), and the first page load is checked like every navigation. `LoginWindow` got `domains` (empty: any https page, as the built-in stores) and `rule` (a parameter capture as data) next to its function pointer. A plugin receives only what the window captured or the session script reported, never cookies; each store has its own browser profile.
 - **Closing the launcher uses names from the manifest:** `launcher_process()` only takes effect for names in `permissions.launcher.processNames` and a clean-exit command only when its program is one of them; without a declaration the store has none. The user's "Close launcher after playing" setting stays the gate.
-- **Prism's keystroke injection is not offered to plugins:** a plugin cannot press keys in another program's window. The built-in Prism keeps its code.
+- **Prism's keystroke injection is not offered to plugins:** a plugin cannot press keys in another program's window. The built-in Prism kept its code until Prism moved to a plugin.
+- **Prism Launcher moved out of the app into the `questkeep/plugin-prism` plugin:** it only reads Prism's own files and starts instances, which the plugin API covers, and it serves few users. The plugin keeps the store id `prism` and the same game ids, so existing entries, sessions and combines match again once it is installed; until then they stay in the library and still start (play actions are stored), but do not sync. The Ctrl+N automation for "New Minecraft instance" was dropped with it, and so were the keystroke helpers in the store API.
 - **`platform/drives.rs` is another small `unsafe` module:** two Win32 calls (`GetLogicalDrives`, `GetDriveTypeW`) with a local buffer, to list local drives for the plugins' file system view.
 
 ## Plugin registry

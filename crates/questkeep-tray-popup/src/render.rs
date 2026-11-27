@@ -1042,7 +1042,7 @@ mod tests {
                     launcher("ea", "EA app", icons::EA),
                     launcher("ubisoft", "Ubisoft Connect", icons::UBISOFT),
                     launcher("battlenet", "Battle.net", icons::BATTLENET),
-                    launcher("prism", "Prism Launcher", icons::PRISM),
+                    launcher("meta", "Meta Horizon Link", icons::META),
                     PopupLauncher {
                         target: crate::LauncherTarget::Game(Uuid::from_u128(99)),
                         name: "Discord".into(),

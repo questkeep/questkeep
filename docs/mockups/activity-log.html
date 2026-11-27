@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Questkeep activity log</title>
+<style>
+:root {
+  --bg: #111317; --surface: #171a20; --raised: #1e222a; --hover: #262b35; --active: #343a47;
+  --border: #2a2f3a; --text: #e6e8ec; --muted: #9aa1ae; --faint: #6c7381;
+  --accent: #7c9cff; --accent-soft: #232c4a; --success: #6fd6a0; --success-soft: #1c3529;
+  --danger: #ff7a85; --danger-soft: #3a1f26; --warn: #ffb86b; --warn-soft: #2a2219;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; font-size: 14px; color: var(--text);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #05060a; padding: 16px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input, select { font: inherit; color: inherit; }
+.note { max-width: 1280px; margin: 0 auto 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.note b { color: var(--text); }
+.tabs { max-width: 1280px; margin: 0 auto 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { padding: 6px 12px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+.tabs button.on { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+.app { max-width: 1280px; min-height: 720px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.view { display: none; padding: 20px 24px; }
+.view.on { display: block; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+.sub { color: var(--muted); font-size: 13px; }
+
+/* Shared: entries */
+.day { color: var(--faint); font-size: 12px; margin: 16px 0 6px; }
+.entry { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 6px; }
+.entry > .head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; width: 100%; text-align: left; }
+.entry > .head:hover { background: var(--hover); border-radius: var(--r-md); }
+.chev { color: var(--faint); width: 12px; transition: transform .15s; flex: none; }
+.entry.open .chev { transform: rotate(90deg); }
+.time { color: var(--faint); font-size: 12px; width: 44px; flex: none; }
+.actor { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--raised); color: var(--muted); border: 1px solid var(--border); flex: none; white-space: nowrap; }
+.actor.user { background: var(--accent-soft); color: var(--text); border-color: transparent; }
+.actor.plugin { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.actor.store { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.summary { flex: 1; min-width: 0; }
+.summary small { color: var(--muted); margin-left: 6px; }
+.count { color: var(--faint); font-size: 12px; }
+.details { display: none; padding: 0 12px 12px 36px; }
+.entry.open > .details { display: block; }
+table.diff { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.diff td { padding: 5px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+table.diff td:first-child { color: var(--muted); width: 140px; }
+.old { color: var(--danger); text-decoration: line-through; text-decoration-color: #ff7a8566; }
+.new { color: var(--success); }
+.arrow { color: var(--faint); padding: 0 6px; }
+.why { font-size: 12px; color: var(--faint); margin: 2px 0 8px; }
+.game-link { color: var(--accent); }
+.nested { margin-top: 6px; }
+.nested .entry { background: var(--raised); }
+
+/* Game page */
+.gp { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
+.hero { height: 160px; border-radius: var(--r-lg); background: linear-gradient(135deg, #2b3550, #1b2030 60%, #30243a); display: flex; align-items: flex-end; padding: 16px; margin-bottom: 14px; }
+.hero h1 { margin: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 14px; margin-bottom: 12px; }
+.card .title { display: flex; align-items: center; justify-content: space-between; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.linkbtn { color: var(--accent); font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mini { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.mini:first-of-type { border-top: 0; }
+.mini .t { color: var(--faint); font-size: 12px; width: 70px; flex: none; }
+.placeholder { height: 70px; border-radius: var(--r-md); background: var(--raised); }
+
+/* Global page */
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 3px; }
+.seg button { padding: 5px 14px; border-radius: var(--r-sm); color: var(--muted); }
+.seg button.on { background: var(--active); color: var(--text); }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 4px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+.chip b { color: var(--text); font-weight: 500; }
+.chip.on { border-color: var(--accent); color: var(--text); }
+.search { flex: 1; min-width: 200px; padding: 6px 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); }
+.lvl { font-size: 11px; font-weight: 600; width: 44px; flex: none; }
+.lvl.info { color: var(--muted); } .lvl.warn { color: var(--warn); } .lvl.err { color: var(--danger); }
+.mono { font-family: Consolas, ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+
+/* Settings */
+.set { max-width: 720px; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border); }
+.row .lab small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.ctl { display: flex; gap: 8px; align-items: center; }
+.num { width: 70px; padding: 5px 8px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--border); text-align: right; }
+.fakeselect { padding: 5px 10px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--border); }
+.bar { height: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; display: flex; margin: 8px 0 4px; }
+.bar i { display: block; height: 100%; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; background: var(--c); }
+.btn { padding: 6px 12px; border-radius: var(--r-md); background: var(--raised); border: 1px solid var(--border); }
+.btn.danger { color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="note">
+  <b>Activity log: design ideas.</b> Every change is recorded as one <b>entry</b>: <i>who</i> (you, a store sync, a plugin, Questkeep itself),
+  a one-line <i>summary of why</i>, and expandable <i>details of what</i> (field, before → after). Changes made together (one sync, one
+  bulk edit) form a <b>batch</b>, so a Steam sync is one line in the global log that expands to the games it touched.
+  Click the tabs to switch views; click entries to expand them.
+</div>
+<div class="tabs">
+  <button class="on" data-v="game">1 · Game page</button>
+  <button data-v="library">2 · Activity page: Library</button>
+  <button data-v="system">3 · Activity page: System</button>
+  <button data-v="settings">4 · Settings: retention</button>
+</div>
+
+<div class="app">
+  <!-- 1. GAME PAGE -->
+  <section class="view on" id="game">
+    <div class="gp">
+      <div>
+        <div class="hero"><h1>Beat Saber</h1></div>
+        <div class="card"><div class="title">About</div><div class="placeholder"></div></div>
+        <div class="card">
+          <div class="title">Activity <button class="linkbtn">Show all in Activity →</button></div>
+          <div class="day">Today</div>
+          <div class="entry">
+            <button class="head"><span class="chev">▶</span><span class="time">14:02</span><span class="actor user">You</span>
+              <span class="summary">Refreshed metadata <small>from IGDB</small></span><span class="count">3 fields</span></button>
+            <div class="details">
+              <table class="diff">
+                <tr><td>Description</td><td><span class="old">Beat Saber is a VR rhythm game…</span><span class="arrow">→</span><span class="new">Beat Saber is a unique VR rhythm game where…</span></td></tr>
+                <tr><td>Genres</td><td><span class="new">+ Music</span>, <span class="old">− Arcade</span></td></tr>
+                <tr><td>Cover</td><td><span class="old">steam-cover.jpg</span><span class="arrow">→</span><span class="new">igdb-co2fia.jpg</span></td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="entry">
+            <button class="head"><span class="chev">▶</span><span class="time">09:15</span><span class="actor plugin">BSManager plugin</span>
+              <span class="summary">Found a new version <small>during sync</small></span><span class="count">1 copy</span></button>
+            <div class="details">
+              <div class="why">Part of “BSManager sync, 09:15” · 1 game added, 2 updated</div>
+              <table class="diff">
+                <tr><td>Copies</td><td><span class="new">+ BSManager · 1.40.0</span></td></tr>
+                <tr><td>Installed</td><td><span class="new">Yes (BSManager · 1.40.0)</span></td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="day">Yesterday</div>
+          <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">21:40</span><span class="actor user">You</span>
+            <span class="summary">Combined with “Beat Saber (1.29.1)”</span><span class="count">2 copies</span></button>
+            <div class="details"><table class="diff">
+              <tr><td>Copies</td><td><span class="new">+ BSManager · 1.29.1</span></td></tr>
+              <tr><td>Categories</td><td><span class="new">+ VR</span> <small class="sub">(taken from the other entry)</small></td></tr>
+            </table></div></div>
+          <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">20:05</span><span class="actor store">Steam</span>
+            <span class="summary">Uninstalled <small>detected during sync</small></span></button>
+            <div class="details"><table class="diff"><tr><td>Installed</td><td><span class="old">Yes</span><span class="arrow">→</span><span class="new">No</span></td></tr></table></div></div>
+          <div class="day">12 Nov 2026</div>
+          <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">18:30</span><span class="actor store">Steam</span>
+            <span class="summary">Added to your library</span></button>
+            <div class="details"><table class="diff"><tr><td>Name</td><td><span class="new">Beat Saber</span></td></tr><tr><td>Store ID</td><td><span class="new">620980</span></td></tr></table></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="card"><div class="title">Library</div><div class="placeholder"></div></div>
+        <div class="card">
+          <div class="title">Recent activity <button class="linkbtn">All →</button></div>
+          <div class="sub" style="margin-bottom:6px">Alternative: a compact card in the side column instead of a full-width one</div>
+          <div class="mini"><span class="t">Today</span><span>You refreshed metadata (3 fields)</span></div>
+          <div class="mini"><span class="t">Today</span><span>BSManager plugin found version 1.40.0</span></div>
+          <div class="mini"><span class="t">Yesterday</span><span>You combined it with Beat Saber (1.29.1)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. GLOBAL: LIBRARY -->
+  <section class="view" id="library">
+    <div class="top">
+      <div><h1>Activity</h1><div class="sub">What happened to your library, and who did it</div></div>
+      <div class="seg"><button class="on">Library</button><button>System</button></div>
+    </div>
+    <div class="filters">
+      <input class="search" placeholder="Search games, fields, plugins…" />
+      <span class="chip on">Who: <b>Everyone</b> ▾</span>
+      <span class="chip">What: <b>All changes</b> ▾</span>
+      <span class="chip">When: <b>Last 30 days</b> ▾</span>
+    </div>
+    <div class="day">Today</div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">14:02</span><span class="actor user">You</span>
+      <span class="summary">Refreshed metadata of <span class="game-link">Beat Saber</span> <small>from IGDB</small></span><span class="count">3 fields</span></button>
+      <div class="details"><table class="diff">
+        <tr><td>Description</td><td><span class="old">Beat Saber is a VR rhythm game…</span><span class="arrow">→</span><span class="new">Beat Saber is a unique VR rhythm game where…</span></td></tr>
+        <tr><td>Genres</td><td><span class="new">+ Music</span>, <span class="old">− Arcade</span></td></tr>
+        <tr><td>Cover</td><td>changed</td></tr>
+      </table></div></div>
+    <div class="entry open"><button class="head"><span class="chev">▶</span><span class="time">11:30</span><span class="actor plugin">Metadata+ plugin</span>
+      <span class="summary">Updated 214 games <small>“Fill missing release dates”</small></span><span class="count">214 games · 231 fields</span></button>
+      <div class="details">
+        <div class="why">Started by you from the plugin’s menu · finished in 41 s</div>
+        <div class="nested">
+          <div class="entry"><button class="head"><span class="chev">▶</span><span class="summary"><span class="game-link">Celeste</span></span><span class="count">1 field</span></button>
+            <div class="details"><table class="diff"><tr><td>Release date</td><td><span class="old">—</span><span class="arrow">→</span><span class="new">25 Jan 2018</span></td></tr></table></div></div>
+          <div class="entry"><button class="head"><span class="chev">▶</span><span class="summary"><span class="game-link">Hades</span></span><span class="count">2 fields</span></button>
+            <div class="details"><table class="diff"><tr><td>Release date</td><td><span class="old">—</span><span class="arrow">→</span><span class="new">17 Sep 2020</span></td></tr><tr><td>Developer</td><td><span class="old">—</span><span class="arrow">→</span><span class="new">Supergiant Games</span></td></tr></table></div></div>
+          <div class="sub" style="padding:4px 2px">… 212 more · <span class="game-link">Show all</span></div>
+        </div>
+      </div></div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">09:15</span><span class="actor store">Steam</span>
+      <span class="summary">Synced <small>automatic, after start</small></span><span class="count">3 added · 12 updated · 1 removed</span></button>
+      <div class="details"><div class="why">Each game’s own log shows its part of this sync.</div></div></div>
+    <div class="day">Yesterday</div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">22:10</span><span class="actor user">You</span>
+      <span class="summary">Removed 4 games from your library</span><span class="count">4 games</span></button>
+      <div class="details"><div class="why">Names and store IDs are kept here so you can find them again.</div></div></div>
+  </section>
+
+  <!-- 3. GLOBAL: SYSTEM -->
+  <section class="view" id="system">
+    <div class="top">
+      <div><h1>Activity</h1><div class="sub">What Questkeep and its plugins did behind the scenes</div></div>
+      <div class="seg"><button>Library</button><button class="on">System</button></div>
+    </div>
+    <div class="filters">
+      <input class="search" placeholder="Search messages…" />
+      <span class="chip on">Source: <b>All plugins + Questkeep</b> ▾</span>
+      <span class="chip">Level: <b>Info and above</b> ▾</span>
+      <span class="chip">Kind: <b>All</b> ▾</span>
+      <span class="chip">When: <b>Today</b> ▾</span>
+    </div>
+    <div class="sub" style="margin:6px 0 10px">Kinds: plugin loaded/updated/removed · network requests (host only) · file system access summary · syncs · backups · errors</div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="lvl err">ERROR</span><span class="time">11:58</span><span class="actor plugin">Metadata+ plugin</span>
+      <span class="summary">Request to api.example.org failed <small>timeout after 20 s</small></span></button>
+      <div class="details"><div class="mono">GET https://api.example.org/v2/games?ids=… → timeout (attempt 3 of 3)</div></div></div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="lvl info">INFO</span><span class="time">11:30</span><span class="actor plugin">Metadata+ plugin</span>
+      <span class="summary">Made 37 requests to api.example.org</span><span class="count">grouped</span></button>
+      <div class="details"><div class="mono">37 × GET api.example.org (allowed by the plugin’s permissions) · 1.2 MB received</div></div></div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="lvl warn">WARN</span><span class="time">09:16</span><span class="actor store">Epic</span>
+      <span class="summary">Sign-in expired, sync skipped</span></button>
+      <div class="details"><div class="mono">Account session refresh returned 401</div></div></div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="lvl info">INFO</span><span class="time">09:14</span><span class="actor">Questkeep</span>
+      <span class="summary">Daily backup created</span><span class="count">4.1 MB</span></button>
+      <div class="details"><div class="mono">backup-2026-11-27.zip · 3 older kept</div></div></div>
+    <div class="entry"><button class="head"><span class="chev">▶</span><span class="lvl info">INFO</span><span class="time">09:14</span><span class="actor">Questkeep</span>
+      <span class="summary">Updated plugin “BSManager” 0.2.0 → 0.3.0</span></button>
+      <div class="details"><div class="mono">No new permissions</div></div></div>
+  </section>
+
+  <!-- 4. SETTINGS -->
+  <section class="view" id="settings">
+    <div class="set">
+      <h1>Activity</h1>
+      <div class="sub">How much history Questkeep keeps</div>
+      <h2>Storage</h2>
+      <div class="bar"><i style="width:38%;background:var(--accent)"></i><i style="width:9%;background:var(--warn)"></i></div>
+      <div class="legend"><span style="--c:var(--accent)">Library 19 MB</span><span style="--c:var(--warn)">System 4.5 MB</span><span>of 50 MB limit</span></div>
+      <div class="row"><div class="lab">Keep library activity up to<small>Oldest entries go first. Large old values (descriptions, notes) are trimmed before whole entries are dropped.</small></div>
+        <div class="ctl"><input class="num" value="50" /> MB</div></div>
+      <div class="row"><div class="lab">Keep system activity for<small>Plugin and app events are only useful for a while.</small></div>
+        <div class="ctl"><span class="fakeselect">30 days ▾</span></div></div>
+      <div class="row"><div class="lab">Record plugin network requests<small>Host names and counts only, never what was sent.</small></div>
+        <div class="ctl"><span class="fakeselect">On ▾</span></div></div>
+      <div class="row"><div class="lab">Clear activity<small>Your library is not changed.</small></div>
+        <div class="ctl"><button class="btn danger">Clear…</button></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === b.dataset.v));
+});
+document.querySelectorAll(".entry > .head").forEach(h => h.onclick = e => { e.stopPropagation(); h.parentElement.classList.toggle("open"); });
+</script>
+</body>
+</html>

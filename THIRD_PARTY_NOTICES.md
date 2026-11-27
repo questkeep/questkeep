@@ -81,11 +81,6 @@ manual provider's is `crates/questkeep-core/src/providers/manual.svg`).
 
 - Steam, Epic Games, GOG.com, Ubisoft, Battle.net, EA, Lutris and Heroic are monochrome glyphs
   from Simple Icons (https://simpleicons.org), released under CC0 1.0.
-- Prism Launcher's logo (`crates/stores/prism/icon.svg`) is adapted from the Prism Launcher logo
-  (https://github.com/PrismLauncher/PrismLauncher, `program_info/`), licensed under CC BY-SA 4.0
-  (https://creativecommons.org/licenses/by-sa/4.0/). Changes: the colored facets were redrawn in
-  one color with varying opacity and the inner cube was cut out; the adapted file is under the same
-  license.
 - Meta Horizon Link's icon (`crates/stores/meta/icon.svg`) is an original headset glyph drawn for
   Questkeep, not Meta's logo.
 - Xbox, Amazon and the folder used for manually added games are from Font Awesome Free 6.7.2 by

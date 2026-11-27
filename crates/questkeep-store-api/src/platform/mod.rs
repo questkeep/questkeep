@@ -1,14 +1,10 @@
-//! OS helpers stores need: the registry, the Windows "Apps" list, Store app packages, starting
-//! launcher dialogs. Everything is behind `cfg` so stores stay portable.
+//! OS helpers stores need: the registry, the Windows "Apps" list, Store app packages.
+//! Everything is behind `cfg` so stores stay portable.
 
-use std::io;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 #[cfg(windows)]
 mod drives;
-#[cfg(windows)]
-mod foreground;
 #[cfg(windows)]
 mod windows;
 
@@ -94,36 +90,6 @@ pub fn split_command_line(command: &str) -> Option<(String, String)> {
         }
     };
     (!program.is_empty()).then(|| (program, rest.trim().to_string()))
-}
-
-/// Starts `program` with `args` for something the user just asked for (a launcher dialog), and
-/// lets it come to the front. Does not wait.
-pub fn start_in_front(program: &Path, args: &[&str]) -> io::Result<()> {
-    #[cfg(windows)]
-    foreground::allow_foreground_handoff();
-    let mut command = Command::new(program);
-    command.args(args);
-    command.spawn().map(|_| ())
-}
-
-/// Presses Ctrl+`key` (a Windows virtual-key code, e.g. `b'N'`) in the program `exe` once one of
-/// its windows whose title starts with `title_prefix` is in front, waiting up to `timeout`. It
-/// never types into another program; false when that window did not come up. Windows only.
-pub fn press_ctrl_key_in(
-    exe: &str,
-    title_prefix: &str,
-    key: u8,
-    timeout: std::time::Duration,
-) -> bool {
-    #[cfg(windows)]
-    {
-        foreground::press_ctrl_key_in(exe, title_prefix, u16::from(key), timeout)
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (exe, title_prefix, key, timeout);
-        false
-    }
 }
 
 /// An installed AppX/MSIX package registered for the current user.

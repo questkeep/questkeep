@@ -3990,17 +3990,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "questkeep-store-prism"
-version = "0.7.0"
-dependencies = [
- "chrono",
- "dirs 7.0.0",
- "questkeep-store-api",
- "tempfile",
- "tracing",
-]
-
-[[package]]
 name = "questkeep-store-steam"
 version = "0.7.0"
 dependencies = [
@@ -4055,7 +4044,6 @@ dependencies = [
  "questkeep-store-heroic",
  "questkeep-store-lutris",
  "questkeep-store-meta",
- "questkeep-store-prism",
  "questkeep-store-steam",
  "questkeep-store-ubisoft",
  "questkeep-store-xbox",

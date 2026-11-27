@@ -10,7 +10,6 @@ use questkeep_store_api::auth::{TokenStore, WebSession};
 use questkeep_store_amazon as amazon;
 use questkeep_store_epic as epic;
 use questkeep_store_gog as gog;
-use questkeep_store_prism as prism;
 use questkeep_store_steam as steam;
 use questkeep_store_ubisoft as ubisoft;
 use questkeep_store_xbox as xbox;
@@ -41,7 +40,6 @@ pub fn builtin(
         gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens.clone()))),
     ));
     stores.push(Arc::new(ubisoft::UbisoftProvider::detect()));
-    stores.push(Arc::new(prism::PrismProvider::detect()));
     // Battle.net, the EA app and Meta Horizon Link only exist on Windows (elsewhere the first two
     // run under Wine, where Heroic or Lutris already see them; PC VR needs Windows).
     #[cfg(windows)]

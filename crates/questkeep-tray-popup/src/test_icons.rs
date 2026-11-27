@@ -7,4 +7,4 @@ pub const XBOX: &str = include_str!("../../stores/xbox/icon.svg");
 pub const EA: &str = include_str!("../../stores/ea/icon.svg");
 pub const UBISOFT: &str = include_str!("../../stores/ubisoft/icon.svg");
 pub const BATTLENET: &str = include_str!("../../stores/battlenet/icon.svg");
-pub const PRISM: &str = include_str!("../../stores/prism/icon.svg");
+pub const META: &str = include_str!("../../stores/meta/icon.svg");
