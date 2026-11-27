@@ -193,6 +193,7 @@ describe("Menus", () => {
       "Open launcher",
       "Sync",
       "Games in several stores…",
+      "ActivityCtrl+Shift+A",
       "Settings",
       "Exit Questkeep",
     ]);

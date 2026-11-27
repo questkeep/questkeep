@@ -12,6 +12,7 @@ import Power from "lucide-solid/icons/power";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Rocket from "lucide-solid/icons/rocket";
 import Settings from "lucide-solid/icons/settings";
+import ActivityIcon from "lucide-solid/icons/activity";
 import Download from "lucide-solid/icons/download";
 import Square from "lucide-solid/icons/square";
 import X from "lucide-solid/icons/x";
@@ -23,6 +24,7 @@ import { shellCommandBar } from "../i18n/shellCommandBar";
 import { shellTitleBar } from "../i18n/shellTitleBar";
 import { readCssPx } from "../lib/layoutMode";
 import { shopping } from "../i18n/shopping";
+import { activity } from "../i18n/activity";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
@@ -42,6 +44,7 @@ import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
 const tr = translator(shellTitleBar);
 const trCommand = translator(shellCommandBar);
 const trShop = translator(shopping);
+const trActivity = translator(activity);
 
 /** "Buy from …" for each store with a website, then "Compare on …" for each price site, as
  * separated groups; all open in the user's browser. */
@@ -284,6 +287,12 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
     },
     ...extensionEntries("app"),
     { kind: "separator" },
+    {
+      label: trActivity("title"),
+      icon: () => <ActivityIcon class="icon" aria-hidden="true" />,
+      hint: "Ctrl+Shift+A",
+      onSelect: () => store.showActivity(),
+    },
     {
       label: tr("settings"),
       icon: () => <Settings class="icon" aria-hidden="true" />,

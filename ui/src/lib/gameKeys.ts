@@ -87,7 +87,12 @@ export function handleSelectionKeys(
     moveTo(target(), (id) => store.selectRange(orderOf(layout), id));
     return true;
   }
-  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "a") {
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === "a"
+  ) {
     event.preventDefault();
     store.selectAll([...new Set(orderOf(layout))]);
     return true;

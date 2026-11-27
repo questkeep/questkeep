@@ -5,6 +5,7 @@ import type { Notification } from "../bindings/Notification";
 import type { NotificationAction } from "../bindings/NotificationAction";
 import { translator } from "../i18n";
 import { shellNotifications } from "../i18n/shellNotifications";
+import { activity } from "../i18n/activity";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import {
@@ -22,6 +23,7 @@ import { store } from "../lib/store";
 import { Popover, type PopoverAnchor } from "./Popover";
 
 const tr = translator(shellNotifications);
+const trActivity = translator(activity);
 
 const unread = () => unreadCount(store.notifications());
 const count = () => badgeCount(store.notifications());
@@ -163,6 +165,18 @@ export function NotificationBell() {
                 </For>
               </ul>
             </Show>
+            <div class="notifications__foot">
+              <button
+                type="button"
+                class="link-btn alog-link"
+                onClick={() => {
+                  close(false);
+                  store.showActivity();
+                }}
+              >
+                {trActivity("showAllActivity")}
+              </button>
+            </div>
           </Popover>
         )}
       </Show>

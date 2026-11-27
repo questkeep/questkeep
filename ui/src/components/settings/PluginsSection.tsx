@@ -5,6 +5,7 @@ import type { PluginFolder } from "../../bindings/PluginFolder";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import type { PluginPreview } from "../../bindings/PluginPreview";
 import { translator } from "../../i18n";
+import { activity } from "../../i18n/activity";
 import { extensions } from "../../i18n/extensions";
 import { pluginBrowser } from "../../i18n/pluginBrowser";
 import { settingsPlugins } from "../../i18n/settingsPlugins";
@@ -30,6 +31,7 @@ import { pickPluginFolder } from "./pluginFolderPicker";
 import { scanAfterInstall, scanPluginStores } from "./scanPluginStores";
 
 const tr = translator(settingsPlugins);
+const trActivity = translator(activity);
 const trExtensions = translator(extensions);
 const trRegistry = translator(pluginBrowser);
 
@@ -482,6 +484,19 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
                       />
                       {tr("watch")}
                     </label>
+                    <button
+                      type="button"
+                      class="btn"
+                      onClick={() =>
+                        store.showActivity({
+                          tab: "library",
+                          library: { who: `plugin:${plugin.id}` },
+                          system: { source: `plugin:${plugin.id}` },
+                        })
+                      }
+                    >
+                      {trActivity("title")}
+                    </button>
                     <button
                       type="button"
                       class="btn"
