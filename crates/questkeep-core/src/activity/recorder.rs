@@ -395,7 +395,7 @@ fn entries_between(change: &Change, before: &Snapshot, after: &Snapshot) -> (Vec
                     None,
                     into.map(|e| Value::String(e.name.clone())),
                 )],
-                args: None,
+                args: into.map(|e| serde_json::json!({ "into": e.name })),
             }
         } else {
             NewEntry {

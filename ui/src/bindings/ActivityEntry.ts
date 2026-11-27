@@ -18,4 +18,8 @@ gameName: string, kind: ActivityKind,
 /**
  * How many fields changed (`activity_details` lists them).
  */
-changeCount: number, cursor: ActivityCursor, };
+changeCount: number, 
+/**
+ * The changed fields' keys, in order (the values are in `activity_details`).
+ */
+fields: Array<string>, cursor: ActivityCursor, };

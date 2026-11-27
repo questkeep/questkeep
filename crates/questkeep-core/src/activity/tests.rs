@@ -706,6 +706,8 @@ fn user_commands_record_entries_by_the_caller() {
         .unwrap();
     }
     let category = lib.create_category("Roguelikes").unwrap();
+    // Creating a name that already exists changes nothing and records nothing.
+    assert_eq!(lib.create_category("Roguelikes").unwrap().id, category.id);
     lib.set_game_categories(id, std::slice::from_ref(&category.id))
         .unwrap();
     lib.rename_category(&category.id, "Rogue-lites").unwrap();
@@ -731,6 +733,10 @@ fn user_commands_record_entries_by_the_caller() {
     assert_eq!(hidden.actor, Actor::plugin("tidy"), "the plugin did it");
     assert_eq!(hidden.kind, EntryKind::Edit);
     assert_eq!(fields(lib.activity(), hidden), ["hidden"]);
+    assert_eq!(hidden.fields, ["hidden"], "listed with the entry");
+    let created = list.iter().find(|e| e.reason == "categoryCreate").unwrap();
+    assert_eq!(created.game_id, None);
+    assert_eq!(created.args, json!({ "name": "Roguelikes" }));
     let set = list.iter().find(|e| e.reason == "setCategories").unwrap();
     assert_eq!(set.kind, EntryKind::Categories);
     let details = lib.activity().details(set.id).unwrap();
@@ -813,6 +819,12 @@ fn edits_images_profiles_and_combining_are_recorded() {
     let absorbed = combine.iter().find(|e| e.game_id == Some(b)).unwrap();
     let details = log.details(absorbed.id).unwrap();
     assert_eq!(details.changes[0].field, "combinedInto");
+    assert_eq!(absorbed.fields, ["combinedInto"]);
+    let into = list
+        .iter()
+        .find(|e| e.game_id == Some(a) && e.reason == "combine")
+        .unwrap();
+    assert_eq!(absorbed.args, json!({ "into": into.game_name }));
     // The combined entry's log includes the absorbed game's history.
     let own = log
         .timeline(

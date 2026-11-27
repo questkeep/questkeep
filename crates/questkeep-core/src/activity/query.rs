@@ -115,6 +115,8 @@ pub struct ActivityEntry {
     pub kind: EntryKind,
     /// How many fields changed (`activity_details` lists them).
     pub change_count: u32,
+    /// The changed fields' keys, in order (the values are in `activity_details`).
+    pub fields: Vec<String>,
     pub cursor: Cursor,
 }
 
@@ -413,7 +415,9 @@ fn actor_of(kind: &str, id: Option<String>) -> Actor {
 }
 
 const ENTRY_COLUMNS: &str = "e.id, e.at, e.batch_id, e.actor_kind, e.actor_id, e.reason, e.args_json, e.game_id, \
-     e.game_name, e.kind, e.change_count";
+     e.game_name, e.kind, e.change_count, \
+     (SELECT group_concat(field, ',') FROM \
+      (SELECT c.field FROM changes c WHERE c.entry_id = e.id ORDER BY c.position))";
 
 fn entry_row(r: &Row<'_>) -> rusqlite::Result<ActivityEntry> {
     let id: i64 = r.get(0)?;
@@ -431,6 +435,10 @@ fn entry_row(r: &Row<'_>) -> rusqlite::Result<ActivityEntry> {
         game_name: r.get(8)?,
         kind: EntryKind::parse(&r.get::<_, String>(9)?),
         change_count: u32::try_from(r.get::<_, i64>(10)?).unwrap_or_default(),
+        fields: r
+            .get::<_, Option<String>>(11)?
+            .map(|f| f.split(',').map(str::to_owned).collect())
+            .unwrap_or_default(),
         cursor: Cursor {
             at,
             rank: ENTRY_RANK,
