@@ -110,6 +110,8 @@ pub enum CoreEvent {
         exit_code: Option<i32>,
         error: Option<String>,
     },
+    /// Icons of price comparison sites arrived or changed (read them with `price_site_icons`).
+    SiteIconsChanged,
 }
 
 /// Which output of a program a piece of text came from.

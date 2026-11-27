@@ -4,6 +4,7 @@
 mod fetcher;
 pub mod hltb;
 mod igdb;
+pub mod site_icons;
 mod steamgriddb;
 
 use std::path::{Path, PathBuf};
@@ -21,6 +22,7 @@ pub use questkeep_imaging::{
     ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
     load_image_filled, scale_icon,
 };
+pub use site_icons::{SiteIcon, SiteIcons};
 pub use steamgriddb::{Lookup, SteamGridDb};
 pub(crate) use steamgriddb::{checked_key, lookup_markers, platform_name};
 

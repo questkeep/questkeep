@@ -6031,6 +6031,15 @@ ul {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.price-sites__icons {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+/* A site's favicon in place of a line icon (see SiteIcon) */
+.site-icon {
+  object-fit: contain;
+}
 .price-sites__add {
   display: flex;
   gap: var(--qk-space-2);

@@ -17,6 +17,9 @@ const en = {
   siteDuplicate: "This site is already in the list.",
   suggested: "Suggestions",
   suggestedFor: "Suggested for {region}",
+  refreshIcons: "Refresh icons",
+  refreshIconsHint: "Fetch the sites' icons from the sites again",
+  refreshingIcons: "Fetching the icons…",
 };
 
 /** Buying games: the store websites and price comparison sites in the + menu, and their settings. */
@@ -39,6 +42,9 @@ export const shopping: Translations<typeof en> = {
     siteDuplicate: "Diese Seite ist schon in der Liste.",
     suggested: "Vorschläge",
     suggestedFor: "Vorschläge für {region}",
+    refreshIcons: "Symbole aktualisieren",
+    refreshIconsHint: "Die Symbole der Seiten erneut von den Seiten laden",
+    refreshingIcons: "Symbole werden geladen …",
   },
   fr: {
     buyFrom: "Acheter sur {store}",
@@ -57,6 +63,9 @@ export const shopping: Translations<typeof en> = {
     siteDuplicate: "Ce site est déjà dans la liste.",
     suggested: "Suggestions",
     suggestedFor: "Suggestions pour : {region}",
+    refreshIcons: "Actualiser les icônes",
+    refreshIconsHint: "Récupérer à nouveau les icônes depuis les sites",
+    refreshingIcons: "Récupération des icônes…",
   },
   it: {
     buyFrom: "Acquista su {store}",
@@ -75,6 +84,9 @@ export const shopping: Translations<typeof en> = {
     siteDuplicate: "Questo sito è già nell'elenco.",
     suggested: "Suggerimenti",
     suggestedFor: "Suggeriti per: {region}",
+    refreshIcons: "Aggiorna icone",
+    refreshIconsHint: "Scarica di nuovo le icone dai siti",
+    refreshingIcons: "Download delle icone…",
   },
   es: {
     buyFrom: "Comprar en {store}",
@@ -93,6 +105,9 @@ export const shopping: Translations<typeof en> = {
     siteDuplicate: "Este sitio ya está en la lista.",
     suggested: "Sugerencias",
     suggestedFor: "Sugerencias para: {region}",
+    refreshIcons: "Actualizar iconos",
+    refreshIconsHint: "Volver a obtener los iconos desde los sitios",
+    refreshingIcons: "Obteniendo los iconos…",
   },
   pt: {
     buyFrom: "Comprar na {store}",
@@ -111,5 +126,8 @@ export const shopping: Translations<typeof en> = {
     siteDuplicate: "Este site já está na lista.",
     suggested: "Sugestões",
     suggestedFor: "Sugestões para: {region}",
+    refreshIcons: "Atualizar ícones",
+    refreshIconsHint: "Buscar de novo os ícones nos sites",
+    refreshingIcons: "Buscando os ícones…",
   },
 };

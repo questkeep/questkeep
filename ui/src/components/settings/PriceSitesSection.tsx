@@ -1,7 +1,7 @@
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import ChevronUp from "lucide-solid/icons/chevron-up";
-import Globe from "lucide-solid/icons/globe";
 import Plus from "lucide-solid/icons/plus";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Trash from "lucide-solid/icons/trash";
 import { createResource, createSignal, For, Show } from "solid-js";
 import type { PriceSite } from "../../bindings/PriceSite";
@@ -9,6 +9,8 @@ import { intlLocale, translator } from "../../i18n";
 import { shopping } from "../../i18n/shopping";
 import * as api from "../../lib/api";
 import { checkSite, moveSite, openSuggestions, type SiteProblem } from "../../lib/priceSites";
+import { errorMessage } from "../../lib/errors";
+import { SiteIcon } from "../SiteIcon";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(shopping);
@@ -37,6 +39,17 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
   const [suggestions] = createResource(() => api.priceSiteSuggestions());
   const sites = () => props.model.settings()?.priceSites ?? [];
   const save = (priceSites: PriceSite[]) => void props.model.update({ priceSites });
+  const [iconsNote, setIconsNote] = createSignal<string | null>(null);
+
+  /** Fetches every site's icon again; they show up one by one as they arrive. */
+  async function refreshIcons() {
+    try {
+      await api.refreshPriceSiteIcons();
+      setIconsNote(tr("refreshingIcons"));
+    } catch (error) {
+      setIconsNote(errorMessage(error));
+    }
+  }
 
   function add(event: SubmitEvent) {
     event.preventDefault();
@@ -65,7 +78,7 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
             <For each={sites()}>
               {(site, index) => (
                 <li class="price-sites__item">
-                  <Globe class="icon" aria-hidden="true" />
+                  <SiteIcon url={site.url} />
                   <span class="price-sites__text">
                     <span class="price-sites__name">{site.name}</span>
                     <small class="muted price-sites__url">{site.url}</small>
@@ -103,6 +116,24 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
               )}
             </For>
           </ul>
+          <div class="price-sites__icons">
+            <button
+              type="button"
+              class="btn btn--small btn--with-icon"
+              data-tooltip={tr("refreshIconsHint")}
+              onClick={() => void refreshIcons()}
+            >
+              <RefreshCw class="icon" aria-hidden="true" />
+              {tr("refreshIcons")}
+            </button>
+            <Show when={iconsNote()}>
+              {(note) => (
+                <small class="muted" role="status">
+                  {note()}
+                </small>
+              )}
+            </Show>
+          </div>
         </Show>
         <form class="price-sites__add" onSubmit={add}>
           <input

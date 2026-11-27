@@ -99,6 +99,8 @@ pub struct Library {
     notifications: crate::notifications::Notifications,
     /// Game scripts.
     scripts: crate::scripts::Scripts,
+    /// Icons of the price comparison sites.
+    site_icons: crate::images::SiteIcons,
 }
 
 impl Library {
@@ -152,6 +154,7 @@ impl Library {
             events.clone(),
         );
         scripts.clean_up_files();
+        let site_icons = crate::images::SiteIcons::new(&paths, events.clone());
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
             match resolver.resolve_all() {
@@ -176,6 +179,7 @@ impl Library {
             scans: ScanCount::default(),
             notifications,
             scripts,
+            site_icons,
         }
     }
 
@@ -417,6 +421,18 @@ impl Library {
         &self.settings
     }
 
+    /// The cached icons of the price comparison sites. Also starts fetching, in the background,
+    /// those that are missing or due (`SiteIconsChanged` follows when they arrive).
+    pub fn price_site_icons(&self) -> Vec<crate::images::SiteIcon> {
+        self.site_icons.update(&self.settings().price_sites, false);
+        self.site_icons.icons()
+    }
+
+    /// Fetches the icons of all price comparison sites again, in the background.
+    pub fn refresh_price_site_icons(&self) {
+        self.site_icons.update(&self.settings().price_sites, true);
+    }
+
     /// Game scripts.
     pub fn scripts(&self) -> &crate::scripts::Scripts {
         &self.scripts
@@ -442,6 +458,8 @@ impl Library {
             settings.igdb_client_id.clone(),
             settings.igdb_client_secret.clone(),
         );
+        // Icons of added sites are fetched, those of removed ones dropped.
+        self.site_icons.update(&settings.price_sites, false);
         self.watch_install_folders();
         if self
             .resolver

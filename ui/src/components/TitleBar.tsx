@@ -13,7 +13,6 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Rocket from "lucide-solid/icons/rocket";
 import Settings from "lucide-solid/icons/settings";
 import Download from "lucide-solid/icons/download";
-import Globe from "lucide-solid/icons/globe";
 import Square from "lucide-solid/icons/square";
 import X from "lucide-solid/icons/x";
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
@@ -35,6 +34,7 @@ import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
 import { NotificationBell } from "./NotificationBell";
 import type { PopoverAnchor } from "./Popover";
+import { SiteIcon } from "./SiteIcon";
 import { sourceName, SourceIcon } from "./SourceIcon";
 import { openLink } from "./settings/openLink";
 import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
@@ -56,7 +56,7 @@ function shopEntries(): MenuEntry[] {
     }));
   const sites = store.priceSites().map((site): MenuEntry => ({
     label: trShop("compareOn", { site: site.name }),
-    icon: () => <Globe class="icon" aria-hidden="true" />,
+    icon: () => <SiteIcon url={site.url} />,
     onSelect: () => void openLink(site.url),
   }));
   const entries: MenuEntry[] = [];

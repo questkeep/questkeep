@@ -69,6 +69,7 @@ import {
 import { takeLegacyViewMode, type ViewMode } from "./viewMode";
 import { HOME_PAGE, startupTarget } from "./startPage";
 import { rangeSelection, toggleSelected } from "./selection";
+import { siteIconUrl, siteIconUrls } from "./siteIcons";
 import { DEFAULT_VIEW_UI, collapsedKeys, createDebouncedSaver, toggleCollapsed } from "./viewUi";
 import {
   EMPTY_HISTORY,
@@ -240,6 +241,8 @@ function createAppStore() {
   });
   /** Price comparison sites offered in the + menu. */
   const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
+  /** Icons of the price sites by host (webview addresses); a site without one shows a globe. */
+  const [siteIcons, setSiteIcons] = createSignal<Record<string, string>>({});
   /** Combined groups per grouping field (settings). */
   const [groupMerges, setGroupMergesState] = createSignal<Partial<Record<string, GroupMerge[]>>>(
     {},
@@ -1272,7 +1275,16 @@ function createAppStore() {
       case "quitDuringBackup":
         setQuitDuringBackup(true);
         break;
+      case "siteIconsChanged":
+        void loadSiteIcons();
+        break;
     }
+  }
+
+  /** The price sites' icons; asking for them also fetches missing or old ones in the background. */
+  async function loadSiteIcons() {
+    const icons = await optional(api.priceSiteIcons);
+    if (icons) setSiteIcons(siteIconUrls(icons, convertFileSrc));
   }
 
   /** A sign-in can end during a scan (an expired session) or be renewed in settings. */
@@ -1389,6 +1401,7 @@ function createAppStore() {
           setPriceSites(settings.priceSites);
           setGroupMergesState(settings.groupMerges ?? {});
         }
+        void loadSiteIcons();
         // After an update the window opens where it was; otherwise on the startup page.
         const resumed = parseLocation(resume);
         if (resumed) {
@@ -1460,6 +1473,7 @@ function createAppStore() {
       setEditingViews(false);
       setSyncTimes({ all: null, providers: {} });
       setLaunchers([]);
+      setSiteIcons({});
       setCategories([]);
       uiSaver.cancel();
       setViewUi({});
@@ -1644,6 +1658,9 @@ function createAppStore() {
     page,
     showSettings: () => setPage("settings"),
     priceSites,
+    /** The icon address of a price site, or null (show the globe). */
+    siteIconUrl: (url: string) => siteIconUrl(siteIcons(), url),
+    loadSiteIcons,
     showSettingsSection,
     takeSettingsSection: () => {
       const section = settingsSection();

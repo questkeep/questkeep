@@ -186,7 +186,8 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::NotificationsChanged
             | CoreEvent::ScriptsChanged
             | CoreEvent::ScriptOutput { .. }
-            | CoreEvent::ScriptRunEnded { .. } => return,
+            | CoreEvent::ScriptRunEnded { .. }
+            | CoreEvent::SiteIconsChanged => return,
         };
         // The receiver only goes away at shutdown.
         let _ = tx.send(trigger);

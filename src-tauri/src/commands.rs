@@ -1101,6 +1101,25 @@ pub fn price_site_suggestions() -> questkeep_core::price_sites::PriceSiteSuggest
     questkeep_core::price_sites::suggestions(crate::i18n::system_region().as_deref())
 }
 
+/// The cached icons of the price comparison sites; missing or old ones are fetched in the
+/// background (`siteIconsChanged` follows).
+#[tauri::command]
+pub async fn price_site_icons(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<questkeep_core::images::SiteIcon>> {
+    blocking(state, move |s| Ok(s.library.price_site_icons())).await
+}
+
+/// Fetches the icons of all price comparison sites again (Settings), in the background.
+#[tauri::command]
+pub async fn refresh_price_site_icons(state: State<'_, Arc<AppState>>) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.refresh_price_site_icons();
+        Ok(())
+    })
+    .await
+}
+
 /// The user's achievements in a game (game page).
 #[tauri::command]
 pub async fn game_achievements(

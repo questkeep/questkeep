@@ -557,6 +557,8 @@ pub fn run() {
             commands::install_game,
             commands::open_launcher_page,
             commands::price_site_suggestions,
+            commands::price_site_icons,
+            commands::refresh_price_site_icons,
             commands::uninstall_game,
             commands::combine_games,
             commands::separate_copy,

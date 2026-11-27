@@ -55,6 +55,7 @@ import type { Settings } from "../bindings/Settings";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { GroupMerge } from "../bindings/GroupMerge";
 import type { PriceSiteSuggestions } from "../bindings/PriceSiteSuggestions";
+import type { SiteIcon } from "../bindings/SiteIcon";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
 import type { ViewUiState } from "../bindings/ViewUiState";
@@ -302,6 +303,10 @@ export const setGroupMerges = (field: GroupBy, merges: GroupMerge[]) =>
   invoke<Partial<Record<string, GroupMerge[]>>>("set_group_merges", { field, merges });
 /** Price comparison sites for the user's region. */
 export const priceSiteSuggestions = () => invoke<PriceSiteSuggestions>("price_site_suggestions");
+/** The cached icons of the price sites; missing or old ones are fetched in the background. */
+export const priceSiteIcons = () => invoke<SiteIcon[]>("price_site_icons");
+/** Fetches the icons of all price sites again (in the background). */
+export const refreshPriceSiteIcons = () => invoke<void>("refresh_price_site_icons");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });
 /** Opens the app's data or logs folder in the file manager (done by the Rust side). */
 export const openAppFolder = (kind: "data" | "logs") => invoke<void>("open_app_folder", { kind });
