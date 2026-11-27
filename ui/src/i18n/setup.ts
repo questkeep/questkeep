@@ -35,6 +35,7 @@ const en = {
   saving: "Saving…",
   backToKeys: "Back to keys",
   continueWithout: "Continue without",
+  restoreBackup: "Restore from a backup…",
 };
 
 /** The first-run setup (FirstRunDialog). */
@@ -75,6 +76,7 @@ export const setup: Translations<typeof en> = {
     saving: "Wird gespeichert…",
     backToKeys: "Zurück zu den Schlüsseln",
     continueWithout: "Ohne fortfahren",
+    restoreBackup: "Aus einem Backup wiederherstellen…",
   },
   fr: {
     title: "Configurer Questkeep",
@@ -113,6 +115,7 @@ export const setup: Translations<typeof en> = {
     saving: "Enregistrement…",
     backToKeys: "Retour aux clés",
     continueWithout: "Continuer sans",
+    restoreBackup: "Restaurer une sauvegarde…",
   },
   it: {
     title: "Configura Questkeep",
@@ -150,6 +153,7 @@ export const setup: Translations<typeof en> = {
     saving: "Salvataggio…",
     backToKeys: "Torna alle chiavi",
     continueWithout: "Continua senza",
+    restoreBackup: "Ripristina da un backup…",
   },
   es: {
     title: "Configurar Questkeep",
@@ -189,6 +193,7 @@ export const setup: Translations<typeof en> = {
     saving: "Guardando…",
     backToKeys: "Volver a las claves",
     continueWithout: "Continuar sin",
+    restoreBackup: "Restaurar desde una copia…",
   },
   pt: {
     title: "Configurar o Questkeep",
@@ -227,5 +232,6 @@ export const setup: Translations<typeof en> = {
     saving: "Salvando…",
     backToKeys: "Voltar às chaves",
     continueWithout: "Continuar sem",
+    restoreBackup: "Restaurar de um backup…",
   },
 };

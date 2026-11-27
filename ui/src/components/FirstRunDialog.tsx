@@ -1,8 +1,15 @@
-import { createEffect, createSignal, For, Match, on, onMount, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, on, onMount, Show, Switch } from "solid-js";
+import type { BackupImportCheck } from "../bindings/BackupImportCheck";
 import { translator } from "../i18n";
 import { setup } from "../i18n/setup";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
+import {
+  BackupImportDialog,
+  chooseBackupToImport,
+  importBackup,
+  importStatus,
+} from "./BackupImportDialog";
 import { AccountsSection } from "./settings/AccountsSection";
 import { GridDbField, IgdbFields, IgdbSteps } from "./settings/KeyFields";
 import { createSettingsModel } from "./settings/useSettings";
@@ -25,7 +32,21 @@ export function FirstRunDialog() {
   /** Whether "Continue without" saves the other keys (came from Finish, not from Skip). */
   const [saveOnContinue, setSaveOnContinue] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
+  /** A picked backup waiting for confirmation, and the status while one is being restored. */
+  const [importCheck, setImportCheck] = createSignal<BackupImportCheck | null>(null);
+  const [restoring, setRestoring] = createSignal<string | null>(null);
   let primary: HTMLButtonElement | undefined;
+
+  async function chooseBackup() {
+    const check = await chooseBackupToImport();
+    if (check) setImportCheck(check);
+  }
+
+  /** Restores the confirmed backup; Questkeep restarts when it is staged. */
+  async function restore(path: string, backUpFirst: boolean) {
+    setRestoring(importStatus(backUpFirst));
+    if (!(await importBackup(path, backUpFirst))) setRestoring(null);
+  }
 
   // Closing the app during the setup counts as skipping it: it never shows again.
   onMount(() => void api.finishSetup().catch(() => undefined));
@@ -57,13 +78,14 @@ export function FirstRunDialog() {
 
   /** Escape (and the close button): skip, or step back from the warning. */
   function onClose() {
+    if (restoring() !== null) return;
     if (step() === "warn") setStep("keys");
     else skip();
   }
 
   /** Enter outside buttons and links presses the primary button. */
   function onKeyDown(event: KeyboardEvent) {
-    if (event.key !== "Enter" || event.defaultPrevented) return;
+    if (event.key !== "Enter" || event.defaultPrevented || restoring() !== null) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, a, textarea, select")) return;
     // Inputs of the store list (codes, credentials) keep their own Enter.
@@ -90,6 +112,7 @@ export function FirstRunDialog() {
             <Match when={step() === "welcome"}>
               <h3 class="setup__title">{tr("welcomeTitle")}</h3>
               <p class="muted">{tr("welcomeText")}</p>
+              <Show when={restoring()}>{(status) => <p role="status">{status()}</p>}</Show>
             </Match>
             <Match when={step() === "stores"}>
               <h3 class="setup__title">{tr("storesTitle")}</h3>
@@ -131,14 +154,30 @@ export function FirstRunDialog() {
         <footer class="setup__foot">
           <Switch>
             <Match when={step() === "welcome"}>
-              <button type="button" class="btn btn--ghost" onClick={skip}>
-                {tr("skipSetup")}
-              </button>
+              <span class="setup__buttons">
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  disabled={restoring() !== null}
+                  onClick={skip}
+                >
+                  {tr("skipSetup")}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--ghost"
+                  disabled={restoring() !== null}
+                  onClick={() => void chooseBackup()}
+                >
+                  {tr("restoreBackup")}
+                </button>
+              </span>
               <button
                 ref={(el) => (primary = el)}
                 type="button"
                 class="btn btn--primary"
                 data-autofocus
+                disabled={restoring() !== null}
                 onClick={() => setStep("stores")}
               >
                 {tr("getStarted")}
@@ -193,6 +232,16 @@ export function FirstRunDialog() {
           </Switch>
         </footer>
       </div>
+      <Show when={importCheck()} keyed>
+        {(check) => (
+          <BackupImportDialog
+            check={check}
+            firstRun
+            onImport={(backUpFirst) => void restore(check.backup.path, backUpFirst)}
+            onClose={() => setImportCheck(null)}
+          />
+        )}
+      </Show>
     </Modal>
   );
 }

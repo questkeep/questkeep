@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "../bindings/Settings";
 import * as api from "../lib/api";
@@ -16,6 +17,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn<() => void>(),
   openUrl: vi.fn<() => void>(),
 }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn<() => void>() }));
 
 const SETTINGS: Settings = {
   scanOnStartup: true,
@@ -164,6 +166,85 @@ describe("FirstRunDialog", () => {
     await fireEvent.click(test);
     expect(await screen.findByText(/did not accept/)).toBeInTheDocument();
     expect(api.saveSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("FirstRunDialog: restore from a backup", () => {
+  const PATH = "E:/Old PC/questkeep-backup.zip";
+  const check = (libraryEmpty: boolean) => ({
+    backup: { path: PATH, createdAt: "2026-10-30T12:00:00Z", size: 1024, appVersion: "0.6.0" },
+    libraryEmpty,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store.reset();
+    vi.mocked(api.getSettings).mockResolvedValue(SETTINGS);
+    vi.mocked(api.accountStatus).mockResolvedValue([]);
+    vi.mocked(api.finishSetup).mockResolvedValue(undefined);
+    vi.mocked(open).mockResolvedValue(PATH);
+    vi.mocked(api.importBackup).mockResolvedValue(undefined);
+  });
+
+  async function pick() {
+    render(() => <FirstRunDialog />);
+    await click("Restore from a backup…");
+    await waitFor(() => expect(api.checkBackupImport).toHaveBeenCalledWith(PATH));
+  }
+
+  it("restores into an empty library without a backup first, after confirming", async () => {
+    vi.mocked(api.checkBackupImport).mockResolvedValue(check(true));
+    await pick();
+    await screen.findByRole("heading", { name: "Restore this backup?" });
+    expect(screen.getByText(/made by Questkeep 0\.6\.0, and restarts to finish/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Back up and restore" })).toBeNull();
+    expect(api.importBackup).not.toHaveBeenCalled();
+    await click("Restore and restart");
+    expect(api.importBackup).toHaveBeenCalledWith(PATH, false);
+    expect(await screen.findByRole("status")).toHaveTextContent(/restarts to finish/);
+  });
+
+  it("asks whether to back up a library that already has games", async () => {
+    vi.mocked(api.checkBackupImport).mockResolvedValue(check(false));
+    await pick();
+    await screen.findByRole("heading", { name: "Back up the current library first?" });
+    await click("Back up and restore");
+    expect(api.importBackup).toHaveBeenCalledWith(PATH, true);
+    expect(await screen.findByRole("status")).toHaveTextContent(/Backing up the current library/);
+  });
+
+  it("restores without a backup when chosen, and Cancel changes nothing", async () => {
+    vi.mocked(api.checkBackupImport).mockResolvedValue(check(false));
+    await pick();
+    await click("Cancel");
+    expect(screen.queryByRole("heading", { name: /library first/ })).toBeNull();
+    expect(api.importBackup).not.toHaveBeenCalled();
+    await click("Restore from a backup…");
+    await screen.findByRole("button", { name: "Restore without backup" });
+    await click("Restore without backup");
+    expect(api.importBackup).toHaveBeenCalledWith(PATH, false);
+  });
+
+  it("shows why an archive is refused and restores nothing", async () => {
+    vi.mocked(api.checkBackupImport).mockRejectedValue("photos.zip is not a Questkeep backup.");
+    await pick();
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain(
+        "photos.zip is not a Questkeep backup.",
+      ),
+    );
+    expect(screen.queryByRole("heading", { name: /backup/ })).toBeNull();
+    expect(api.importBackup).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the file picker is cancelled", async () => {
+    vi.mocked(open).mockResolvedValue(null);
+    render(() => <FirstRunDialog />);
+    await click("Restore from a backup…");
+    await waitFor(() => expect(open).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(api.checkBackupImport).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /backup/ })).toBeNull();
   });
 });
 

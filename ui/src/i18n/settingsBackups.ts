@@ -25,6 +25,7 @@ const en = {
   restoreMessage:
     "Questkeep replaces the library, settings and images with the backup from {date} and restarts. The current library is backed up first. API keys and store sign-ins are not part of a backup and stay as they are.",
   restoreConfirm: "Restore and restart",
+  importBackup: "Import backup…",
 };
 
 /** Settings → Backups (BackupsSection). */
@@ -55,6 +56,7 @@ export const settingsBackups: Translations<typeof en> = {
     restoreMessage:
       "Questkeep ersetzt Bibliothek, Einstellungen und Bilder durch das Backup vom {date} und startet neu. Die aktuelle Bibliothek wird zuvor gesichert. API-Schlüssel und Store-Anmeldungen gehören nicht zu einem Backup und bleiben unverändert.",
     restoreConfirm: "Wiederherstellen und neu starten",
+    importBackup: "Backup importieren…",
   },
   fr: {
     loading: "Chargement…",
@@ -81,6 +83,7 @@ export const settingsBackups: Translations<typeof en> = {
     restoreMessage:
       "Questkeep remplace la bibliothèque, les paramètres et les images par la sauvegarde du {date} et redémarre. La bibliothèque actuelle est d'abord sauvegardée. Les clés API et les connexions aux boutiques ne font pas partie d'une sauvegarde et restent inchangées.",
     restoreConfirm: "Restaurer et redémarrer",
+    importBackup: "Importer une sauvegarde…",
   },
   it: {
     loading: "Caricamento…",
@@ -107,6 +110,7 @@ export const settingsBackups: Translations<typeof en> = {
     restoreMessage:
       "Questkeep sostituisce libreria, impostazioni e immagini con il backup del {date} e si riavvia. La libreria attuale viene prima salvata. Le chiavi API e gli accessi agli store non fanno parte di un backup e restano invariati.",
     restoreConfirm: "Ripristina e riavvia",
+    importBackup: "Importa backup…",
   },
   es: {
     loading: "Cargando…",
@@ -133,6 +137,7 @@ export const settingsBackups: Translations<typeof en> = {
     restoreMessage:
       "Questkeep sustituye la biblioteca, la configuración y las imágenes por la copia del {date} y se reinicia. Antes se hace una copia de la biblioteca actual. Las claves API y los inicios de sesión de las tiendas no forman parte de una copia y se quedan como están.",
     restoreConfirm: "Restaurar y reiniciar",
+    importBackup: "Importar copia…",
   },
   pt: {
     loading: "Carregando…",
@@ -159,5 +164,6 @@ export const settingsBackups: Translations<typeof en> = {
     restoreMessage:
       "O Questkeep substitui a biblioteca, as configurações e as imagens pelo backup de {date} e reinicia. A biblioteca atual passa antes por um backup. Chaves de API e logins das lojas não fazem parte de um backup e continuam como estão.",
     restoreConfirm: "Restaurar e reiniciar",
+    importBackup: "Importar backup…",
   },
 };

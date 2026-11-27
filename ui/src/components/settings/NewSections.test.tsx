@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountStatus } from "../../bindings/AccountStatus";
@@ -23,6 +24,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn<() => void>(),
   openUrl: vi.fn<() => void>(),
 }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn<() => void>() }));
 
 const toasts = () => store.toasts().map((t) => t.message);
 
@@ -514,5 +516,36 @@ describe("BackupsSection", () => {
     expect(api.restoreBackup).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole("button", { name: "Restore and restart" }));
     expect(api.restoreBackup).toHaveBeenCalledWith(backup.path);
+  });
+
+  it("imports a backup from anywhere, always backing up the current library first", async () => {
+    const outside = { ...backup, path: "E:/Old PC/my library.zip" };
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    vi.mocked(open).mockResolvedValue(outside.path);
+    // Even an empty library is backed up first from Settings.
+    vi.mocked(api.checkBackupImport).mockResolvedValue({ backup: outside, libraryEmpty: true });
+    vi.mocked(api.importBackup).mockResolvedValue(undefined);
+    render(() => <BackupsHarness />);
+    await fireEvent.click(await screen.findByRole("button", { name: "Import backup…" }));
+    await screen.findByRole("heading", { name: "Import this backup?" });
+    expect(api.checkBackupImport).toHaveBeenCalledWith(outside.path);
+    expect(
+      screen.getByText(/Questkeep 0\.9\.0.*Your current library is backed up first/),
+    ).toBeVisible();
+    expect(api.importBackup).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Import and restart" }));
+    expect(api.importBackup).toHaveBeenCalledWith(outside.path, true);
+    expect(await screen.findByText(/then restarting/)).toBeInTheDocument();
+  });
+
+  it("refuses an archive that is not a backup without asking", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    vi.mocked(open).mockResolvedValue("E:/photos.zip");
+    vi.mocked(api.checkBackupImport).mockRejectedValue("E:/photos.zip is not a Questkeep backup.");
+    render(() => <BackupsHarness />);
+    await fireEvent.click(await screen.findByRole("button", { name: "Import backup…" }));
+    await waitFor(() => expect(toasts()).toContain("E:/photos.zip is not a Questkeep backup."));
+    expect(screen.queryByRole("heading", { name: "Import this backup?" })).toBeNull();
+    expect(api.importBackup).not.toHaveBeenCalled();
   });
 });

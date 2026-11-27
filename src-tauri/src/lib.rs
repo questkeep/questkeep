@@ -496,6 +496,8 @@ pub fn run() {
             commands::backup_now,
             commands::cancel_backup,
             commands::restore_backup,
+            commands::check_backup_import,
+            commands::import_backup,
             commands::quit_pending,
             commands::finish_quit,
             commands::cancel_quit,

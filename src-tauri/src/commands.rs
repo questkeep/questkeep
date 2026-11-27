@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
-use questkeep_core::backup::BackupInfo;
+use questkeep_core::backup::{BackupImportCheck, BackupInfo};
 use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
 use questkeep_core::model::{
     Achievements, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings, Game,
@@ -1387,6 +1387,36 @@ pub async fn restore_backup(
     })
     .await?;
     tracing::info!("restarting to restore a backup");
+    app.restart()
+}
+
+/// Checks a backup archive anywhere on disk before importing it (the confirmation shows what it
+/// holds; an empty library needs no backup first).
+#[tauri::command]
+pub async fn check_backup_import(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> CmdResult<BackupImportCheck> {
+    blocking(state, move |s| {
+        s.library.check_backup_import(&PathBuf::from(path))
+    })
+    .await
+}
+
+/// Stages the archive at `path` (backing up the current library first when `back_up_first`)
+/// and restarts the app, which then swaps it in.
+#[tauri::command]
+pub async fn import_backup(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    path: String,
+    back_up_first: bool,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.import_backup(&PathBuf::from(path), back_up_first)
+    })
+    .await?;
+    tracing::info!("restarting to restore an imported backup");
     app.restart()
 }
 

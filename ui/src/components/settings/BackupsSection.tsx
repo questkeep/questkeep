@@ -1,7 +1,9 @@
 import ArchiveRestore from "lucide-solid/icons/archive-arrow-up";
 import DatabaseBackup from "lucide-solid/icons/database-backup";
+import FolderInput from "lucide-solid/icons/folder-input";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import type { BackupFrequency } from "../../bindings/BackupFrequency";
+import type { BackupImportCheck } from "../../bindings/BackupImportCheck";
 import type { BackupInfo } from "../../bindings/BackupInfo";
 import type { BackupSettings } from "../../bindings/BackupSettings";
 import { translator } from "../../i18n";
@@ -11,6 +13,7 @@ import { errorMessage } from "../../lib/errors";
 import { formatAgo, formatDateTime, formatSize } from "../../lib/format";
 import { pickDirectory } from "../../lib/pickers";
 import { store } from "../../lib/store";
+import { BackupImportDialog, chooseBackupToImport, importBackup } from "../BackupImportDialog";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { SettingsModel } from "./useSettings";
 
@@ -39,6 +42,18 @@ export function BackupsSection(props: { model: SettingsModel }) {
   const [folder, setFolder] = createSignal("");
   const [restoring, setRestoring] = createSignal<BackupInfo | null>(null);
   const [restartPending, setRestartPending] = createSignal(false);
+  const [importing, setImporting] = createSignal<BackupImportCheck | null>(null);
+
+  /** Imports an archive from anywhere on disk; the current library is always backed up first. */
+  async function startImport() {
+    const check = await chooseBackupToImport();
+    if (check) setImporting(check);
+  }
+
+  async function runImport(path: string) {
+    setRestartPending(true);
+    if (!(await importBackup(path, true))) setRestartPending(false);
+  }
 
   async function load() {
     try {
@@ -149,6 +164,14 @@ export function BackupsSection(props: { model: SettingsModel }) {
               >
                 <DatabaseBackup class="icon" aria-hidden="true" /> {tr("backUpNow")}
               </button>
+              <button
+                type="button"
+                class="btn"
+                disabled={store.backupRunning() || restartPending()}
+                onClick={() => void startImport()}
+              >
+                <FolderInput class="icon" aria-hidden="true" /> {tr("importBackup")}
+              </button>
               <Show when={!store.backupRunning() && backups()[0]}>
                 {(last) => (
                   <span class="muted">
@@ -207,6 +230,16 @@ export function BackupsSection(props: { model: SettingsModel }) {
                 confirmLabel={tr("restoreConfirm")}
                 onConfirm={() => void restore(backup)}
                 onClose={() => setRestoring(null)}
+              />
+            )}
+          </Show>
+          <Show when={importing()} keyed>
+            {(check) => (
+              <BackupImportDialog
+                check={check}
+                firstRun={false}
+                onImport={() => void runImport(check.backup.path)}
+                onClose={() => setImporting(null)}
               />
             )}
           </Show>

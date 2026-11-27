@@ -4,6 +4,10 @@
 //! Restoring never edits the data dir in place: the archive is unpacked into a staging folder
 //! first, and only a complete staging folder (marked ready) is swapped in, at the next start,
 //! before anything opens the database.
+//!
+//! Every restore, from the backup list or an archive anywhere on disk, goes through
+//! [`import_backup`]: it checks the archive, copies it into the data dir, and stages that copy,
+//! so nothing reads the original after the check (it may be pruned by the backup made first).
 
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Read, Write};
@@ -38,6 +42,10 @@ const READY: &str = "READY";
 const REPLACED_DIR: &str = "restore-replaced";
 /// The settings key whose value a restore keeps from the current install.
 const SETTINGS_KEY: &str = "backups";
+/// The copy of an archive being restored, inside the data dir, while it is staged.
+const IMPORT_COPY: &str = "restore-import.zip";
+/// The first bytes of every SQLite database file.
+const SQLITE_HEADER: &[u8; 16] = b"SQLite format 3\0";
 
 /// How often an automatic backup runs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -100,6 +108,16 @@ pub struct BackupInfo {
     pub app_version: Option<String>,
 }
 
+/// An archive picked for import, after the checks a restore makes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BackupImportCheck {
+    pub backup: BackupInfo,
+    /// The current library has no games, so there is nothing to back up before the import.
+    pub library_empty: bool,
+}
+
 /// What an archive says about itself (`questkeep-backup.json`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,13 +164,51 @@ fn is_archive_name(path: &Path) -> bool {
 }
 
 fn read_manifest(archive: &Path) -> Result<Manifest> {
-    let mut zip = open_archive(archive)?;
+    manifest_of(&mut open_archive(archive)?, archive)
+}
+
+fn manifest_of(zip: &mut ZipArchive<File>, archive: &Path) -> Result<Manifest> {
     let mut text = String::new();
     zip.by_name(MANIFEST)
         .map_err(|_| unreadable(archive))?
         .read_to_string(&mut text)
         .map_err(|_| unreadable(archive))?;
     serde_json::from_str(&text).map_err(|_| unreadable(archive))
+}
+
+/// Checks that `archive` is a Questkeep backup this version can restore: a zip with a readable
+/// manifest, a schema no newer than this build's (older ones are migrated when the restored
+/// library opens) and a SQLite database.
+fn validate(archive: &Path) -> Result<Manifest> {
+    let mut zip = open_archive(archive)?;
+    let manifest = manifest_of(&mut zip, archive)?;
+    if manifest.schema_version > LATEST_VERSION {
+        return Err(CoreError::Invalid(format!(
+            "This backup was made by Questkeep {}, which is newer than this version. Update \
+             Questkeep, then restore it.",
+            manifest.app_version
+        )));
+    }
+    let mut header = [0u8; 16];
+    zip.by_name(DB_ENTRY)
+        .map_err(|_| unreadable(archive))?
+        .read_exact(&mut header)
+        .map_err(|_| unreadable(archive))?;
+    if &header != SQLITE_HEADER {
+        return Err(unreadable(archive));
+    }
+    Ok(manifest)
+}
+
+/// What an archive anywhere on disk holds, after the same checks a restore makes.
+pub fn inspect_backup(archive: &Path) -> Result<BackupInfo> {
+    let manifest = validate(archive)?;
+    Ok(BackupInfo {
+        path: archive.to_string_lossy().into_owned(),
+        created_at: manifest.created_at,
+        size: fs::metadata(archive).map(|m| m.len()).unwrap_or_default(),
+        app_version: Some(manifest.app_version),
+    })
 }
 
 fn open_archive(path: &Path) -> Result<ZipArchive<File>> {
@@ -325,17 +381,34 @@ fn write_archive(
     Ok(())
 }
 
+/// Prepares restoring `source` (an archive anywhere on disk) at the next start: checks it,
+/// copies it into the data dir, runs `before_staging` (the backup of the current state; its
+/// error stops the import) and unpacks the copy into the staging folder. The original is not
+/// read after the copy. On any error the data dir is as it was (the copy is always removed).
+pub fn import_backup(
+    source: &Path,
+    paths: &DataPaths,
+    before_staging: &mut dyn FnMut() -> Result<()>,
+) -> Result<()> {
+    // A foreign or too new archive is refused before anything is written.
+    validate(source)?;
+    let copy = paths.root().join(IMPORT_COPY);
+    let result = fs::copy(source, &copy)
+        .map_err(|e| io_error("copy", source, &e))
+        .and_then(|_| before_staging())
+        .and_then(|()| prepare_restore(&copy, paths));
+    if let Err(err) = fs::remove_file(&copy)
+        && err.kind() != io::ErrorKind::NotFound
+    {
+        tracing::warn!(%err, path = %copy.display(), "could not delete the copy of an imported backup");
+    }
+    result
+}
+
 /// Unpacks `archive` into the staging folder for the next start. Refuses archives from a newer
 /// Questkeep (their database is newer than this build understands).
-pub fn prepare_restore(archive: &Path, paths: &DataPaths) -> Result<()> {
-    let manifest = read_manifest(archive)?;
-    if manifest.schema_version > LATEST_VERSION {
-        return Err(CoreError::Invalid(format!(
-            "This backup was made by Questkeep {}, which is newer than this version. Update \
-             Questkeep, then restore it.",
-            manifest.app_version
-        )));
-    }
+fn prepare_restore(archive: &Path, paths: &DataPaths) -> Result<()> {
+    validate(archive)?;
     let staging = paths.root().join(RESTORE_DIR);
     if staging.exists() {
         fs::remove_dir_all(&staging).map_err(|e| io_error("clear", &staging, &e))?;
@@ -384,6 +457,8 @@ fn unpack(archive: &Path, target: &Path) -> Result<()> {
 /// The backup settings of the current install are kept. If moving the restored files in fails,
 /// the replaced ones are moved back.
 pub fn apply_pending_restore(paths: &DataPaths) -> Result<bool> {
+    // Left over when the app ended while staging an import.
+    let _ = fs::remove_file(paths.root().join(IMPORT_COPY));
     let staging = paths.root().join(RESTORE_DIR);
     if !staging.join(READY).is_file() {
         if staging.exists() {
@@ -672,5 +747,195 @@ mod tests {
         let err = prepare_restore(&future, &paths).unwrap_err().to_string();
         assert!(err.contains("99.0.0"), "{err}");
         assert!(!apply_pending_restore(&paths).unwrap());
+    }
+
+    /// Writes a zip with these entries.
+    fn zip_with(path: &Path, entries: &[(&str, &[u8])]) {
+        let mut zip = ZipWriter::new(File::create(path).unwrap());
+        for (name, data) in entries {
+            zip.start_file(*name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    fn manifest_json(schema_version: u32) -> Vec<u8> {
+        serde_json::to_vec(&Manifest {
+            app_version: "0.1.0".into(),
+            schema_version,
+            created_at: Utc::now(),
+        })
+        .unwrap()
+    }
+
+    /// Nothing of a refused import is left in the data dir.
+    fn assert_untouched(paths: &DataPaths) {
+        assert!(!paths.root().join(RESTORE_DIR).exists());
+        assert!(!paths.root().join(IMPORT_COPY).exists());
+    }
+
+    #[test]
+    fn imports_check_the_archive_before_anything_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (paths, db) = library(tmp.path());
+        let elsewhere = tmp.path().join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        let never = AtomicBool::new(false);
+
+        // A real backup, renamed: the name does not matter for imports.
+        let made = create_backup(&db, &paths, &elsewhere, 5, &never, &|_, _| {}).unwrap();
+        let valid = elsewhere.join("my library.zip");
+        fs::rename(&made.path, &valid).unwrap();
+        let info = inspect_backup(&valid).unwrap();
+        assert_eq!(info.created_at, made.created_at);
+        assert_eq!(info.app_version.as_deref(), Some(env!("CARGO_PKG_VERSION")));
+        assert_eq!(info.path, valid.to_string_lossy());
+
+        let not_a_zip = elsewhere.join("notes.zip");
+        fs::write(&not_a_zip, "just text").unwrap();
+        let foreign = elsewhere.join("photos.zip");
+        zip_with(&foreign, &[("holiday.jpg", b"jpg")]);
+        let no_database = elsewhere.join("no-db.zip");
+        zip_with(&no_database, &[(MANIFEST, &manifest_json(1))]);
+        let bad_database = elsewhere.join("bad-db.zip");
+        zip_with(
+            &bad_database,
+            &[(MANIFEST, &manifest_json(1)), (DB_ENTRY, b"not a database")],
+        );
+        let newer = elsewhere.join("newer.zip");
+        zip_with(
+            &newer,
+            &[
+                (MANIFEST, &manifest_json(LATEST_VERSION + 1)),
+                (DB_ENTRY, SQLITE_HEADER),
+            ],
+        );
+
+        for refused in [&not_a_zip, &foreign, &no_database, &bad_database, &newer] {
+            let err = inspect_backup(refused).unwrap_err().to_string();
+            if refused == &newer {
+                assert!(err.contains("newer than this version"), "{err}");
+            } else {
+                assert!(err.contains("is not a Questkeep backup"), "{err}");
+            }
+            let mut called = false;
+            let err = import_backup(refused, &paths, &mut || {
+                called = true;
+                Ok(())
+            });
+            assert!(err.is_err());
+            assert!(
+                !called,
+                "no backup of the current state for a refused archive"
+            );
+            assert_untouched(&paths);
+        }
+        assert!(!apply_pending_restore(&paths).unwrap());
+    }
+
+    #[test]
+    fn an_import_backs_up_first_then_stages_a_copy_of_the_archive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (paths, db) = library(tmp.path());
+        db.upsert_imported(
+            "steam",
+            &[ImportedGame::installed("1", "Hades")],
+            Utc::now(),
+        )
+        .unwrap();
+        fs::create_dir_all(paths.images_dir().join("covers")).unwrap();
+        fs::write(paths.images_dir().join("covers/a.jpg"), b"cover").unwrap();
+        let elsewhere = tmp.path().join("usb stick");
+        let never = AtomicBool::new(false);
+        let source = PathBuf::from(
+            create_backup(&db, &paths, &elsewhere, 5, &never, &|_, _| {})
+                .unwrap()
+                .path,
+        );
+        db.upsert_imported(
+            "steam",
+            &[ImportedGame::installed("2", "Celeste")],
+            Utc::now(),
+        )
+        .unwrap();
+
+        let mut backups_first = 0;
+        import_backup(&source, &paths, &mut || {
+            backups_first += 1;
+            // The archive is copied into the data dir before the backup of the current state,
+            // and nothing reads the original after that (a backup may prune it).
+            assert!(paths.root().join(IMPORT_COPY).is_file());
+            assert!(!paths.root().join(RESTORE_DIR).exists(), "staged after it");
+            fs::remove_file(&source).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(backups_first, 1);
+        assert!(!paths.root().join(IMPORT_COPY).exists(), "the copy is gone");
+        assert!(paths.root().join(RESTORE_DIR).join(READY).is_file());
+
+        drop(db);
+        assert!(apply_pending_restore(&paths).unwrap());
+        let db = Database::open(&paths.database_file()).unwrap();
+        assert_eq!(names(&db), ["Hades"]);
+        assert_eq!(
+            fs::read(paths.images_dir().join("covers/a.jpg")).unwrap(),
+            b"cover"
+        );
+    }
+
+    #[test]
+    fn a_failed_backup_of_the_current_state_stops_the_import() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (paths, db) = library(tmp.path());
+        let never = AtomicBool::new(false);
+        let source = create_backup(&db, &paths, &tmp.path().join("x"), 5, &never, &|_, _| {})
+            .unwrap()
+            .path;
+        let err = import_backup(Path::new(&source), &paths, &mut || {
+            Err(CoreError::Invalid("disk full".into()))
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("disk full"));
+        assert_untouched(&paths);
+        assert!(Path::new(&source).is_file(), "the original stays");
+        drop(db);
+        assert!(!apply_pending_restore(&paths).unwrap());
+    }
+
+    #[test]
+    fn a_backup_with_an_older_schema_is_migrated_when_it_opens() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (paths, db) = library(tmp.path());
+        let old = tmp.path().join("old.sqlite");
+        {
+            let conn = rusqlite::Connection::open(&old).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version VALUES (1);",
+            )
+            .unwrap();
+            conn.execute_batch(crate::db::migrations::MIGRATIONS[0])
+                .unwrap();
+            conn.execute_batch(
+                "INSERT INTO games (id, name, sorting_name, search_key, source, date_added) \
+                 VALUES ('6f1c2b1e-0d6a-4c8e-9a3b-2f0e5d7c1a90', 'Old Game', 'Old Game', 'old game', 'steam', \
+                 '2026-01-01T00:00:00Z');",
+            )
+            .unwrap();
+        }
+        let archive = tmp.path().join("old-backup.zip");
+        zip_with(
+            &archive,
+            &[
+                (MANIFEST, &manifest_json(1)),
+                (DB_ENTRY, &fs::read(&old).unwrap()),
+            ],
+        );
+        import_backup(&archive, &paths, &mut || Ok(())).unwrap();
+        drop(db);
+        assert!(apply_pending_restore(&paths).unwrap());
+        let db = Database::open(&paths.database_file()).unwrap();
+        assert_eq!(names(&db), ["Old Game"]);
     }
 }

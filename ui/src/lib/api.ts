@@ -4,6 +4,7 @@ import { openPath as openerOpenPath } from "@tauri-apps/plugin-opener";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AccountWarning } from "../bindings/AccountWarning";
 import type { Achievements } from "../bindings/Achievements";
+import type { BackupImportCheck } from "../bindings/BackupImportCheck";
 import type { BackupInfo } from "../bindings/BackupInfo";
 import type { BulkChange } from "../bindings/BulkChange";
 import type { CatalogHit } from "../bindings/CatalogHit";
@@ -146,6 +147,12 @@ export const backupNow = () => invoke<BackupInfo>("backup_now");
 export const cancelBackup = () => invoke<void>("cancel_backup");
 /** Backs up the current library, then restarts Questkeep with `path` restored. */
 export const restoreBackup = (path: string) => invoke<void>("restore_backup", { path });
+/** Checks a backup archive anywhere on disk before importing it. */
+export const checkBackupImport = (path: string) =>
+  invoke<BackupImportCheck>("check_backup_import", { path });
+/** Restarts Questkeep with the archive at `path` restored, backing up the library first if asked. */
+export const importBackup = (path: string, backUpFirst: boolean) =>
+  invoke<void>("import_backup", { path, backUpFirst });
 /** Whether a quit waits for an answer because a backup runs. */
 export const quitPending = () => invoke<boolean>("quit_pending");
 /** Quits after the running backup (`wait`) or after cancelling it. */

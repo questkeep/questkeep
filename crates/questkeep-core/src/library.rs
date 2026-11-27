@@ -11,7 +11,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::auth::{AccountStatus, TokenStore};
-use crate::backup::{self, BackupInfo, BackupRun};
+use crate::backup::{self, BackupImportCheck, BackupInfo, BackupRun};
 use crate::db::{Database, NewGameRecord, playtime_by_day, playtime_by_week};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
@@ -267,8 +267,32 @@ impl Library {
     /// Prepares restoring `path` at the next start, after backing up the current state. The
     /// caller restarts the app.
     pub fn restore_backup(&self, path: &Path) -> Result<()> {
-        self.run_backup()?;
-        backup::prepare_restore(path, &self.paths)
+        self.import_backup(path, true)
+    }
+
+    /// Checks a backup archive anywhere on disk before importing it, and tells whether the
+    /// current library is empty (then nothing needs backing up first).
+    pub fn check_backup_import(&self, path: &Path) -> Result<BackupImportCheck> {
+        Ok(BackupImportCheck {
+            backup: backup::inspect_backup(path)?,
+            library_empty: self.db.count_games()? == 0,
+        })
+    }
+
+    /// Prepares restoring the archive at `path` (anywhere on disk) at the next start, through
+    /// the same staging as [`Self::restore_backup`]. With `back_up_first` the current state is
+    /// backed up before anything is staged; a failed backup stops the import. The caller
+    /// restarts the app.
+    pub fn import_backup(&self, path: &Path, back_up_first: bool) -> Result<()> {
+        backup::import_backup(path, &self.paths, &mut || {
+            if back_up_first {
+                self.run_backup().map(|_| ())
+            } else {
+                Ok(())
+            }
+        })?;
+        tracing::info!(path = %path.display(), back_up_first, "backup staged for restore");
+        Ok(())
     }
 
     pub fn events(&self) -> &EventBus {
@@ -2298,6 +2322,54 @@ mod tests {
             Library::with_database(paths, db, providers, events, secrets),
             seen,
         )
+    }
+
+    #[test]
+    fn importing_a_backup_backs_up_the_current_library_only_when_asked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let archive = outside.join("from another pc.zip");
+        std::fs::rename(lib.run_backup().unwrap().path, &archive).unwrap();
+        assert!(lib.backups().is_empty());
+
+        let check = lib.check_backup_import(&archive).unwrap();
+        assert!(check.library_empty);
+        assert_eq!(
+            check.backup.app_version.as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
+
+        lib.import_backup(&archive, false).unwrap();
+        assert!(lib.backups().is_empty(), "no backup when not asked");
+        assert!(lib.paths().root().join("restore-pending/READY").is_file());
+
+        lib.db
+            .upsert_imported(
+                "steam",
+                &[ImportedGame::installed("1", "Hades")],
+                Utc::now(),
+            )
+            .unwrap();
+        assert!(!lib.check_backup_import(&archive).unwrap().library_empty);
+        lib.import_backup(&archive, true).unwrap();
+        assert_eq!(
+            lib.backups().len(),
+            1,
+            "the current state was backed up first"
+        );
+        assert!(lib.paths().root().join("restore-pending/READY").is_file());
+
+        let foreign = outside.join("foreign.zip");
+        std::fs::write(&foreign, b"PK not really").unwrap();
+        assert!(lib.check_backup_import(&foreign).is_err());
+        assert!(lib.import_backup(&foreign, true).is_err());
+        assert_eq!(lib.backups().len(), 1, "no backup for a refused archive");
+        assert!(
+            lib.paths().root().join("restore-pending/READY").is_file(),
+            "a refused archive leaves the staged restore alone"
+        );
     }
 
     #[test]

@@ -38,6 +38,14 @@ export function pickGameImage(icon: boolean): Promise<string | null> {
   ]);
 }
 
+/** A Questkeep backup archive to import. */
+export function pickBackupFile(): Promise<string | null> {
+  return pickFile(tr("chooseBackup"), [
+    { name: tr("filterBackup"), extensions: ["zip"] },
+    { name: tr("filterAllFiles"), extensions: ["*"] },
+  ]);
+}
+
 /** A script file to link or import. */
 export function pickScriptFile(): Promise<string | null> {
   return pickFile(trScripts("chooseScriptFile"), [
