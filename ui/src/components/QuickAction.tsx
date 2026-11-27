@@ -42,11 +42,17 @@ export function QuickAction(props: QuickActionProps) {
             kind() === "running"
               ? tr("isRunning", { name: props.game.name })
               : kind() === "play"
-                ? tr("playGame", { name: props.game.name })
+                ? tr(props.game.kind === "app" ? "startGame" : "playGame", {
+                    name: props.game.name,
+                  })
                 : tr("installGame", { name: props.game.name })
           }
           data-tooltip={
-            kind() === "play" ? tr("playTitle") : kind() === "install" ? tr("install") : ""
+            kind() === "play"
+              ? tr(props.game.kind === "app" ? "startTitle" : "playTitle")
+              : kind() === "install"
+                ? tr("install")
+                : ""
           }
           onClick={(event) => {
             event.stopPropagation();

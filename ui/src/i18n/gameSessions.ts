@@ -1,10 +1,10 @@
 import type { Translations } from ".";
 
 const en = {
-  title: "Play sessions of {name}",
+  title: "Sessions of {name}",
   edit: "Edit sessions…",
   intro:
-    "Add a session Questkeep did not record, or correct or remove one. Playtime and play count follow.",
+    "Add a session Questkeep did not record, or correct or remove one. Running time and times started follow.",
   started: "Started",
   minutes: "Minutes",
   add: "Add session",
@@ -26,10 +26,10 @@ const en = {
 export const gameSessions: Translations<typeof en> = {
   en,
   de: {
-    title: "Spielsitzungen von {name}",
+    title: "Sitzungen von {name}",
     edit: "Sitzungen bearbeiten…",
     intro:
-      "Füge eine Sitzung hinzu, die Questkeep nicht aufgezeichnet hat, oder korrigiere oder entferne eine. Spielzeit und Spielanzahl passen sich an.",
+      "Füge eine Sitzung hinzu, die Questkeep nicht aufgezeichnet hat, oder korrigiere oder entferne eine. Laufzeit und Anzahl Starts passen sich an.",
     started: "Beginn",
     minutes: "Minuten",
     add: "Sitzung hinzufügen",
@@ -47,10 +47,10 @@ export const gameSessions: Translations<typeof en> = {
     failed: "Die Sitzung konnte nicht geändert werden: {error}",
   },
   fr: {
-    title: "Sessions de jeu de {name}",
+    title: "Sessions de {name}",
     edit: "Modifier les sessions…",
     intro:
-      "Ajoutez une session que Questkeep n’a pas enregistrée, ou corrigez-en ou supprimez-en une. Le temps de jeu et le nombre de parties suivent.",
+      "Ajoutez une session que Questkeep n’a pas enregistrée, ou corrigez-en ou supprimez-en une. La durée d’utilisation et le nombre de lancements suivent.",
     started: "Début",
     minutes: "Minutes",
     add: "Ajouter la session",
@@ -68,10 +68,10 @@ export const gameSessions: Translations<typeof en> = {
     failed: "Impossible de modifier la session : {error}",
   },
   it: {
-    title: "Sessioni di gioco di {name}",
+    title: "Sessioni di {name}",
     edit: "Modifica sessioni…",
     intro:
-      "Aggiungi una sessione che Questkeep non ha registrato, oppure correggine o rimuovine una. Tempo di gioco e numero di partite si aggiornano.",
+      "Aggiungi una sessione che Questkeep non ha registrato, oppure correggine o rimuovine una. Tempo di utilizzo e numero di avvii si aggiornano.",
     started: "Inizio",
     minutes: "Minuti",
     add: "Aggiungi sessione",
@@ -89,10 +89,10 @@ export const gameSessions: Translations<typeof en> = {
     failed: "Impossibile modificare la sessione: {error}",
   },
   es: {
-    title: "Sesiones de juego de {name}",
+    title: "Sesiones de {name}",
     edit: "Editar sesiones…",
     intro:
-      "Añade una sesión que Questkeep no registró, o corrige o elimina una. El tiempo de juego y el número de partidas se ajustan.",
+      "Añade una sesión que Questkeep no registró, o corrige o elimina una. El tiempo de uso y las veces iniciado se ajustan.",
     started: "Inicio",
     minutes: "Minutos",
     add: "Añadir sesión",
@@ -110,10 +110,10 @@ export const gameSessions: Translations<typeof en> = {
     failed: "No se pudo cambiar la sesión: {error}",
   },
   pt: {
-    title: "Sessões de jogo de {name}",
+    title: "Sessões de {name}",
     edit: "Editar sessões…",
     intro:
-      "Adicione uma sessão que o Questkeep não registrou, ou corrija ou remova uma. O tempo de jogo e o número de partidas acompanham.",
+      "Adicione uma sessão que o Questkeep não registrou, ou corrija ou remova uma. O tempo de uso e as vezes iniciado acompanham.",
     started: "Início",
     minutes: "Minutos",
     add: "Adicionar sessão",

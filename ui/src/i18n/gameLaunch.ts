@@ -30,8 +30,12 @@ const en = {
   delete: "Delete",
   intro:
     "Profiles are ways to start this game. The default one runs on Play (and from the tray); all of them are in the menu next to Play. Drag to reorder.",
+  introApp:
+    "Profiles are ways to start this app. The default one runs on Start (and from the tray); all of them are in the menu next to Start. Drag to reorder.",
   playStartsAutomatic: "Play starts: Automatic (the first installed store)",
+  startStartsAutomatic: "Start runs: Automatic (the first installed store)",
   playStartsDefault: "Play starts the default profile.",
+  startStartsDefault: "Start runs the default profile.",
   launchProfiles: "Launch profiles",
   dragToReorder: "Drag to reorder",
   notInstalled: "not installed",
@@ -73,8 +77,12 @@ export const gameLaunch: Translations<typeof en> = {
     delete: "Löschen",
     intro:
       "Profile sind Möglichkeiten, dieses Spiel zu starten. Das Standardprofil läuft bei „Spielen“ (und über den Infobereich); alle stehen im Menü neben „Spielen“. Zum Sortieren ziehen.",
+    introApp:
+      "Profile sind Möglichkeiten, diese App zu starten. Das Standardprofil läuft bei „Starten“ (und über den Infobereich); alle stehen im Menü neben „Starten“. Zum Sortieren ziehen.",
     playStartsAutomatic: "Spielen startet: Automatisch (der erste installierte Store)",
+    startStartsAutomatic: "„Starten“ nutzt: Automatisch (der erste installierte Store)",
     playStartsDefault: "Spielen startet das Standardprofil.",
+    startStartsDefault: "„Starten“ nutzt das Standardprofil.",
     launchProfiles: "Startprofile",
     dragToReorder: "Zum Sortieren ziehen",
     notInstalled: "nicht installiert",
@@ -112,8 +120,12 @@ export const gameLaunch: Translations<typeof en> = {
     delete: "Supprimer",
     intro:
       "Les profils sont des façons de lancer ce jeu. Celui par défaut se lance avec Jouer (et depuis la zone de notification) ; tous sont dans le menu à côté de Jouer. Glissez pour réorganiser.",
+    introApp:
+      "Les profils sont des façons de lancer cette application. Celui par défaut se lance avec Démarrer (et depuis la zone de notification) ; tous sont dans le menu à côté de Démarrer. Glissez pour réorganiser.",
     playStartsAutomatic: "Jouer lance : Automatique (la première boutique installée)",
+    startStartsAutomatic: "Démarrer lance : Automatique (la première boutique installée)",
     playStartsDefault: "Jouer lance le profil par défaut.",
+    startStartsDefault: "Démarrer lance le profil par défaut.",
     launchProfiles: "Profils de lancement",
     dragToReorder: "Glisser pour réorganiser",
     notInstalled: "non installé",
@@ -150,8 +162,12 @@ export const gameLaunch: Translations<typeof en> = {
     delete: "Elimina",
     intro:
       "I profili sono modi per avviare questo gioco. Quello predefinito parte con Gioca (e dall’area di notifica); tutti sono nel menu accanto a Gioca. Trascina per riordinare.",
+    introApp:
+      "I profili sono modi per avviare questa app. Quello predefinito parte con Avvia (e dall’area di notifica); tutti sono nel menu accanto ad Avvia. Trascina per riordinare.",
     playStartsAutomatic: "Gioca avvia: Automatico (il primo store installato)",
+    startStartsAutomatic: "Avvia usa: Automatico (il primo store installato)",
     playStartsDefault: "Gioca avvia il profilo predefinito.",
+    startStartsDefault: "Avvia usa il profilo predefinito.",
     launchProfiles: "Profili di avvio",
     dragToReorder: "Trascina per riordinare",
     notInstalled: "non installato",
@@ -188,8 +204,12 @@ export const gameLaunch: Translations<typeof en> = {
     delete: "Eliminar",
     intro:
       "Los perfiles son formas de iniciar este juego. El predeterminado se ejecuta con Jugar (y desde la bandeja del sistema); todos están en el menú junto a Jugar. Arrastra para reordenar.",
+    introApp:
+      "Los perfiles son formas de iniciar esta aplicación. El predeterminado se ejecuta con Iniciar (y desde la bandeja del sistema); todos están en el menú junto a Iniciar. Arrastra para reordenar.",
     playStartsAutomatic: "Jugar inicia: Automático (la primera tienda instalada)",
+    startStartsAutomatic: "Iniciar usa: Automático (la primera tienda instalada)",
     playStartsDefault: "Jugar inicia el perfil predeterminado.",
+    startStartsDefault: "Iniciar usa el perfil predeterminado.",
     launchProfiles: "Perfiles de inicio",
     dragToReorder: "Arrastra para reordenar",
     notInstalled: "no instalado",
@@ -226,8 +246,12 @@ export const gameLaunch: Translations<typeof en> = {
     delete: "Excluir",
     intro:
       "Perfis são formas de iniciar este jogo. O padrão roda com Jogar (e pela bandeja do sistema); todos estão no menu ao lado de Jogar. Arraste para reordenar.",
+    introApp:
+      "Perfis são formas de iniciar este aplicativo. O padrão roda com Iniciar (e pela bandeja do sistema); todos estão no menu ao lado de Iniciar. Arraste para reordenar.",
     playStartsAutomatic: "Jogar inicia: Automático (a primeira loja instalada)",
+    startStartsAutomatic: "Iniciar usa: Automático (a primeira loja instalada)",
     playStartsDefault: "Jogar inicia o perfil padrão.",
+    startStartsDefault: "Iniciar usa o perfil padrão.",
     launchProfiles: "Perfis de inicialização",
     dragToReorder: "Arraste para reordenar",
     notInstalled: "não instalado",

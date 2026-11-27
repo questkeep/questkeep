@@ -422,7 +422,7 @@ describe("App", () => {
     it("opens on the start page and opens a game in a view with Enter", async () => {
       vi.mocked(api.getSettings).mockResolvedValue({ ...SETTINGS, startupPage: { kind: "start" } });
       render(() => <App />);
-      const shelf = await screen.findByRole("grid", { name: "Recently played" });
+      const shelf = await screen.findByRole("grid", { name: "Recently started" });
       expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
       expect(screen.getByRole("gridcell", { name: "Hades" })).toHaveTextContent("Today");
       expect(screen.getByText("No games yet")).toBeInTheDocument();
@@ -445,7 +445,7 @@ describe("App", () => {
       vi.mocked(api.getSettings).mockResolvedValue({ ...SETTINGS, startupPage: { kind: "last" } });
       vi.mocked(api.lastPage).mockResolvedValue("home");
       render(() => <App />);
-      await screen.findByRole("grid", { name: "Recently played" });
+      await screen.findByRole("grid", { name: "Recently started" });
 
       store.applySettings({ ...SETTINGS, showStartPage: false });
       await waitFor(() => expect(store.page()).toBe("library"));

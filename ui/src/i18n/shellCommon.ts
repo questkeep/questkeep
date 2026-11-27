@@ -20,6 +20,7 @@ const en = {
   installHanded: "Install handed to the store client",
   installed: "{name} is installed",
   play: "Play",
+  start: "Start",
   installAllHanded: (p: { count: number }) =>
     `Install of ${games(p.count)} handed to the store clients`,
   refreshFailed: (p: { count: number }) => `Could not refresh ${games(p.count)}`,
@@ -60,6 +61,7 @@ export const shellCommon: Translations<typeof en> = {
     installHanded: "Installation an den Store-Client übergeben",
     installed: "{name} ist installiert",
     play: "Spielen",
+    start: "Starten",
     installAllHanded: (p: { count: number }) =>
       `Installation von ${spiele(p.count)} an die Store-Clients übergeben`,
     refreshFailed: (p: { count: number }) => `${spiele(p.count)} konnten nicht aktualisiert werden`,
@@ -94,6 +96,7 @@ export const shellCommon: Translations<typeof en> = {
     installHanded: "Installation transmise au client de la boutique",
     installed: "{name} est installé",
     play: "Jouer",
+    start: "Démarrer",
     installAllHanded: (p: { count: number }) =>
       `Installation de ${jeux(p.count)} transmise aux clients des boutiques`,
     refreshFailed: (p: { count: number }) => `Impossible d'actualiser ${jeux(p.count)}`,
@@ -129,6 +132,7 @@ export const shellCommon: Translations<typeof en> = {
     installHanded: "Installazione passata al client dello store",
     installed: "{name} è installato",
     play: "Gioca",
+    start: "Avvia",
     installAllHanded: (p: { count: number }) =>
       `Installazione di ${giochi(p.count)} passata ai client degli store`,
     refreshFailed: (p: { count: number }) => `Impossibile aggiornare ${giochi(p.count)}`,
@@ -164,6 +168,7 @@ export const shellCommon: Translations<typeof en> = {
     installHanded: "Instalación enviada al cliente de la tienda",
     installed: "{name} está instalado",
     play: "Jugar",
+    start: "Iniciar",
     installAllHanded: (p: { count: number }) =>
       `Instalación de ${juegos(p.count)} enviada a los clientes de las tiendas`,
     refreshFailed: (p: { count: number }) => `No se pudo actualizar ${juegos(p.count)}`,
@@ -199,6 +204,7 @@ export const shellCommon: Translations<typeof en> = {
     installHanded: "Instalação enviada ao cliente da loja",
     installed: "{name} está instalado",
     play: "Jogar",
+    start: "Iniciar",
     installAllHanded: (p: { count: number }) =>
       `Instalação de ${jogos(p.count)} enviada aos clientes das lojas`,
     refreshFailed: (p: { count: number }) => `Não foi possível atualizar ${jogos(p.count)}`,

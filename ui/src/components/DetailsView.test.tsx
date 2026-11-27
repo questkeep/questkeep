@@ -57,7 +57,7 @@ describe("DetailsView", () => {
     expect(page()).toHaveTextContent("Supergiant");
     expect(page()).toHaveTextContent("Annapurna");
     expect(page()).toHaveTextContent("3h");
-    expect(page()).toHaveTextContent("Play count");
+    expect(page()).toHaveTextContent("Times started");
     expect(page()).toHaveTextContent("A long descent.");
     expect(page()).toHaveTextContent("Roguelike");
     expect(page().querySelector(".details__stores")).toHaveTextContent("Steam");

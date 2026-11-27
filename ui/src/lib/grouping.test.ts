@@ -76,7 +76,7 @@ describe("groupGames", () => {
       "None: C",
     ]);
     expect(names(groupGames([a, b, c], "playtime", ctx([])))).toEqual([
-      "Never played: A, B",
+      "Never started: A, B",
       "10–50 hours: C",
     ]);
     const now = Date.parse("2026-10-31T12:00:00Z");
@@ -85,7 +85,7 @@ describe("groupGames", () => {
     expect(names(groupGames([old, recent, c], "lastPlayed", { ...ctx([]), now }))).toEqual([
       "Today: R",
       "Over a year ago: O",
-      "Never played: C",
+      "Never started: C",
     ]);
   });
 
@@ -132,7 +132,7 @@ describe("groupGames", () => {
     };
     expect(
       names(groupGames([long, never, quick], "playtime", { ...ctx([]), merges: [played] })),
-    ).toEqual(["Never played: N", "Played: L, Q"]);
+    ).toEqual(["Never started: N", "Played: L, Q"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Translations } from ".";
 
 const en = {
-  neverPlayed: "Never played",
+  neverPlayed: "Never started",
   lessThanMinute: "Less than a minute",
   minutes: "{m}m",
   hours: "{h}h",
@@ -20,7 +20,7 @@ const en = {
 export const format: Translations<typeof en> = {
   en,
   de: {
-    neverPlayed: "Nie gespielt",
+    neverPlayed: "Nie gestartet",
     lessThanMinute: "Weniger als eine Minute",
     minutes: "{m} Min.",
     hours: "{h} Std.",
@@ -35,7 +35,7 @@ export const format: Translations<typeof en> = {
     hoursAgo: "Vor {n} Std.",
   },
   fr: {
-    neverPlayed: "Jamais joué",
+    neverPlayed: "Jamais lancé",
     lessThanMinute: "Moins d'une minute",
     minutes: "{m} min",
     hours: "{h} h",
@@ -50,7 +50,7 @@ export const format: Translations<typeof en> = {
     hoursAgo: "Il y a {n} h",
   },
   it: {
-    neverPlayed: "Mai giocato",
+    neverPlayed: "Mai avviato",
     lessThanMinute: "Meno di un minuto",
     minutes: "{m} min",
     hours: "{h} h",
@@ -65,7 +65,7 @@ export const format: Translations<typeof en> = {
     hoursAgo: "{n} h fa",
   },
   es: {
-    neverPlayed: "Nunca jugado",
+    neverPlayed: "Nunca iniciado",
     lessThanMinute: "Menos de un minuto",
     minutes: "{m} min",
     hours: "{h} h",
@@ -80,7 +80,7 @@ export const format: Translations<typeof en> = {
     hoursAgo: "Hace {n} h",
   },
   pt: {
-    neverPlayed: "Nunca jogado",
+    neverPlayed: "Nunca iniciado",
     lessThanMinute: "Menos de um minuto",
     minutes: "{m} min",
     hours: "{h} h",

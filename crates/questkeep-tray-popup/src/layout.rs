@@ -2,7 +2,7 @@
 //! is unit tested here; the Windows renderer only draws what this computes.
 //!
 //! ```text
-//! Recently played
+//! Recently started
 //! [tile] [tile] [tile] [tile]      cover tiles, 2:3, up to two rows
 //! [tile] [tile] ...
 //! Favorites
@@ -71,10 +71,10 @@ pub struct PopupTexts {
 impl Default for PopupTexts {
     fn default() -> Self {
         Self {
-            recent: "Recently played".into(),
+            recent: "Recently started".into(),
             favorites: "Favorites".into(),
             launchers: "Quick launch".into(),
-            empty_recent: "No recently played games yet".into(),
+            empty_recent: "No recently started games yet".into(),
             open: "Open Questkeep".into(),
             exit: "Exit".into(),
             exit_app: "Exit Questkeep".into(),
@@ -643,7 +643,7 @@ mod tests {
         assert_eq!(k[13], ItemKind::ExitButton);
         assert_eq!(
             l.labels.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
-            vec!["Recently played", "Favorites", "Quick launch"]
+            vec!["Recently started", "Favorites", "Quick launch"]
         );
         // Everything inside the popup, and the footer at the bottom.
         for item in &l.items {

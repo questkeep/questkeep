@@ -104,7 +104,7 @@ export function GameContextMenu(props: {
     return [
       {
         kind: "submenu",
-        label: tr("playWith"),
+        label: tr(game().kind === "app" ? "startWith" : "playWith"),
         entries: () =>
           installed.map((profile) => ({
             label: profile.name,

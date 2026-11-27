@@ -12,9 +12,9 @@ import {
 
 describe("formatPlaytime", () => {
   it("handles never played", () => {
-    expect(formatPlaytime(0)).toBe("Never played");
-    expect(formatPlaytime(-5)).toBe("Never played");
-    expect(formatPlaytime(Number.NaN)).toBe("Never played");
+    expect(formatPlaytime(0)).toBe("Never started");
+    expect(formatPlaytime(-5)).toBe("Never started");
+    expect(formatPlaytime(Number.NaN)).toBe("Never started");
   });
   it("handles sub-minute values", () => {
     expect(formatPlaytime(30)).toBe("Less than a minute");

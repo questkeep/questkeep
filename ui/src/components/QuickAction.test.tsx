@@ -46,6 +46,14 @@ describe("quick action on a tile", () => {
     expect(onLaunch).not.toHaveBeenCalled();
   });
 
+  it("says Start for an app", async () => {
+    renderTile({ kind: "app" });
+    const button = screen.getByRole("button", { name: "Start Hades" });
+    expect(button).toHaveAttribute("data-tooltip", "Start (Ctrl+Enter)");
+    await fireEvent.click(button);
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
+  });
+
   it("installs a store game that is not installed", async () => {
     const { onSelect } = renderTile({ source: "steam", sourceGameId: "440", installed: false });
     expect(screen.queryByRole("button", { name: "Play Hades" })).toBeNull();

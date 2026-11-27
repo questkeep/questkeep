@@ -86,6 +86,10 @@ Short log of choices made while building. Newest at the bottom of each section.
   user's quoting works exactly as typed in a shortcut. On Linux arguments are split shell-style.
 - **`play_count` and `last_played` update when a session ends** (Playnite updates them at start),
   so a game that fails to start doesn't count as played.
+- **The UI says "running time", "last started" and "times started"**, not playtime/played: the
+  timer measures how long the process runs (also for apps, or a game idling in the background),
+  not play. "Runtime" is avoided because scripts already have a Runtime setting. Code, JSON, DB
+  columns and script variables keep the `playtime`/`played` names.
 
 ## Steam and covers
 

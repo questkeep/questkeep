@@ -254,10 +254,16 @@ export function CommandBar(props: {
                         tabIndex={-1}
                         aria-label={
                           action() === "play"
-                            ? tr("playNamed", { name: game.name })
+                            ? tr(game.kind === "app" ? "startNamed" : "playNamed", {
+                                name: game.name,
+                              })
                             : tr("installNamed", { name: game.name })
                         }
-                        data-tooltip={action() === "play" ? tr("playHint") : tr("installHint")}
+                        data-tooltip={
+                          action() === "play"
+                            ? tr(game.kind === "app" ? "startHint" : "playHint")
+                            : tr("installHint")
+                        }
                       >
                         <Show
                           when={action() === "play"}

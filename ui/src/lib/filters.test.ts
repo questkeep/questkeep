@@ -167,7 +167,7 @@ describe("treePills", () => {
         joiner: "and",
         grouped: false,
         negated: false,
-        parts: [{ label: "Playtime", value: "2 h +" }],
+        parts: [{ label: "Running time", value: "2 h +" }],
       },
     ]);
   });

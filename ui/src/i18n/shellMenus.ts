@@ -3,6 +3,7 @@ import type { Translations } from ".";
 const en = {
   // GameContextMenu
   playWith: "Play with",
+  startWith: "Start with",
   defaultProfile: "Default",
   none: "None",
   noCategories: "No categories yet",
@@ -56,6 +57,7 @@ export const shellMenus: Translations<typeof en> = {
   en,
   de: {
     playWith: "Spielen mit",
+    startWith: "Starten mit",
     defaultProfile: "Standard",
     none: "Keiner",
     noCategories: "Noch keine Kategorien",
@@ -104,6 +106,7 @@ export const shellMenus: Translations<typeof en> = {
   },
   fr: {
     playWith: "Jouer avec",
+    startWith: "Démarrer avec",
     defaultProfile: "Par défaut",
     none: "Aucun",
     noCategories: "Aucune catégorie pour l'instant",
@@ -152,6 +155,7 @@ export const shellMenus: Translations<typeof en> = {
   },
   it: {
     playWith: "Gioca con",
+    startWith: "Avvia con",
     defaultProfile: "Predefinito",
     none: "Nessuno",
     noCategories: "Ancora nessuna categoria",
@@ -200,6 +204,7 @@ export const shellMenus: Translations<typeof en> = {
   },
   es: {
     playWith: "Jugar con",
+    startWith: "Iniciar con",
     defaultProfile: "Predeterminado",
     none: "Ninguno",
     noCategories: "Aún no hay categorías",
@@ -248,6 +253,7 @@ export const shellMenus: Translations<typeof en> = {
   },
   pt: {
     playWith: "Jogar com",
+    startWith: "Iniciar com",
     defaultProfile: "Padrão",
     none: "Nenhum",
     noCategories: "Ainda não há categorias",

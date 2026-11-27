@@ -372,7 +372,9 @@ export function DetailsPanel(props: DetailsPanelProps) {
       : copies()
           .filter((copy) => copy.installed)
           .map((copy) => ({
-            label: tr("playWith", { store: label(copy) }),
+            label: tr(props.game.kind === "app" ? "startWith" : "playWith", {
+              store: label(copy),
+            }),
             icon: icon(copy.source),
             hint: copy.id === playCopy(props.game)?.id ? tr("default") : undefined,
             disabled: running(),
@@ -386,7 +388,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         onSelect: () => void install(copy.id),
       }));
     return [
-      { kind: "heading", label: tr("play") },
+      { kind: "heading", label: tr(props.game.kind === "app" ? "start" : "play") },
       ...played,
       ...(installs.length > 0 ? [{ kind: "separator" } as const, ...installs] : []),
       { kind: "separator" },

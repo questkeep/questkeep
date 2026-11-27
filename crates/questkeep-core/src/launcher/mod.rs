@@ -423,7 +423,7 @@ impl Launcher {
                 tracing::error!(%err, "could not spawn tracker thread");
                 self.events.publish(CoreEvent::GameError {
                     id: game_id,
-                    message: format!("Playtime tracking could not start: {err}"),
+                    message: format!("Running time tracking could not start: {err}"),
                 });
             }
         }
@@ -461,7 +461,9 @@ impl Drop for Launcher {
 }
 
 fn untracked_message(name: &str) -> String {
-    format!("{name} was started, but playtime can't be tracked: no install folder is known.")
+    format!(
+        "{name} was started, but its running time can't be tracked: no install folder is known."
+    )
 }
 
 /// Starts the game's process (or opens its URI) and works out how to follow it. `None` as the
@@ -653,7 +655,7 @@ impl Tracker {
                 {
                     tracing::info!(game = %self.game_id, "only ignored programs ran");
                     self.error(format!(
-                        "{} only ran programs it ignores, so no playtime was recorded.",
+                        "{} only ran programs it ignores, so no running time was recorded.",
                         self.name
                     ));
                     self.end(&LaunchOutcome::not_run());
@@ -664,7 +666,7 @@ impl Tracker {
             if startup_started.elapsed() >= self.config.startup_timeout {
                 tracing::warn!(game = %self.game_id, "game process never appeared");
                 self.error(format!(
-                    "{} didn't start or its process couldn't be found, so no playtime was recorded.",
+                    "{} didn't start or its process couldn't be found, so no running time was recorded.",
                     self.name
                 ));
                 self.end(&LaunchOutcome::not_run());
@@ -680,7 +682,7 @@ impl Tracker {
             Ok(id) => id,
             Err(err) => {
                 tracing::error!(%err, "could not start play session");
-                self.error(format!("Playtime can't be recorded: {err}"));
+                self.error(format!("Running time can't be recorded: {err}"));
                 return;
             }
         };
@@ -730,7 +732,7 @@ impl Tracker {
             }
             Err(err) => {
                 tracing::error!(%err, "could not save play session");
-                self.error(format!("Playtime could not be saved: {err}"));
+                self.error(format!("Running time could not be saved: {err}"));
             }
         }
         if !shutting_down {

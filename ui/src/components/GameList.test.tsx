@@ -132,10 +132,10 @@ describe("GameList", () => {
     render(() => <GameList />);
     const header = screen.getByRole("group", { name: /Columns/ });
 
-    await fireEvent.click(screen.getByRole("button", { name: "Playtime" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Running time" }));
     expect(store.query().sort).toBe("playtime");
     expect(store.query().descending).toBe(true);
-    await fireEvent.click(screen.getByRole("button", { name: "Playtime" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Running time" }));
     expect(store.query().descending).toBe(false);
 
     await fireEvent.contextMenu(header);

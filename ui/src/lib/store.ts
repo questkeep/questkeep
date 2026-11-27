@@ -1236,7 +1236,7 @@ function createAppStore() {
           .then((game) => {
             upsertGame(game);
             pushToast("info", tr("installed", { name: game.name }), {
-              label: tr("play"),
+              label: tr(game.kind === "app" ? "start" : "play"),
               run: () =>
                 void api.launchGame(game.id).catch((error: unknown) => {
                   pushToast("error", errorMessage(error));

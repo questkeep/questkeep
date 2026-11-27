@@ -59,7 +59,7 @@ pub struct MenuTexts {
 pub fn menu_texts(lang: Lang) -> MenuTexts {
     match lang {
         Lang::En => MenuTexts {
-            no_recent: "No recently played games",
+            no_recent: "No recently started games",
             favorites: "Favorites",
             no_favorites: "No favorites",
             launchers: "Quick launch",
@@ -68,7 +68,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
             exit: "Exit",
         },
         Lang::De => MenuTexts {
-            no_recent: "Keine zuletzt gespielten Spiele",
+            no_recent: "Keine kürzlich gestarteten Spiele",
             favorites: "Favoriten",
             no_favorites: "Keine Favoriten",
             launchers: "Schnellstart",
@@ -77,7 +77,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
             exit: "Beenden",
         },
         Lang::Fr => MenuTexts {
-            no_recent: "Aucun jeu joué récemment",
+            no_recent: "Aucun jeu lancé récemment",
             favorites: "Favoris",
             no_favorites: "Aucun favori",
             launchers: "Lancement rapide",
@@ -86,7 +86,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
             exit: "Quitter",
         },
         Lang::It => MenuTexts {
-            no_recent: "Nessun gioco giocato di recente",
+            no_recent: "Nessun gioco avviato di recente",
             favorites: "Preferiti",
             no_favorites: "Nessun preferito",
             launchers: "Avvio rapido",
@@ -95,7 +95,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
             exit: "Esci",
         },
         Lang::Es => MenuTexts {
-            no_recent: "No hay juegos jugados recientemente",
+            no_recent: "No hay juegos iniciados recientemente",
             favorites: "Favoritos",
             no_favorites: "No hay favoritos",
             launchers: "Inicio rápido",
@@ -104,7 +104,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
             exit: "Salir",
         },
         Lang::Pt => MenuTexts {
-            no_recent: "Nenhum jogo jogado recentemente",
+            no_recent: "Nenhum jogo iniciado recentemente",
             favorites: "Favoritos",
             no_favorites: "Nenhum favorito",
             launchers: "Início rápido",
@@ -121,8 +121,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
     let menu = menu_texts(lang);
     let (recent, empty_recent, exit_app, update, open_launcher, play, more) = match lang {
         Lang::En => (
-            "Recently played",
-            "No recently played games yet",
+            "Recently started",
+            "No recently started games yet",
             "Exit Questkeep",
             "Update to {version}",
             "Open {name}",
@@ -130,8 +130,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "More",
         ),
         Lang::De => (
-            "Zuletzt gespielt",
-            "Noch keine zuletzt gespielten Spiele",
+            "Kürzlich gestartet",
+            "Noch keine kürzlich gestarteten Spiele",
             "Questkeep beenden",
             "Auf {version} aktualisieren",
             "{name} öffnen",
@@ -139,8 +139,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Mehr",
         ),
         Lang::Fr => (
-            "Joués récemment",
-            "Aucun jeu joué récemment pour l'instant",
+            "Lancés récemment",
+            "Aucun jeu lancé récemment pour l'instant",
             "Quitter Questkeep",
             "Mettre à jour vers {version}",
             "Ouvrir {name}",
@@ -148,8 +148,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Plus",
         ),
         Lang::It => (
-            "Giocati di recente",
-            "Ancora nessun gioco giocato di recente",
+            "Avviati di recente",
+            "Ancora nessun gioco avviato di recente",
             "Esci da Questkeep",
             "Aggiorna a {version}",
             "Apri {name}",
@@ -157,8 +157,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Altro",
         ),
         Lang::Es => (
-            "Jugados recientemente",
-            "Aún no hay juegos jugados recientemente",
+            "Iniciados recientemente",
+            "Aún no hay juegos iniciados recientemente",
             "Salir de Questkeep",
             "Actualizar a {version}",
             "Abrir {name}",
@@ -166,8 +166,8 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Más",
         ),
         Lang::Pt => (
-            "Jogados recentemente",
-            "Nenhum jogo jogado recentemente ainda",
+            "Iniciados recentemente",
+            "Nenhum jogo iniciado recentemente ainda",
             "Sair do Questkeep",
             "Atualizar para {version}",
             "Abrir {name}",

@@ -234,6 +234,8 @@ export function EditLaunchSection(props: {
   const [dragged, setDragged] = createSignal<number | null>(null);
   const menuButtons = new Map<string, HTMLButtonElement>();
   const list = () => props.profiles?.profiles ?? [];
+  /** Apps have Start instead of Play. */
+  const app = () => props.game.kind === "app";
 
   function change(profiles: LaunchProfile[], defaultId = props.profiles?.defaultId ?? null) {
     const current = props.profiles;
@@ -358,10 +360,13 @@ export function EditLaunchSection(props: {
 
   return (
     <div class="edit-section">
-      <p class="field__hint">{tr("intro")}</p>
+      <p class="field__hint">{tr(app() ? "introApp" : "intro")}</p>
       <p class="profiles__default">
-        <Show when={props.profiles?.defaultId} fallback={<>{tr("playStartsAutomatic")}</>}>
-          {tr("playStartsDefault")}{" "}
+        <Show
+          when={props.profiles?.defaultId}
+          fallback={<>{tr(app() ? "startStartsAutomatic" : "playStartsAutomatic")}</>}
+        >
+          {tr(app() ? "startStartsDefault" : "playStartsDefault")}{" "}
           <button type="button" class="link-btn" onClick={() => setDefault(null)}>
             {tr("useAutomatic")}
           </button>

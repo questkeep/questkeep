@@ -110,12 +110,13 @@ popup's More menu, and hidden games in Explore.
 
 ## Done in the next release
 
-- Game page: the "…" menu also has the cards' actions (categories, news, per-copy Separate and Play this store first); copies from the same store are told apart by name, folder or ID everywhere.
+- Game page: the "…" menu also has the cards' actions (categories, news, per-copy Separate and Use this store first); copies from the same store are told apart by name, folder or ID everywhere.
 - Tray popup: middle-click a game to open its page; right-click (or Shift+click, the context-menu key, Shift+F10) to open its page or play it with a specific launch profile.
 - Price comparison sites show their favicons in the Add game menu and Settings (refetched monthly, Refresh icons button).
 - Import a backup from anywhere on disk (Settings > Backups) or restore one from the first-run setup; the current library is backed up first.
 - Styled dropdowns everywhere instead of the native ones.
 - Prism Launcher moved out into the Prism Launcher plugin (questkeep/plugin-prism); a bell entry points users with Prism games to it.
+- Playtime is called running time, "played" labels say "started" (Last started, Times started, …), and apps say Start instead of Play in more places.
 
 ## Next
 

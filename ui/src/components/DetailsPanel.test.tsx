@@ -161,10 +161,10 @@ describe("DetailsPanel", () => {
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.keyDown(window, { key: "F2" });
     const dialog = screen.getByRole("dialog", { name: "Edit game" });
-    await fireEvent.click(within(dialog).getByRole("button", { name: "Playtime tracking" }));
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Running time tracking" }));
     await fireEvent.click(
       within(dialog).getByRole("checkbox", {
-        name: "Record playtime when started outside Questkeep",
+        name: "Record running time when started outside Questkeep",
       }),
     );
     await fireEvent.input(within(dialog).getByRole("textbox", { name: "Ignored programs" }), {

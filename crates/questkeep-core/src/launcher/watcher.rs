@@ -417,7 +417,7 @@ impl Watcher {
                 tracing::error!(%err, "could not save play session");
                 self.shared.events.publish(CoreEvent::GameError {
                     id: game,
-                    message: format!("Playtime could not be saved: {err}"),
+                    message: format!("Running time could not be saved: {err}"),
                 });
             }
         }

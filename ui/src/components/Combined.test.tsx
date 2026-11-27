@@ -140,7 +140,7 @@ describe("details of a combined game", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(api.launchGame).toHaveBeenCalledWith("rl", null, null);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Choose how to play" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Choose how to start" }));
     const menu = screen.getByRole("menu", { name: "Stores" });
     expect(within(menu).getByRole("menuitem", { name: /Install with Steam/ })).toBeTruthy();
     await fireEvent.click(within(menu).getByRole("menuitem", { name: /Play with Epic/ }));
@@ -149,10 +149,10 @@ describe("details of a combined game", () => {
     const stores = screen.getByRole("list", { name: "Stores" });
     expect(within(stores).getByText(/Not installed · preferred · 1h/)).toBeTruthy();
     await fireEvent.click(within(stores).getByRole("button", { name: "Epic actions" }));
-    await fireEvent.click(screen.getByRole("menuitem", { name: "Play this store first" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Use this store first" }));
     expect(api.preferCopy).toHaveBeenCalledWith("rl-epic");
     await fireEvent.click(within(stores).getByRole("button", { name: "Steam actions" }));
-    expect(screen.queryByRole("menuitem", { name: "Play this store first" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Use this store first" })).toBeNull();
     await fireEvent.click(screen.getByRole("menuitem", { name: /Separate/ }));
     expect(api.separateCopy).toHaveBeenCalledWith("rl");
   });
@@ -191,14 +191,14 @@ describe("details of a combined game", () => {
     // One submenu per copy, with the copy's row actions.
     await fireEvent.click(within(menu).getByRole("menuitem", { name: "Epic" }));
     const epic = screen.getByRole("menu", { name: "Epic" });
-    await fireEvent.click(within(epic).getByRole("menuitem", { name: "Play this store first" }));
+    await fireEvent.click(within(epic).getByRole("menuitem", { name: "Use this store first" }));
     expect(api.preferCopy).toHaveBeenCalledWith("rl-epic");
 
     await more();
     menu = screen.getByRole("menu", { name: "More actions" });
     await fireEvent.click(within(menu).getByRole("menuitem", { name: /^Steam/ }));
     const steam = screen.getByRole("menu", { name: "Steam" });
-    expect(within(steam).queryByRole("menuitem", { name: "Play this store first" })).toBeNull();
+    expect(within(steam).queryByRole("menuitem", { name: "Use this store first" })).toBeNull();
     await fireEvent.click(within(steam).getByRole("menuitem", { name: /Separate/ }));
     expect(api.separateCopy).toHaveBeenCalledWith("rl");
   });
@@ -224,7 +224,7 @@ describe("details of a combined game", () => {
     expect(within(stores).getByText("Epic")).toBeTruthy();
     expect(within(stores).getByRole("button", { name: "Steam · 1.40.0 actions" })).toBeTruthy();
 
-    await fireEvent.click(screen.getByRole("button", { name: "Choose how to play" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Choose how to start" }));
     const play = screen.getByRole("menu", { name: "Stores" });
     expect(within(play).getByRole("menuitem", { name: /Play with Steam · 1.29.1/ })).toBeTruthy();
     expect(within(play).getByRole("menuitem", { name: /Play with Steam · 1.40.0/ })).toBeTruthy();
@@ -241,7 +241,7 @@ describe("details of a combined game", () => {
     const epic = makeGame({ id: "e", name: "Rocket League®", source: "epic" });
     vi.mocked(api.listGames).mockResolvedValue([steam, epic]);
     render(() => <DetailsPanel game={steam} onClose={() => undefined} />);
-    expect(screen.queryByRole("button", { name: "Choose how to play" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Choose how to start" })).toBeNull();
 
     await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "Combine with another game…" }));

@@ -1,7 +1,7 @@
 import type { Translations } from ".";
 
 const en = {
-  neverPlayed: "Never played",
+  neverPlayed: "Never started",
   under1Hour: "Under 1 hour",
   hours1to10: "1–10 hours",
   hours10to50: "10–50 hours",
@@ -32,7 +32,7 @@ const en = {
 export const libraryGrouping: Translations<typeof en> = {
   en,
   de: {
-    neverPlayed: "Nie gespielt",
+    neverPlayed: "Nie gestartet",
     under1Hour: "Unter 1 Stunde",
     hours1to10: "1–10 Stunden",
     hours10to50: "10–50 Stunden",
@@ -59,7 +59,7 @@ export const libraryGrouping: Translations<typeof en> = {
     selectedOf: "{picked} von {count} ausgewählt",
   },
   fr: {
-    neverPlayed: "Jamais joué",
+    neverPlayed: "Jamais lancé",
     under1Hour: "Moins d’1 heure",
     hours1to10: "1–10 heures",
     hours10to50: "10–50 heures",
@@ -86,7 +86,7 @@ export const libraryGrouping: Translations<typeof en> = {
     selectedOf: "{picked} sur {count} sélectionnés",
   },
   it: {
-    neverPlayed: "Mai giocato",
+    neverPlayed: "Mai avviato",
     under1Hour: "Meno di 1 ora",
     hours1to10: "1–10 ore",
     hours10to50: "10–50 ore",
@@ -113,7 +113,7 @@ export const libraryGrouping: Translations<typeof en> = {
     selectedOf: "{picked} di {count} selezionati",
   },
   es: {
-    neverPlayed: "Nunca jugado",
+    neverPlayed: "Nunca iniciado",
     under1Hour: "Menos de 1 hora",
     hours1to10: "1–10 horas",
     hours10to50: "10–50 horas",
@@ -140,7 +140,7 @@ export const libraryGrouping: Translations<typeof en> = {
     selectedOf: "{picked} de {count} seleccionados",
   },
   pt: {
-    neverPlayed: "Nunca jogado",
+    neverPlayed: "Nunca iniciado",
     under1Hour: "Menos de 1 hora",
     hours1to10: "1–10 horas",
     hours10to50: "10–50 horas",
