@@ -735,6 +735,7 @@ mod tests {
                 recently_played: true,
                 recently_added: false,
             },
+            moved_store_notices: vec!["prism".into()],
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
