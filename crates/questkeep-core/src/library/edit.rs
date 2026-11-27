@@ -388,6 +388,11 @@ impl Library {
             } else {
                 store_name
             };
+            // Two copies of one store would otherwise share a name.
+            let base = match &copy.qualifier {
+                Some(qualifier) => format!("{base} · {qualifier}"),
+                None => base,
+            };
             let custom_name = row.and_then(|r| r.name.clone());
             let position = row.map_or(index as i64, |r| r.position);
             listed.push((
@@ -937,6 +942,50 @@ mod tests {
         assert_eq!(game.metadata_name(), None);
         // No playtime sent: it stays.
         assert_eq!(game.playtime_seconds, 3600);
+    }
+
+    #[test]
+    fn copies_of_one_store_get_told_apart_but_custom_names_stay() {
+        let (tmp, lib, id) = library();
+        let exe = tmp.path().join("other.exe");
+        std::fs::write(&exe, b"MZ").unwrap();
+        let other = lib
+            .add_manual_game(&NewManualGame {
+                name: Some("Hades Beta".into()),
+                executable: exe.display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap();
+        lib.db.combine_games(id, &[other.id]).unwrap();
+        let game = lib.get_game(id).unwrap();
+        let qualifiers: Vec<_> = game.copies.iter().map(|c| c.qualifier.clone()).collect();
+        assert_eq!(
+            qualifiers,
+            [Some("Hades".to_string()), Some("Hades Beta".to_string())]
+        );
+        let names: Vec<_> = lib
+            .launch_profiles(id)
+            .unwrap()
+            .profiles
+            .into_iter()
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(names, ["Executable · Hades", "Executable · Hades Beta"]);
+
+        let renamed = lib
+            .save_launch_profile(
+                id,
+                Some(other.id),
+                &ProfileInput {
+                    name: Some("Beta".into()),
+                    ..ProfileInput::default()
+                },
+            )
+            .unwrap();
+        let names: Vec<_> = renamed.profiles.into_iter().map(|p| p.name).collect();
+        assert_eq!(names, ["Executable · Hades", "Beta"]);
     }
 
     #[test]

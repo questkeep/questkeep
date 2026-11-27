@@ -7,4 +7,10 @@ export type GameCopy = {
 /**
  * The copy's own game id (the entry's id for its own row).
  */
-id: string, source: string, sourceGameId: string | null, installed: boolean, playtimeSeconds: number, lastPlayed: string | null, };
+id: string, source: string, sourceGameId: string | null, installed: boolean, playtimeSeconds: number, lastPlayed: string | null, 
+/**
+ * What tells this copy apart from the entry's other copies of the same store (its own
+ * name, install folder or store id; see [`super::copy_qualifiers`]), shown after the store's
+ * name. Absent when its store is in the entry once.
+ */
+qualifier?: string, };

@@ -3,6 +3,7 @@
 mod category;
 mod combine;
 mod completion;
+mod copy_label;
 mod edit;
 mod game;
 mod metadata;
@@ -16,6 +17,7 @@ mod view;
 pub use category::*;
 pub use combine::CombinePlan;
 pub use completion::*;
+pub use copy_label::{CopyFacts, copy_qualifiers};
 pub use edit::*;
 pub use game::*;
 pub use metadata::*;

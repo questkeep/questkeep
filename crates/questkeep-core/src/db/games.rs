@@ -11,10 +11,10 @@ use super::metadata::Details;
 use super::text_match;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
+    CopyFacts, FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
     ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode, MetadataField,
     NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter, ScanSummary,
-    SortField, TextField, TextFilter, TextOp, TriState, sorting_name,
+    SortField, TextField, TextFilter, TextOp, TriState, copy_qualifiers, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
@@ -479,6 +479,7 @@ fn own_copy(game: &Game) -> GameCopy {
         installed: game.installed,
         playtime_seconds: game.playtime_seconds,
         last_played: game.last_played,
+        qualifier: None,
     }
 }
 
@@ -487,13 +488,10 @@ fn own_copy(game: &Game) -> GameCopy {
 /// own row.
 pub(super) fn attach_copies(conn: &rusqlite::Connection, games: &mut [Game]) -> Result<()> {
     let mut stmt = conn.prepare_cached(
-        "SELECT id, COALESCE(merged_into, id), source, source_game_id, installed, \
-         playtime_seconds, last_played FROM games \
-         WHERE merged_into IS NOT NULL OR id IN \
-         (SELECT merged_into FROM games WHERE merged_into IS NOT NULL) \
-         ORDER BY copy_position, merged_into IS NOT NULL, date_added, id",
+        "SELECT id, COALESCE(merged_into, id), source, source_game_id, installed,          playtime_seconds, last_played, name, install_dir FROM games          WHERE merged_into IS NOT NULL OR id IN          (SELECT merged_into FROM games WHERE merged_into IS NOT NULL)          ORDER BY copy_position, merged_into IS NOT NULL, date_added, id",
     )?;
-    let mut by_entry: HashMap<String, Vec<GameCopy>> = HashMap::new();
+    // Each copy with its name and install folder, which only its qualifier needs.
+    let mut by_entry: HashMap<String, Vec<(GameCopy, String, Option<String>)>> = HashMap::new();
     let rows = stmt.query_map([], |r| {
         Ok((
             r.get::<_, String>(0)?,
@@ -503,31 +501,54 @@ pub(super) fn attach_copies(conn: &rusqlite::Connection, games: &mut [Game]) -> 
             r.get::<_, bool>(4)?,
             r.get::<_, i64>(5)?,
             r.get::<_, Option<DateTime<Utc>>>(6)?,
+            r.get::<_, String>(7)?,
+            r.get::<_, Option<String>>(8)?,
         ))
     })?;
     for row in rows {
-        let (id, entry, source, source_game_id, installed, playtime, last_played) = row?;
+        let (id, entry, source, source_game_id, installed, playtime, last_played, name, dir) = row?;
         let Ok(id) = Uuid::parse_str(&id) else {
             continue;
         };
-        by_entry.entry(entry).or_default().push(GameCopy {
+        let copy = GameCopy {
             id,
             source,
             source_game_id,
             installed,
             playtime_seconds: u64::try_from(playtime).unwrap_or_default(),
             last_played,
-        });
+            qualifier: None,
+        };
+        by_entry.entry(entry).or_default().push((copy, name, dir));
     }
     if by_entry.is_empty() {
         return Ok(());
     }
     for game in games {
         if let Some(copies) = by_entry.remove(&game.id.to_string()) {
-            game.copies = copies;
+            game.copies = with_qualifiers(copies);
         }
     }
     Ok(())
+}
+
+/// An entry's copies with the qualifiers that tell copies of the same store apart.
+fn with_qualifiers(copies: Vec<(GameCopy, String, Option<String>)>) -> Vec<GameCopy> {
+    let facts: Vec<CopyFacts<'_>> = copies
+        .iter()
+        .map(|(copy, name, dir)| CopyFacts {
+            source: &copy.source,
+            name,
+            install_dir: dir.as_deref(),
+            source_game_id: copy.source_game_id.as_deref(),
+        })
+        .collect();
+    let qualifiers = copy_qualifiers(&facts);
+    copies
+        .into_iter()
+        .zip(qualifiers)
+        .map(|((copy, _, _), qualifier)| GameCopy { qualifier, ..copy })
+        .collect()
 }
 
 /// Parses a JSON string array column; malformed data yields an empty list.

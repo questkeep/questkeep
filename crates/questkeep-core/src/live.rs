@@ -290,6 +290,7 @@ mod tests {
             installed: false,
             playtime_seconds: 0,
             last_played: None,
+            qualifier: None,
         }
     }
 

@@ -216,6 +216,12 @@ pub struct GameCopy {
     #[ts(type = "number")]
     pub playtime_seconds: u64,
     pub last_played: Option<DateTime<Utc>>,
+    /// What tells this copy apart from the entry's other copies of the same store (its own
+    /// name, install folder or store id; see [`super::copy_qualifiers`]), shown after the store's
+    /// name. Absent when its store is in the entry once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub qualifier: Option<String>,
 }
 
 /// Input for adding a game by hand.
