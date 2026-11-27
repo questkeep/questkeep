@@ -8,6 +8,7 @@ import type { SettingsController } from "../../lib/extensions/settings";
 import { sortPlugins } from "../../lib/plugins";
 import { store } from "../../lib/store";
 import { ExtensionMount } from "../ExtensionMount";
+import { Select } from "../Select";
 
 const tr = translator(extensions);
 
@@ -38,12 +39,16 @@ function SettingRow(props: {
     });
   }
 
-  /** Saves what a control holds if it fits the setting; else the control shows the old value. */
-  function change(input: HTMLInputElement | HTMLSelectElement, raw: unknown) {
+  /**
+   * Saves what a control holds if it fits the setting; else an input shows the old value again
+   * (a Select only offers fitting values and always shows the saved one).
+   */
+  function change(input: HTMLInputElement | undefined, raw: unknown) {
     const next = coerceValue(setting, raw);
-    if (next === undefined) input.value = String(value());
-    else if (next !== value()) save(next);
-    else input.value = String(next);
+    if (next === undefined) {
+      if (input) input.value = String(value());
+    } else if (next !== value()) save(next);
+    else if (input) input.value = String(next);
   }
 
   const reset = (
@@ -108,17 +113,14 @@ function SettingRow(props: {
             <label class="plugin-setting__label" for={id}>
               {setting.label}
             </label>
-            <select
+            <Select
               id={id}
               class="input settings-row__input"
               aria-describedby={hintId}
               value={String(value())}
-              onChange={(event) => change(event.currentTarget, event.currentTarget.value)}
-            >
-              <For each={setting.options}>
-                {(option) => <option value={option.value}>{option.label}</option>}
-              </For>
-            </select>
+              options={setting.options}
+              onChange={(raw) => change(undefined, raw)}
+            />
           </Match>
           <Match when={setting.type === "color"}>
             <label class="plugin-setting__label" for={id}>

@@ -5,6 +5,7 @@ import { translator } from "../i18n";
 import { gameSetup } from "../i18n/gameSetup";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
+import { Select } from "./Select";
 
 const tr = translator(gameSetup);
 
@@ -82,17 +83,16 @@ export function MetadataLinkPicker(props: {
         }
       >
         <div class="link-picker__search">
-          <select
+          <Select
             class="input link-picker__source"
             aria-label={tr("source")}
             value={chosenSource() ?? ""}
-            onChange={(event) => {
-              setSource(event.currentTarget.value);
+            options={(sources() ?? []).map((entry) => ({ value: entry.id, label: entry.name }))}
+            onChange={(id) => {
+              setSource(id);
               setHits(null);
             }}
-          >
-            <For each={sources()}>{(entry) => <option value={entry.id}>{entry.name}</option>}</For>
-          </select>
+          />
           <input
             class="input"
             type="search"

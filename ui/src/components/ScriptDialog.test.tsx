@@ -8,7 +8,7 @@ import * as api from "../lib/api";
 import { defaultQuery } from "../lib/query";
 import { emitScriptRunEvent } from "../lib/scriptRun";
 import { store } from "../lib/store";
-import { makeGame, makeScript, RUNTIMES, SCRIPT_VARIABLES } from "../test-utils";
+import { chooseOption, makeGame, makeScript, RUNTIMES, SCRIPT_VARIABLES } from "../test-utils";
 import { ScriptDialog } from "./ScriptDialog";
 
 vi.mock("../lib/api");
@@ -149,23 +149,24 @@ describe("ScriptDialog", () => {
     await fireEvent.click(source("Script"));
     expect(screen.queryByRole("group", { name: "Preview" })).toBeNull();
     const runtime = screen.getByRole("combobox", { name: "Runtime" });
-    await waitFor(() =>
-      expect(
-        within(runtime)
-          .getAllByRole("option")
-          .map((o) => o.textContent),
-      ).toEqual(["Windows PowerShell 5.1", "Bash", "Python 3.12"]),
-    );
+    await waitFor(() => expect(runtime).toHaveTextContent("Windows PowerShell 5.1"));
+    await fireEvent.click(runtime);
+    expect(
+      within(screen.getByRole("listbox"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Windows PowerShell 5.1", "Bash", "Python 3.12"]);
+    await fireEvent.keyDown(runtime, { key: "Escape" });
     const editor = textbox("Script");
     await fireEvent.focus(editor);
     await fireEvent.click(screen.getByRole("button", { name: "Insert QK_GAME_NAME" }));
     expect(editor).toHaveValue("$env:QK_GAME_NAME");
 
-    await fireEvent.change(runtime, { target: { value: "bash" } });
+    await chooseOption(runtime, "Bash");
     await fireEvent.click(screen.getByRole("button", { name: "Insert QK_GENRES" }));
     expect(editor).toHaveValue("$env:QK_GAME_NAME$QK_GENRES");
 
-    await fireEvent.change(runtime, { target: { value: "python" } });
+    await chooseOption(runtime, "Python 3.12");
     await fireEvent.click(screen.getByRole("button", { name: "Insert QK_PHASE" }));
     expect(editor).toHaveValue('$env:QK_GAME_NAME$QK_GENRESos.environ["QK_PHASE"]');
 
@@ -195,11 +196,11 @@ describe("ScriptDialog", () => {
     await fireEvent.input(textbox("Name"), { target: { value: "Back up" } });
     await fireEvent.click(source("Script"));
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Runtime" })).toHaveValue("windowsPowershell"),
+      expect(screen.getByRole("combobox", { name: "Runtime" })).toHaveTextContent(
+        "Windows PowerShell 5.1",
+      ),
     );
-    await fireEvent.change(screen.getByRole("combobox", { name: "Runtime" }), {
-      target: { value: "bash" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Runtime" }), "Bash");
     await fireEvent.input(textbox("Script"), { target: { value: "echo hi" } });
     await fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(api.saveScript).toHaveBeenCalled());
@@ -220,11 +221,11 @@ describe("ScriptDialog", () => {
     await fireEvent.click(source("Linked script file"));
     await fireEvent.input(textbox("Script file"), { target: { value: "C:\\Tools\\show.py" } });
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Run with" })).toHaveValue("python"),
+      expect(screen.getByRole("combobox", { name: "Run with" })).toHaveTextContent("Python 3.12"),
     );
     await fireEvent.input(textbox("Script file"), { target: { value: "C:\\Tools\\go.sh" } });
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Run with" })).toHaveValue("bash"),
+      expect(screen.getByRole("combobox", { name: "Run with" })).toHaveTextContent("Bash"),
     );
     await fireEvent.click(screen.getByRole("button", { name: "Import a copy" }));
     await waitFor(() => expect(textbox("Script")).toHaveValue("print('hi')"));
@@ -239,7 +240,7 @@ describe("ScriptDialog", () => {
     await fireEvent.click(source("Script"));
     await fireEvent.click(screen.getByRole("button", { name: "Import file…" }));
     await waitFor(() => expect(textbox("Script")).toHaveValue("echo imported"));
-    expect(screen.getByRole("combobox", { name: "Runtime" })).toHaveValue("bash");
+    expect(screen.getByRole("combobox", { name: "Runtime" })).toHaveTextContent("Bash");
 
     vi.mocked(api.readScriptFile).mockResolvedValue("echo second");
     await fireEvent.click(screen.getByRole("button", { name: "Import file…" }));

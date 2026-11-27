@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { translator } from "../i18n";
 import { libraryCommon } from "../i18n/libraryCommon";
 import { libraryFilters } from "../i18n/libraryFilters";
@@ -10,6 +10,7 @@ import { activeFilterCount, NO_CATEGORY, shownName } from "../lib/views";
 import { IconPicker } from "./IconPicker";
 import { Modal } from "./Modal";
 import type { PopoverAnchor } from "./Popover";
+import { Select } from "./Select";
 import { sourceName } from "./SourceIcon";
 import { ViewIcon } from "./ViewIcon";
 
@@ -112,14 +113,13 @@ export function SaveViewDialog(props: { onClose: () => void }) {
           <label class="field__label" for="view-section">
             {tr("section")}
           </label>
-          <select
+          <Select
             id="view-section"
             class="input"
             value={sectionId()}
-            onChange={(event) => setSectionId(event.currentTarget.value)}
-          >
-            <For each={sections}>{(s) => <option value={s.id}>{shownName(s)}</option>}</For>
-          </select>
+            options={sections.map((s) => ({ value: s.id, label: shownName(s) }))}
+            onChange={(id) => setSectionId(id)}
+          />
         </div>
         <dl class="view-summary">
           <dt>{tr("filters")}</dt>

@@ -5,6 +5,7 @@ import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { allViews, shownName } from "../../lib/views";
 import { store } from "../../lib/store";
 import { ChipInput } from "../ChipInput";
+import { Select } from "../Select";
 import { CheckOption } from "./SettingsControls";
 import type { SettingsModel } from "./useSettings";
 
@@ -38,21 +39,19 @@ export function GeneralSection(props: { model: SettingsModel }) {
             <legend class="fieldset__legend">{tr("language")}</legend>
             <div class="settings-row">
               <label for="language">{tr("language")}</label>
-              <select
+              <Select
                 id="language"
                 class="input settings-row__input"
                 value={current().language ?? ""}
-                onChange={(e) =>
-                  void props.model.update({ language: e.currentTarget.value || null })
-                }
-              >
-                <option value="">
-                  {tr("systemLanguage", { name: LOCALE_NAMES[systemLocale()] })}
-                </option>
-                <For each={LOCALES}>
-                  {(locale) => <option value={locale}>{LOCALE_NAMES[locale]}</option>}
-                </For>
-              </select>
+                options={[
+                  {
+                    value: "",
+                    label: tr("systemLanguage", { name: LOCALE_NAMES[systemLocale()] }),
+                  },
+                  ...LOCALES.map((locale) => ({ value: locale, label: LOCALE_NAMES[locale] })),
+                ]}
+                onChange={(language) => void props.model.update({ language: language || null })}
+              />
             </div>
           </fieldset>
           <fieldset class="fieldset settings-group">
@@ -64,27 +63,22 @@ export function GeneralSection(props: { model: SettingsModel }) {
             />
             <div class="settings-row">
               <label for="auto-sync">{tr("autoSync")}</label>
-              <select
+              <Select<number>
                 id="auto-sync"
                 class="input settings-row__input"
                 aria-describedby="auto-sync-hint"
-                value={String(current().autoSyncMinutes)}
-                onChange={(e) =>
-                  void props.model.update({ autoSyncMinutes: Number(e.currentTarget.value) })
-                }
-              >
-                <For each={AUTO_SYNC_MINUTES}>
-                  {(minutes) => (
-                    <option value={String(minutes)}>
-                      {minutes === 0
-                        ? tr("autoSyncOff")
-                        : minutes === 60
-                          ? tr("autoSyncHourly")
-                          : tr("autoSyncMinutes", { minutes })}
-                    </option>
-                  )}
-                </For>
-              </select>
+                value={current().autoSyncMinutes}
+                options={AUTO_SYNC_MINUTES.map((minutes) => ({
+                  value: minutes,
+                  label:
+                    minutes === 0
+                      ? tr("autoSyncOff")
+                      : minutes === 60
+                        ? tr("autoSyncHourly")
+                        : tr("autoSyncMinutes", { minutes }),
+                }))}
+                onChange={(minutes) => void props.model.update({ autoSyncMinutes: minutes })}
+              />
             </div>
             <p class="field__hint" id="auto-sync-hint">
               {tr("autoSyncHint")}
@@ -157,24 +151,23 @@ export function GeneralSection(props: { model: SettingsModel }) {
             </label>
             <div class="settings-row">
               <label for="startup-page">{tr("whenOpens")}</label>
-              <select
+              <Select
                 id="startup-page"
                 class="input settings-row__input"
                 value={startupValue(current().startupPage)}
-                onChange={(e) =>
-                  void props.model.update({ startupPage: startupPage(e.currentTarget.value) })
-                }
-              >
-                <option value="start" disabled={!current().showStartPage}>
-                  {tr("startPage")}
-                </option>
-                <option value="last">{tr("lastPage")}</option>
-                <optgroup label={tr("views")}>
-                  <For each={allViews(store.sections())}>
-                    {(view) => <option value={`view:${view.id}`}>{shownName(view)}</option>}
-                  </For>
-                </optgroup>
-              </select>
+                options={[
+                  { value: "start", label: tr("startPage"), disabled: !current().showStartPage },
+                  { value: "last", label: tr("lastPage") },
+                  {
+                    group: tr("views"),
+                    options: allViews(store.sections()).map((view) => ({
+                      value: `view:${view.id}`,
+                      label: shownName(view),
+                    })),
+                  },
+                ]}
+                onChange={(value) => void props.model.update({ startupPage: startupPage(value) })}
+              />
             </div>
             <Show when={!current().showStartPage && current().startupPage.kind === "start"}>
               <p class="field__hint">{tr("startPageOff")}</p>

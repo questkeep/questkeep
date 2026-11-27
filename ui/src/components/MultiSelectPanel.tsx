@@ -14,6 +14,7 @@ import { store } from "../lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { PanelHeader, type PanelPin } from "./PanelHeader";
+import { Select } from "./Select";
 import { sourceName } from "./SourceIcon";
 
 const tr = translator(shellMulti);
@@ -147,26 +148,22 @@ export function MultiSelectPanel(props: {
           <h3 id="multi-change" class="details-card__title">
             {tr("changeAll")}
           </h3>
-          <label class="multi__row">
-            <span>{tr("completionStatus")}</span>
-            <select class="input" onChange={(e) => onStatus(e.currentTarget.value)}>
-              <Show when={status() === "mixed"}>
-                <option value="mixed" disabled selected>
-                  {tr("mixed")}
-                </option>
-              </Show>
-              <option value="" selected={status() === null}>
-                {tr("none")}
-              </option>
-              <For each={store.completion().statuses}>
-                {(s) => (
-                  <option value={s.id} selected={status() === s.id}>
-                    {s.name}
-                  </option>
-                )}
-              </For>
-            </select>
-          </label>
+          <div class="multi__row">
+            <span id="multi-status-label">{tr("completionStatus")}</span>
+            <Select
+              class="input"
+              aria-labelledby="multi-status-label"
+              value={status() ?? ""}
+              options={[
+                ...(status() === "mixed"
+                  ? [{ value: "mixed", label: tr("mixed"), disabled: true }]
+                  : []),
+                { value: "", label: tr("none") },
+                ...store.completion().statuses.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+              onChange={onStatus}
+            />
+          </div>
           <div class="multi__row">
             <span>{tr("favorite")}</span>
             <button
@@ -184,31 +181,28 @@ export function MultiSelectPanel(props: {
               {mixedLabel(favorite(), (v) => (v ? tr("yes") : tr("no")))}
             </button>
           </div>
-          <label class="multi__row">
-            <span>{tr("type")}</span>
-            <select
+          <div class="multi__row">
+            <span id="multi-type-label">{tr("type")}</span>
+            <Select
               class="input"
-              onChange={(e) =>
+              aria-labelledby="multi-type-label"
+              value={kind() ?? ""}
+              options={[
+                ...(kind() === "mixed"
+                  ? [{ value: "mixed", label: tr("mixed"), disabled: true }]
+                  : []),
+                { value: "game", label: tr("game") },
+                { value: "app", label: tr("app") },
+              ]}
+              onChange={(value) =>
                 void changeAll(props.games, {
-                  kind: e.currentTarget.value === "app" ? "app" : "game",
+                  kind: value === "app" ? "app" : "game",
                   addCategories: [],
                   removeCategories: [],
                 })
               }
-            >
-              <Show when={kind() === "mixed"}>
-                <option value="mixed" disabled selected>
-                  {tr("mixed")}
-                </option>
-              </Show>
-              <option value="game" selected={kind() === "game"}>
-                {tr("game")}
-              </option>
-              <option value="app" selected={kind() === "app"}>
-                {tr("app")}
-              </option>
-            </select>
-          </label>
+            />
+          </div>
           <div class="multi__row">
             <span>{tr("hidden")}</span>
             <button

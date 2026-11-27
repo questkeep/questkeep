@@ -15,6 +15,7 @@ import {
 import { themeEditor } from "../../lib/themeEditor";
 import { setSavedUserThemes } from "../../lib/userThemeStore";
 import { emptyOverrides } from "../../lib/userThemes";
+import { chooseOption } from "../../test-utils";
 import { AppearanceSection } from "./AppearanceSection";
 import { createSettingsModel } from "./useSettings";
 
@@ -120,10 +121,10 @@ describe("AppearanceSection", () => {
   it("changes a select parameter, shows it as changed and resets it", async () => {
     renderSection({ scheme: "dark" });
     const corners = await screen.findByLabelText("Corners");
-    expect(corners).toHaveValue("default");
+    expect(corners).toHaveTextContent("Default");
     const reset = screen.getByRole("button", { name: "Reset Corners" });
     expect(reset).toBeDisabled();
-    await fireEvent.change(corners, { target: { value: "round" } });
+    await chooseOption(corners, "Round");
     expect(root.getAttribute("data-param-corners")).toBe("round");
     await waitFor(() => expect(lastSaved()?.params).toEqual({ questkeep: { corners: "round" } }));
     expect(reset).not.toBeDisabled();
@@ -225,7 +226,7 @@ describe("AppearanceSection", () => {
     renderSection({ scheme: "dark", theme: "plugin.neon" });
     expect(await screen.findByText(/The theme “plugin.neon” is not available/)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Questkeep" })).toBeChecked();
-    await fireEvent.change(screen.getByLabelText("Density"), { target: { value: "compact" } });
+    await chooseOption(screen.getByLabelText("Density"), "Compact");
     await waitFor(() => expect(lastSaved()?.params).toEqual({ questkeep: { density: "compact" } }));
     expect(lastSaved()?.theme).toBe("plugin.neon");
     // The theme arrives (its plugin loaded): it is selected without further ado.

@@ -23,6 +23,7 @@ import {
   type VariableGroup,
 } from "../lib/userThemes";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 
 const tr = translator(themeEditorText);
 const trCommon = translator(shellCommon);
@@ -285,17 +286,16 @@ export function ThemeEditor() {
           </div>
           <div class="theme-editor__field">
             <label for="theme-editor-base">{tr("base")}</label>
-            <select
+            <Select
               id="theme-editor-base"
               class="input"
               value={draft().base}
-              onChange={(e) => themeEditor.update({ base: e.currentTarget.value }, true)}
-            >
-              <Show when={isBaseMissing(draft())}>
-                <option value={draft().base}>{draft().base}</option>
-              </Show>
-              <For each={bases()}>{(theme) => <option value={theme.id}>{theme.name}</option>}</For>
-            </select>
+              options={[
+                ...(isBaseMissing(draft()) ? [{ value: draft().base, label: draft().base }] : []),
+                ...bases().map((theme) => ({ value: theme.id, label: theme.name })),
+              ]}
+              onChange={(id) => themeEditor.update({ base: id }, true)}
+            />
             <Show when={isBaseMissing(draft())}>
               <p class="field__hint">{tr("baseMissing", { id: draft().base })}</p>
             </Show>
@@ -321,16 +321,13 @@ export function ThemeEditor() {
           </div>
           <div class="theme-editor__field">
             <label for="theme-editor-target">{tr("appliesTo")}</label>
-            <select
+            <Select<EditTarget>
               id="theme-editor-target"
               class="input"
               value={themeEditor.target()}
-              onChange={(e) => themeEditor.setTarget(e.currentTarget.value as EditTarget)}
-            >
-              <For each={TARGETS}>
-                {(option) => <option value={option.value}>{tr(option.label)}</option>}
-              </For>
-            </select>
+              options={TARGETS.map((option) => ({ value: option.value, label: tr(option.label) }))}
+              onChange={(target) => themeEditor.setTarget(target)}
+            />
           </div>
           <Show
             when={

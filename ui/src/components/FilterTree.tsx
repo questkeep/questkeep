@@ -64,6 +64,7 @@ import { store } from "../lib/store";
 import { Menu } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SearchPicker } from "./SearchPicker";
+import { Select } from "./Select";
 
 const tr = translator(libraryFilterTree);
 const trCommon = translator(libraryCommon);
@@ -245,14 +246,13 @@ function TextRow(props: { filter: TextFilter; path: Path; change: (c: Change) =>
         />
       </div>
       <div class="filter-row__text">
-        <select
+        <Select<TextOp>
           class="filter-row__op"
           aria-label={tr("textOp", { label: info().label })}
           value={props.filter.op}
-          onChange={(event) => update({ op: event.currentTarget.value as TextOp })}
-        >
-          <For each={TEXT_OPS}>{(op) => <option value={op}>{opLabel(op)}</option>}</For>
-        </select>
+          options={TEXT_OPS.map((op) => ({ value: op, label: opLabel(op) }))}
+          onChange={(op) => update({ op })}
+        />
         <Show when={needsValue(props.filter.op)}>
           <input
             type="text"

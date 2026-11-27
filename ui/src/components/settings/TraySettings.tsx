@@ -19,6 +19,7 @@ import {
 import { store } from "../../lib/store";
 import { GameIcon } from "../GameIcon";
 import { Modal } from "../Modal";
+import { Select, type SelectItem } from "../Select";
 import { SourceIcon, sourceName } from "../SourceIcon";
 import { ControllerGlyph, QuestkeepGlyph } from "./TrayGlyphs";
 import type { SettingsModel } from "./useSettings";
@@ -57,6 +58,34 @@ export function TraySettings(props: { model: SettingsModel }) {
   const app = (id: string): Game | undefined => apps()?.find((a) => a.id === id);
   const label = (item: QuickLaunchItem) =>
     item.kind === "store" ? sourceName(item.id) : (app(item.id)?.name ?? tr("quickLaunchGone"));
+
+  const icon = (item: QuickLaunchItem) => (
+    <Show when={item.kind === "game" && app(item.id)} fallback={<SourceIcon source={item.id} />}>
+      {(game) => <GameIcon game={game()} />}
+    </Show>
+  );
+
+  /** A heading of the add list with its entries (nothing when there are none). */
+  const addGroup = (name: string, entries: QuickLaunchItem[]): SelectItem<string>[] =>
+    entries.length === 0
+      ? []
+      : [
+          {
+            group: name,
+            options: entries.map((item) => ({
+              value: quickKey(item),
+              label: label(item),
+              icon: () => icon(item),
+            })),
+          },
+        ];
+
+  /** The add list's entries: "Pick…", then launchers and apps under headings. */
+  const addOptions = (): SelectItem<string>[] => [
+    { value: "", label: tr("quickLaunchPick") },
+    ...addGroup(tr("quickLaunchStores"), addable().stores),
+    ...addGroup(tr("quickLaunchApps"), addable().games),
+  ];
 
   /** What the add list offers: installed launchers and apps not in the strip yet. */
   const addable = () => {
@@ -197,12 +226,7 @@ export function TraySettings(props: { model: SettingsModel }) {
                   >
                     <GripVertical class="icon quick-launch__grip" aria-hidden="true" />
                     <span class="quick-launch__icon" aria-hidden="true">
-                      <Show
-                        when={item.kind === "game" && app(item.id)}
-                        fallback={<SourceIcon source={item.id} />}
-                      >
-                        {(game) => <GameIcon game={game()} />}
-                      </Show>
+                      {icon(item)}
                     </span>
                     <span class="quick-launch__name">{label(item)}</span>
                     <button
@@ -224,28 +248,13 @@ export function TraySettings(props: { model: SettingsModel }) {
           <div class="settings-row">
             <label for="quick-launch-add">{tr("quickLaunchAdd")}</label>
             <div class="quick-launch__add">
-              <select
+              <Select
                 id="quick-launch-add"
                 class="input settings-row__input"
                 value={adding()}
-                onChange={(e) => setAdding(e.currentTarget.value)}
-              >
-                <option value="">{tr("quickLaunchPick")}</option>
-                <Show when={addable().stores.length > 0}>
-                  <optgroup label={tr("quickLaunchStores")}>
-                    <For each={addable().stores}>
-                      {(item) => <option value={quickKey(item)}>{label(item)}</option>}
-                    </For>
-                  </optgroup>
-                </Show>
-                <Show when={addable().games.length > 0}>
-                  <optgroup label={tr("quickLaunchApps")}>
-                    <For each={addable().games}>
-                      {(item) => <option value={quickKey(item)}>{label(item)}</option>}
-                    </For>
-                  </optgroup>
-                </Show>
-              </select>
+                options={addOptions()}
+                onChange={(key) => setAdding(key)}
+              />
               <button type="button" class="btn" disabled={adding() === ""} onClick={add}>
                 {tr("quickLaunchAddButton")}
               </button>

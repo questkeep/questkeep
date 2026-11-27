@@ -82,7 +82,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
+    target.getAttribute("role") === "combobox" || // a Select: letters find options
     target.isContentEditable
   );
 }

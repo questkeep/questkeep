@@ -55,6 +55,7 @@ import { Modal } from "./Modal";
 import type { PopoverAnchor } from "./Popover";
 import { filterText } from "./ScriptList";
 import { ScriptRunOutput } from "./ScriptRunOutput";
+import { Select } from "./Select";
 import { iconLabel, SCRIPT_ICON_NAMES, ScriptIcon } from "./ScriptIcon";
 import { ScriptVariables } from "./ScriptVariables";
 
@@ -233,6 +234,7 @@ export function ScriptDialog(props: {
   const isNew = () => draft().id === null;
   const ownScript = () => draft().gameId !== null;
   const runtime = createMemo<RuntimeId | null>(() => effectiveRuntime(draft(), installed()));
+  const runtimeOptions = () => installed().map((info) => ({ value: info.id, label: info.name }));
   const preview = createMemo(() => commandPreview(draft(), vars()));
   const filterHint = () => {
     const summary = filterLine();
@@ -622,18 +624,15 @@ export function ScriptDialog(props: {
                     when={installed().length > 0}
                     fallback={<span class="error-text">{tr("noRuntimes")}</span>}
                   >
-                    <select
+                    <Select<RuntimeId | "">
                       class="input script-editor__runtime"
                       aria-label={tr("runtime")}
                       value={runtime() ?? ""}
-                      onChange={(event) =>
-                        patch({ runtime: event.currentTarget.value as RuntimeId })
-                      }
-                    >
-                      <For each={installed()}>
-                        {(info) => <option value={info.id}>{info.name}</option>}
-                      </For>
-                    </select>
+                      options={runtimeOptions()}
+                      onChange={(id) => {
+                        if (id !== "") patch({ runtime: id });
+                      }}
+                    />
                   </Show>
                   <span class="field__hint script-editor__where">{tr("libraryCopy")}</span>
                   <button type="button" class="btn btn--ghost" onClick={() => void importFile()}>
@@ -685,18 +684,15 @@ export function ScriptDialog(props: {
                     when={installed().length > 0}
                     fallback={<span class="error-text">{tr("noRuntimes")}</span>}
                   >
-                    <select
+                    <Select<RuntimeId | "">
                       id={`${ids}-runwith`}
                       class="input script-editor__runtime"
                       value={runtime() ?? ""}
-                      onChange={(event) =>
-                        patch({ runtime: event.currentTarget.value as RuntimeId })
-                      }
-                    >
-                      <For each={installed()}>
-                        {(info) => <option value={info.id}>{info.name}</option>}
-                      </For>
-                    </select>
+                      options={runtimeOptions()}
+                      onChange={(id) => {
+                        if (id !== "") patch({ runtime: id });
+                      }}
+                    />
                     <span class="field__hint">{tr("runWithHint")}</span>
                   </Show>
                 </div>

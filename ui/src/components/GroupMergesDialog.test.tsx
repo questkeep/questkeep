@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GroupMerge } from "../bindings/GroupMerge";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
+import { chooseOption } from "../test-utils";
 import { GroupMergesSection } from "./settings/GroupMergesSection";
 import { GroupMergesDialog } from "./GroupMergesDialog";
 
@@ -69,9 +70,7 @@ describe("GroupMergesSection", () => {
 
   it("combines groups of a chosen grouping from the whole library", async () => {
     render(() => <GroupMergesSection />);
-    await fireEvent.change(screen.getByRole("combobox", { name: "Grouping" }), {
-      target: { value: "series" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Grouping" }), "Series");
     await fireEvent.click(screen.getByRole("button", { name: "Combine groups…" }));
     expect(store.mergeDialog()).toEqual({
       field: "series",

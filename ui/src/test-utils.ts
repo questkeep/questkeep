@@ -1,3 +1,4 @@
+import { fireEvent, screen, within } from "@solidjs/testing-library";
 import type { RuntimeInfo } from "./bindings/RuntimeInfo";
 import type { Script } from "./bindings/Script";
 import type { ScriptVariable } from "./bindings/ScriptVariable";
@@ -156,6 +157,16 @@ export function byTooltip(text: string): HTMLElement {
   const found = allByTooltip(text);
   if (found.length > 1) throw new Error(`${found.length} elements with the tooltip "${text}"`);
   return found[0] as HTMLElement;
+}
+
+/**
+ * Picks an option of a Select (components/Select.tsx) the way a user does: a click on the button
+ * opens the list, a click on the option chooses it.
+ */
+export async function chooseOption(select: HTMLElement, option: string | RegExp): Promise<void> {
+  await fireEvent.click(select);
+  const list = await screen.findByRole("listbox");
+  await fireEvent.click(within(list).getByRole("option", { name: option }));
 }
 
 /** A folder a plugin asks for: no choice, a default that is not there. */

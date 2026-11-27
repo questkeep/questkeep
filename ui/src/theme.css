@@ -486,6 +486,12 @@
   --qk-command-row-height: 38px;
   --qk-command-act-height: 26px;
   --qk-menu-min-width: 240px;
+  /* Select dropdowns: the list is at least as wide as its button, within these limits. */
+  --qk-select-min-width: 160px;
+  --qk-select-max-width: 480px;
+  --qk-select-chevron-size: 14px;
+  /* An option's own icon (a store or app icon) in the button and the list. */
+  --qk-select-icon-size: 16px;
   --qk-filters-width: 500px;
   --qk-filters-max-height: calc(100vh - 120px);
   --qk-filter-group-bar: 3px;

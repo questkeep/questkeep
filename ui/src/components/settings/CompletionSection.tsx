@@ -8,6 +8,7 @@ import { translator } from "../../i18n";
 import { settingsLibrary } from "../../i18n/settingsLibrary";
 import { dropIndexAt, moveBefore, nudge } from "../../lib/categoryOrder";
 import { store } from "../../lib/store";
+import { Select } from "../Select";
 
 const tr = translator(settingsLibrary);
 
@@ -168,15 +169,16 @@ export function CompletionSection() {
             aria-label={tr("removeStatus", { name: status().name })}
           >
             <span>{tr("removePrompt", { count: status().gameCount, name: status().name })}</span>
-            <select
+            <Select
               class="input"
               aria-label={tr("statusForGames")}
               value={replacement()}
-              onChange={(event) => setReplacement(event.currentTarget.value)}
-            >
-              <For each={options(status().id)}>{(s) => <option value={s.id}>{s.name}</option>}</For>
-              <option value={NONE}>{tr("noStatus")}</option>
-            </select>
+              options={[
+                ...options(status().id).map((s) => ({ value: s.id, label: s.name })),
+                { value: NONE, label: tr("noStatus") },
+              ]}
+              onChange={(id) => setReplacement(id)}
+            />
             <button
               type="button"
               class="btn btn--danger"
@@ -206,41 +208,31 @@ export function CompletionSection() {
         <label class="field__label" for="completion-new-game">
           {tr("newGamesGet")}
         </label>
-        <select
+        <Select
           id="completion-new-game"
           class="input status-select"
           value={settings().newGame ?? NONE}
-          onChange={(event) =>
-            void save({
-              ...settings(),
-              newGame: event.currentTarget.value === NONE ? null : event.currentTarget.value,
-            })
-          }
-        >
-          <For each={statuses()}>{(s) => <option value={s.id}>{s.name}</option>}</For>
-          <option value={NONE}>{tr("noStatus")}</option>
-        </select>
+          options={[
+            ...statuses().map((s) => ({ value: s.id, label: s.name })),
+            { value: NONE, label: tr("noStatus") },
+          ]}
+          onChange={(id) => void save({ ...settings(), newGame: id === NONE ? null : id })}
+        />
       </div>
       <div class="field">
         <label class="field__label" for="completion-first-start">
           {tr("firstStart")}
         </label>
-        <select
+        <Select
           id="completion-first-start"
           class="input status-select"
           value={settings().firstStart ?? NONE}
-          onChange={(event) =>
-            void save({
-              ...settings(),
-              firstStart: event.currentTarget.value === NONE ? null : event.currentTarget.value,
-            })
-          }
-        >
-          <For each={statuses()}>
-            {(s) => <option value={s.id}>{tr("setItTo", { name: s.name })}</option>}
-          </For>
-          <option value={NONE}>{tr("leaveAlone")}</option>
-        </select>
+          options={[
+            ...statuses().map((s) => ({ value: s.id, label: tr("setItTo", { name: s.name }) })),
+            { value: NONE, label: tr("leaveAlone") },
+          ]}
+          onChange={(id) => void save({ ...settings(), firstStart: id === NONE ? null : id })}
+        />
         <p class="field__hint">{tr("firstStartHint")}</p>
       </div>
     </div>

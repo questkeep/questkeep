@@ -5,7 +5,7 @@ import type { Settings } from "../../bindings/Settings";
 import * as api from "../../lib/api";
 import { store } from "../../lib/store";
 import { SettingsPage } from "./SettingsPage";
-import { makeProvider, optionSettings, STEAM_SETTINGS } from "../../test-utils";
+import { chooseOption, makeProvider, optionSettings, STEAM_SETTINGS } from "../../test-utils";
 
 vi.mock("../../lib/api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -181,7 +181,7 @@ describe("SettingsPage", () => {
     render(() => <SettingsPage />);
     const show = await screen.findByRole("switch", { name: "Show the start page" });
     const startup = screen.getByRole("combobox", { name: "When Questkeep opens, show" });
-    expect(startup).toHaveValue("start");
+    expect(startup).toHaveTextContent("Start page");
     await fireEvent.click(show);
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenLastCalledWith(
@@ -189,9 +189,14 @@ describe("SettingsPage", () => {
       ),
     );
     expect(store.showStartPage()).toBe(false);
-    expect(screen.getByRole("option", { name: "Start page" })).toBeDisabled();
+    await fireEvent.click(startup);
+    expect(screen.getByRole("option", { name: "Start page" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await fireEvent.keyDown(startup, { key: "Escape" });
     expect(screen.getByText(/opens the first view instead/)).toBeInTheDocument();
-    await fireEvent.change(startup, { target: { value: "last" } });
+    await chooseOption(startup, "The page I had open last");
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenLastCalledWith(
         expect.objectContaining({ startupPage: { kind: "last" } }),

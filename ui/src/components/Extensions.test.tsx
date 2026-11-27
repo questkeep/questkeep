@@ -14,7 +14,7 @@ import {
 import { createSettingsController } from "../lib/extensions/settings";
 import type { QuestkeepApi } from "../lib/extensions/types";
 import { store } from "../lib/store";
-import { byTooltip, makeGame, makePlugin } from "../test-utils";
+import { byTooltip, chooseOption, makeGame, makePlugin } from "../test-utils";
 import { ExtensionDialogs } from "./ExtensionDialogs";
 import { GameContextMenu } from "./GameContextMenu";
 import { MultiContextMenu } from "./MultiContextMenu";
@@ -234,7 +234,7 @@ describe("plugin settings", () => {
     expect(greet).toBeChecked();
     expect(greet).toHaveAccessibleDescription("On start.");
     expect(screen.getByRole("spinbutton", { name: "Size" })).toHaveValue(5);
-    expect(screen.getByRole("combobox", { name: "Pick from" })).toHaveValue("installed");
+    expect(screen.getByRole("combobox", { name: "Pick from" })).toHaveTextContent("Installed");
     expect(screen.getByLabelText("Tint")).toHaveValue("#112233");
 
     await fireEvent.click(greet);
@@ -243,9 +243,7 @@ describe("plugin settings", () => {
     );
     expect(heard).toHaveBeenLastCalledWith("greet", false);
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "Pick from" }), {
-      target: { value: "all" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Pick from" }), "All");
     expect(api.settings.get("pool")).toBe("all");
     await fireEvent.change(screen.getByRole("textbox", { name: "Your name" }), {
       target: { value: "Ada" },

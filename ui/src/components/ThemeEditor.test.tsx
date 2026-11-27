@@ -10,6 +10,7 @@ import { PREVIEW_DELAY_MS, themeEditor } from "../lib/themeEditor";
 import { applyAppearance, cachedTheme, getTheme } from "../lib/themes";
 import { setSavedUserThemes, userThemes } from "../lib/userThemeStore";
 import { emptyOverrides } from "../lib/userThemes";
+import { chooseOption } from "../test-utils";
 import { ThemeEditor } from "./ThemeEditor";
 
 vi.mock("../lib/api");
@@ -73,7 +74,7 @@ describe("ThemeEditor", () => {
     render(() => <ThemeEditor />);
     expect(screen.getByRole("complementary", { name: "Theme editor" })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Fjord custom");
-    expect(screen.getByLabelText("Based on")).toHaveValue("fjord");
+    expect(screen.getByLabelText("Based on")).toHaveTextContent("Fjord");
     expect(root.dataset.theme).toBe("user-fjord-custom");
     expect(themeCss()).toContain(':root[data-theme="user-fjord-custom"][data-scheme="dark"]');
     // The parameter values of the theme it was made from come along.
@@ -204,9 +205,7 @@ describe("ThemeEditor", () => {
     expect(themeEditor.draft().overrides.light).toEqual({ "--qk-color-bg": "#ffeedd" });
 
     // "Both modes" sends colors to both as well.
-    await fireEvent.change(screen.getByLabelText("Changes apply to"), {
-      target: { value: "both" },
-    });
+    await chooseOption(screen.getByLabelText("Changes apply to"), "Both modes");
     await fireEvent.input(screen.getByLabelText("Text: pick a color"), {
       target: { value: "#000000" },
     });
@@ -432,7 +431,7 @@ describe("ThemeEditor", () => {
     expect(getTheme("user-neon")?.params.map((p) => p.key)).toContain("density");
     themeEditor.edit("user-neon");
     render(() => <ThemeEditor />);
-    expect(screen.getByLabelText("Based on")).toHaveValue("plugin.gone");
+    expect(screen.getByLabelText("Based on")).toHaveTextContent("plugin.gone");
     expect(screen.getByText(/“plugin.gone” is not available right now/)).toBeInTheDocument();
   });
 });

@@ -23,6 +23,7 @@ import {
 import { themeEditor } from "../../lib/themeEditor";
 import { getUserTheme, isBaseMissing } from "../../lib/userThemeStore";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { Select } from "../Select";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsAppearance);
@@ -269,19 +270,17 @@ function ParamField(props: {
               <>
                 <label for={id()}>{label()}</label>
                 <div class="param-control">
-                  <select
+                  <Select
                     id={id()}
                     class="input"
                     aria-describedby={describedBy()}
                     value={String(props.value)}
-                    onChange={(e) => props.onChange(e.currentTarget.value)}
-                  >
-                    <For each={param().options}>
-                      {(option) => (
-                        <option value={option.value}>{themeText(props.theme, option.label)}</option>
-                      )}
-                    </For>
-                  </select>
+                    options={param().options.map((option) => ({
+                      value: option.value,
+                      label: themeText(props.theme, option.label),
+                    }))}
+                    onChange={(value) => props.onChange(value)}
+                  />
                 </div>
               </>
             )}

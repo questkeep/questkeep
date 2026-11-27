@@ -6,6 +6,7 @@ import { libraryGroupMerge } from "../../i18n/libraryGroupMerge";
 import { store } from "../../lib/store";
 import { GROUP_FIELDS, groupLabel } from "../../lib/viewOptions";
 import { GroupMergeList } from "../GroupMergeList";
+import { Select } from "../Select";
 
 const tr = translator(libraryGroupMerge);
 
@@ -25,14 +26,13 @@ export function GroupMergesSection() {
     <div class="form">
       <p class="muted">{tr("settingsIntro")}</p>
       <div class="field__row merge-add">
-        <select
+        <Select
           class="input merge-add__field"
           aria-label={tr("groupingField")}
           value={field()}
-          onChange={(event) => setField(event.currentTarget.value as GroupBy)}
-        >
-          <For each={COMBINABLE}>{(id) => <option value={id}>{groupLabel(id)}</option>}</For>
-        </select>
+          options={COMBINABLE.map((id) => ({ value: id, label: groupLabel(id) }))}
+          onChange={(id) => setField(id)}
+        />
         <button
           type="button"
           class="btn"

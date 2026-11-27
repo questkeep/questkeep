@@ -2662,13 +2662,15 @@ ul {
   white-space: nowrap;
   cursor: pointer;
 }
-.menu__item:hover:not(:disabled),
+.menu__item:hover:not(:disabled, [aria-disabled="true"]),
 :where(html[data-keyboard-focus]) .menu__item:focus-visible,
-.menu__item--open {
+.menu__item--open,
+.menu__item--active {
   background: var(--qk-color-surface-hover);
   outline: none;
 }
-.menu__item:disabled {
+.menu__item:disabled,
+.menu__item[aria-disabled="true"] {
   color: var(--qk-color-text-faint);
   cursor: default;
 }
@@ -2712,6 +2714,60 @@ ul {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--qk-color-text-faint);
+}
+/* Select: a dropdown button (usually also .input) and its list, a .menu in a popover. */
+.select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.select:disabled {
+  color: var(--qk-color-text-faint);
+  cursor: default;
+}
+.select__icon,
+.select__option-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--qk-select-icon-size);
+  height: var(--qk-select-icon-size);
+}
+.select__icon > *,
+.select__option-icon > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+.select__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select__chevron {
+  flex: none;
+  width: var(--qk-select-chevron-size);
+  height: var(--qk-select-chevron-size);
+  color: var(--qk-color-text-muted);
+}
+.select[aria-expanded="true"] .select__chevron {
+  transform: rotate(180deg);
+}
+.select__list {
+  min-width: max(var(--qk-select-trigger-width, 0px), var(--qk-select-min-width));
+  max-width: var(--qk-select-max-width);
+}
+/* The highlight follows the keyboard and the pointer alike: only the active option is lit. */
+.select__option:hover:not(.menu__item--active) {
+  background: transparent;
+}
+.select__group {
+  display: flex;
+  flex-direction: column;
 }
 .icon-picker {
   display: grid;
@@ -8154,7 +8210,7 @@ label[for="quick-launch-add"] {
 .quick-launch__add {
   min-width: 0;
 }
-.quick-launch__add select {
+.quick-launch__add .select {
   flex: 1;
   min-width: 0;
   max-width: none;
@@ -8168,7 +8224,7 @@ label[for="quick-launch-add"] {
 .quick-launch__add {
   flex: 1 1 14rem;
 }
-.quick-launch__add select {
+.quick-launch__add .select {
   flex: 1 1 0;
   width: 0;
 }

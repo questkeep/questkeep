@@ -15,6 +15,7 @@ import { pickDirectory } from "../../lib/pickers";
 import { store } from "../../lib/store";
 import { BackupImportDialog, chooseBackupToImport, importBackup } from "../BackupImportDialog";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { Select } from "../Select";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsBackups);
@@ -106,17 +107,14 @@ export function BackupsSection(props: { model: SettingsModel }) {
             </label>
             <div class="settings-row" classList={{ "check--disabled": !current().enabled }}>
               <label for="backup-frequency">{tr("howOften")}</label>
-              <select
+              <Select
                 id="backup-frequency"
                 class="input settings-row__input"
                 value={current().frequency}
                 disabled={!current().enabled}
-                onChange={(e) => change({ frequency: e.currentTarget.value as BackupFrequency })}
-              >
-                <For each={FREQUENCIES}>
-                  {(f) => <option value={f.value}>{tr(f.label)}</option>}
-                </For>
-              </select>
+                options={FREQUENCIES.map((f) => ({ value: f.value, label: tr(f.label) }))}
+                onChange={(frequency) => change({ frequency })}
+              />
             </div>
             <div class="settings-row">
               <label for="backup-keep">{tr("keep")}</label>
