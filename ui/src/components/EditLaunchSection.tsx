@@ -12,6 +12,7 @@ import { moveItem } from "../lib/editGame";
 import { pickDirectory, pickExecutable } from "../lib/pickers";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
+import { copyLabel } from "../lib/copies";
 import { SourceIcon, sourceName } from "./SourceIcon";
 
 const tr = translator(gameLaunch);
@@ -116,7 +117,9 @@ function ProfileForm(props: {
                   aria-checked={basedOn() === copy.id}
                   onClick={() => setBasedOn(copy.id)}
                 >
-                  {copy.source === "manual" ? tr("itsExecutable") : sourceName(copy.source)}
+                  {copyLabel(copy, (source) =>
+                    source === "manual" ? tr("itsExecutable") : sourceName(source),
+                  )}
                 </button>
               )}
             </For>

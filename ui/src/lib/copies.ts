@@ -27,3 +27,12 @@ export function playCopy(game: Game): GameCopy | undefined {
   const copies = copiesOf(game);
   return copies.find((c) => c.installed) ?? copies[0];
 }
+
+/**
+ * A copy's name in lists and menus: its store's name, and when the entry has another copy of
+ * the same store, what tells them apart ("Steam · Half-Life 2: Episode One"; the core picks it).
+ */
+export function copyLabel(copy: GameCopy, storeName: (source: string) => string): string {
+  const store = storeName(copy.source);
+  return copy.qualifier ? `${store} · ${copy.qualifier}` : store;
+}

@@ -11,10 +11,10 @@ use super::metadata::Details;
 use super::text_match;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    CopyFacts, FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
-    ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode, MetadataField,
-    NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter, ScanSummary,
-    SortField, TextField, TextFilter, TextOp, TriState, copy_qualifiers, sorting_name,
+    CopyFacts, FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate,
+    HiddenFilter, ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode,
+    MetadataField, NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter,
+    ScanSummary, SortField, TextField, TextFilter, TextOp, TriState, copy_qualifiers, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \

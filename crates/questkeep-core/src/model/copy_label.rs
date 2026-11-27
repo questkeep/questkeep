@@ -50,7 +50,12 @@ fn distinct<'a>(
 ) -> Option<Vec<String>> {
     let values: Vec<String> = copies
         .iter()
-        .map(|c| key(c).map(str::trim).filter(|v| !v.is_empty()).map(str::to_string))
+        .map(|c| {
+            key(c)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string)
+        })
         .collect::<Option<_>>()?;
     let mut lowered: Vec<String> = values.iter().map(|v| v.to_lowercase()).collect();
     lowered.sort();

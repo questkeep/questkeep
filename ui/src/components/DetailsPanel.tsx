@@ -6,6 +6,7 @@ import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import ExternalLink from "lucide-solid/icons/external-link";
 import FolderOpen from "lucide-solid/icons/folder-open";
+import Newspaper from "lucide-solid/icons/newspaper";
 import Clock from "lucide-solid/icons/clock";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
@@ -13,6 +14,7 @@ import Pencil from "lucide-solid/icons/pencil";
 import Play from "lucide-solid/icons/play";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
+import Tag from "lucide-solid/icons/tag";
 import Trash from "lucide-solid/icons/trash";
 import Unlink from "lucide-solid/icons/unlink";
 import {
@@ -42,7 +44,7 @@ import {
   uninstallGame,
   updateGame,
 } from "../lib/actions";
-import { copiesOf, launcherPageCopies, playCopy } from "../lib/copies";
+import { copiesOf, copyLabel, launcherPageCopies, playCopy } from "../lib/copies";
 import { chipsThatFit } from "../lib/gamePage";
 import {
   formatDate,
@@ -61,6 +63,8 @@ import {
 } from "../lib/api";
 import { intlLocale, translator } from "../i18n";
 import { gamePage } from "../i18n/gamePage";
+import { gameSections } from "../i18n/gameSections";
+import { shellMenus } from "../i18n/shellMenus";
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
@@ -86,10 +90,16 @@ import { extensionEntries } from "./ExtensionIcon";
 import { GameActionButtons } from "./GameActionButtons";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
+import { openLink } from "./settings/openLink";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
 
 const tr = translator(gamePage);
 const trSessions = translator(gameSessions);
+const trSections = translator(gameSections);
+const trMenus = translator(shellMenus);
+
+/** A copy's store, and what tells it apart from another copy of the same store. */
+const label = (copy: GameCopy) => copyLabel(copy, sourceName);
 
 const DESCRIPTION_CLAMP_CHARS = 300;
 const DESCRIPTION_CLAMP_LINES = 5;
@@ -258,6 +268,10 @@ export function DetailsPanel(props: DetailsPanelProps) {
       store.providers().some((p) => p.id === copy.source && p.canUninstall)
     );
   };
+  const uninstallLabel = () => {
+    const copy = uninstallCopy();
+    return copy ? label(copy) : "";
+  };
   const isPage = () => props.variant === "page";
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
   const live = <T,>(load: (id: string) => Promise<T>) =>
@@ -358,7 +372,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       : copies()
           .filter((copy) => copy.installed)
           .map((copy) => ({
-            label: tr("playWith", { store: sourceName(copy.source) }),
+            label: tr("playWith", { store: label(copy) }),
             icon: icon(copy.source),
             hint: copy.id === playCopy(props.game)?.id ? tr("default") : undefined,
             disabled: running(),
@@ -367,7 +381,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
     const installs: MenuEntry[] = copies()
       .filter((copy) => !copy.installed)
       .map((copy) => ({
-        label: tr("installWith", { store: sourceName(copy.source) }),
+        label: tr("installWith", { store: label(copy) }),
         icon: icon(copy.source),
         onSelect: () => void install(copy.id),
       }));
@@ -391,6 +405,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       icon: () => <ImageDown class="icon" aria-hidden="true" />,
       onSelect: () => void refetchGameArtwork(),
     },
+    { kind: "separator" },
     {
       label: trSessions("edit"),
       icon: () => <Clock class="icon" aria-hidden="true" />,
@@ -403,6 +418,13 @@ export function DetailsPanel(props: DetailsPanelProps) {
       onSelect: () =>
         queueMicrotask(() => toggleAnchored(combining, setCombining, moreButton, "end")),
     },
+    {
+      kind: "submenu",
+      label: tr("categories"),
+      icon: () => <Tag class="icon" aria-hidden="true" />,
+      entries: categoryEntries,
+    },
+    ...newsEntries(),
     ...(props.game.installDir === null
       ? []
       : [
@@ -414,6 +436,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         ]),
     ...launcherPageCopies(props.game, store.providers()).map(showInLauncher),
     ...extensionEntries("gameMore", { game: props.game, games: [props.game] }),
+    ...copySubmenus(),
     { kind: "separator" },
     ...(canUninstall()
       ? [
@@ -433,13 +456,65 @@ export function DetailsPanel(props: DetailsPanelProps) {
     },
   ];
 
+  // What the cards offer, also in the "More" menu: the Library card's categories and store copies,
+  // the News card's link (the Details card's sessions link is "Edit sessions" above).
+  const categoryEntries = (): MenuEntry[] =>
+    store.categories().length === 0
+      ? [{ label: trMenus("noCategories"), disabled: true, onSelect: () => undefined }]
+      : store.categories().map((category) => {
+          const has = props.game.categories.includes(category.id);
+          return {
+            label: category.name,
+            checked: has,
+            keepOpen: true,
+            onSelect: () =>
+              void store.setGameCategories(
+                props.game.id,
+                has
+                  ? props.game.categories.filter((id) => id !== category.id)
+                  : [...props.game.categories, category.id],
+              ),
+          };
+        });
+
+  const newsEntries = (): MenuEntry[] => {
+    const all = news();
+    const url = all && all.items.length > 0 ? all.allUrl : null;
+    return url
+      ? [
+          {
+            label: trSections("openAllNews"),
+            icon: () => <Newspaper class="icon" aria-hidden="true" />,
+            onSelect: () => void openLink(url),
+          },
+        ]
+      : [];
+  };
+
+  /** A combined game's copies, each with what its row in the Library card offers. */
+  const copySubmenus = (): MenuEntry[] =>
+    combined()
+      ? [
+          { kind: "separator" },
+          { kind: "heading", label: tr("stores") },
+          ...copies().map((copy, index): MenuEntry => ({
+            kind: "submenu",
+            label: label(copy),
+            icon: () => <SourceIcon source={copy.source} />,
+            hint: index === 0 ? tr("preferred") : undefined,
+            // "Show in" is in the menu already.
+            entries: () => copyEntries(copy, false),
+          })),
+        ]
+      : [];
+
   const showInLauncher = (copy: GameCopy): MenuEntry => ({
-    label: tr("showIn", { store: sourceName(copy.source) }),
+    label: tr("showIn", { store: label(copy) }),
     icon: () => <ExternalLink class="icon" aria-hidden="true" />,
     onSelect: () => void run(() => openLauncherPage(props.game.id, copy.id)),
   });
 
-  const copyEntries = (copy: GameCopy): MenuEntry[] => [
+  const copyEntries = (copy: GameCopy, withLauncher = true): MenuEntry[] => [
     ...(copy.id === copies()[0]?.id
       ? []
       : [
@@ -455,9 +530,11 @@ export function DetailsPanel(props: DetailsPanelProps) {
       icon: () => <Unlink class="icon" aria-hidden="true" />,
       onSelect: () => void run(() => separateCopy(copy.id)),
     },
-    ...launcherPageCopies(props.game, store.providers())
-      .filter((c) => c.id === copy.id)
-      .map(showInLauncher),
+    ...(withLauncher
+      ? launcherPageCopies(props.game, store.providers())
+          .filter((c) => c.id === copy.id)
+          .map(showInLauncher)
+      : []),
   ];
 
   async function install(copyId: string | null = null) {
@@ -785,14 +862,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   {(copy, index) => (
                     <li class="copies__row">
                       <SourceIcon source={copy.source} />
-                      <span class="copies__name">{sourceName(copy.source)}</span>
+                      <span class="copies__name">{label(copy)}</span>
                       <span class="copies__state">{copyState(copy, index())}</span>
                       <Show when={combined()}>
                         <button
                           ref={(el) => copyButtons.set(copy.id, el)}
                           type="button"
                           class="icon-btn icon-btn--small"
-                          aria-label={tr("actionsOf", { name: sourceName(copy.source) })}
+                          aria-label={tr("actionsOf", { name: label(copy) })}
                           data-tooltip={tr("storeActions")}
                           aria-haspopup="menu"
                           aria-expanded={copyMenu()?.copy.id === copy.id}
@@ -856,7 +933,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         {(open) => (
           <Menu
             anchor={open().anchor}
-            label={tr("actionsOf", { name: sourceName(open().copy.source) })}
+            label={tr("actionsOf", { name: label(open().copy) })}
             inside={() => [copyButtons.get(open().copy.id)]}
             onClose={(returnFocus) => {
               const button = copyButtons.get(open().copy.id);
@@ -907,7 +984,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
             combined() && uninstallCopy()
               ? tr("uninstallMessageFrom", {
                   name: props.game.name,
-                  store: sourceName(uninstallCopy()?.source ?? ""),
+                  store: uninstallLabel(),
                 })
               : tr("uninstallMessage", { name: props.game.name })
           }

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Game } from "../bindings/Game";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import * as api from "../lib/api";
 import { copiesOf, playCopy, storesOf } from "../lib/copies";
 import { groupGames } from "../lib/grouping";
@@ -21,6 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn<() => void>() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn<() => Promise<void>>() }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -49,6 +51,9 @@ const rocket = (overrides: Partial<Game> = {}) =>
   });
 
 const noop = () => undefined;
+
+/** Opens the game page's More menu. */
+const more = () => fireEvent.click(screen.getByRole("button", { name: "More actions" }));
 
 /** One game in Steam and Epic, as two library entries. */
 const group = (name: string, ids: [string, string]) => [
@@ -150,6 +155,85 @@ describe("details of a combined game", () => {
     expect(screen.queryByRole("menuitem", { name: "Play this store first" })).toBeNull();
     await fireEvent.click(screen.getByRole("menuitem", { name: /Separate/ }));
     expect(api.separateCopy).toHaveBeenCalledWith("rl");
+  });
+
+  it("offers what the Library and News cards offer in the More menu too", async () => {
+    const game = rocket();
+    vi.mocked(api.preferCopy).mockResolvedValue(game);
+    vi.mocked(api.separateCopy).mockResolvedValue(game);
+    vi.mocked(api.setGameCategories).mockResolvedValue(game);
+    vi.mocked(api.listCategories).mockResolvedValue([
+      { id: "c1", name: "RPG", gameCount: 0, sources: [], autoFilter: null },
+    ]);
+    vi.mocked(api.gameNews).mockResolvedValue({
+      items: [
+        { title: "Patch", url: "https://n/1", date: null, source: "", snippet: "", image: null },
+      ],
+      allUrl: "https://n/all",
+    });
+    await store.loadCategories();
+    render(() => <DetailsPanel game={game} onClose={() => undefined} />);
+    await screen.findByText("Patch");
+
+    await more();
+    let menu = screen.getByRole("menu", { name: "More actions" });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: /Open all news/ }));
+    expect(openUrl).toHaveBeenCalledWith("https://n/all");
+
+    await more();
+    menu = screen.getByRole("menu", { name: "More actions" });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Categories" }));
+    await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "RPG" }));
+    await waitFor(() => expect(api.setGameCategories).toHaveBeenCalledWith("rl", ["c1"]));
+    // Categories stay open for more changes; the More menu too.
+    expect(screen.getByRole("menu", { name: "Categories" })).toBeTruthy();
+
+    // One submenu per copy, with the copy's row actions.
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Epic" }));
+    const epic = screen.getByRole("menu", { name: "Epic" });
+    await fireEvent.click(within(epic).getByRole("menuitem", { name: "Play this store first" }));
+    expect(api.preferCopy).toHaveBeenCalledWith("rl-epic");
+
+    await more();
+    menu = screen.getByRole("menu", { name: "More actions" });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: /^Steam/ }));
+    const steam = screen.getByRole("menu", { name: "Steam" });
+    expect(within(steam).queryByRole("menuitem", { name: "Play this store first" })).toBeNull();
+    await fireEvent.click(within(steam).getByRole("menuitem", { name: /Separate/ }));
+    expect(api.separateCopy).toHaveBeenCalledWith("rl");
+  });
+
+  it("tells two copies of one store apart everywhere", async () => {
+    const game = makeGame({
+      id: "bs",
+      name: "Beat Saber",
+      source: "steam",
+      installed: true,
+      copies: [
+        { ...copy("bs", "steam", true), qualifier: "1.29.1" },
+        { ...copy("bs-2", "steam", true), qualifier: "1.40.0" },
+        copy("bs-epic", "epic", false),
+      ],
+    });
+    vi.mocked(api.launchProfiles).mockRejectedValue(new Error("none"));
+    render(() => <DetailsPanel game={game} onClose={() => undefined} />);
+
+    const stores = screen.getByRole("list", { name: "Stores" });
+    expect(within(stores).getByText("Steam · 1.29.1")).toBeTruthy();
+    expect(within(stores).getByText("Steam · 1.40.0")).toBeTruthy();
+    expect(within(stores).getByText("Epic")).toBeTruthy();
+    expect(within(stores).getByRole("button", { name: "Steam · 1.40.0 actions" })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Choose how to play" }));
+    const play = screen.getByRole("menu", { name: "Stores" });
+    expect(within(play).getByRole("menuitem", { name: /Play with Steam · 1.29.1/ })).toBeTruthy();
+    expect(within(play).getByRole("menuitem", { name: /Play with Steam · 1.40.0/ })).toBeTruthy();
+    await fireEvent.keyDown(play, { key: "Escape" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    const menu = screen.getByRole("menu", { name: "More actions" });
+    expect(within(menu).getByRole("menuitem", { name: /^Steam · 1.29.1/ })).toBeTruthy();
+    expect(within(menu).getByRole("menuitem", { name: /^Steam · 1.40.0/ })).toBeTruthy();
   });
 
   it("combines with a game picked by name", async () => {

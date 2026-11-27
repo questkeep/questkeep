@@ -30,7 +30,7 @@ import { shellMenus } from "../i18n/shellMenus";
 import { launchProfiles } from "../lib/api";
 import { scriptsText } from "../i18n/scripts";
 import { createGameActions, runAction } from "../lib/gameActions";
-import { launcherPageCopies, playCopy } from "../lib/copies";
+import { copyLabel, launcherPageCopies, playCopy } from "../lib/copies";
 import { store } from "../lib/store";
 import { gameSessions } from "../i18n/gameSessions";
 import { SessionsDialog } from "./SessionsDialog";
@@ -241,7 +241,7 @@ export function GameContextMenu(props: {
           },
         ]),
     ...launcherPageCopies(game(), store.providers()).map((copy) => ({
-      label: tr("showIn", { store: sourceName(copy.source) }),
+      label: tr("showIn", { store: copyLabel(copy, sourceName) }),
       icon: iconOf(ExternalLink),
       onSelect: () => void report(openLauncherPage(game().id, copy.id)),
     })),
