@@ -11,4 +11,11 @@ id: string,
 /**
  * Menu text, e.g. `New Minecraft instance`.
  */
-label: string, };
+label: string, 
+/**
+ * When set, choosing the option opens the store's launcher (what the provider's
+ * `launcher()` starts) with these command-line arguments added, e.g. `--show-window`, and
+ * `run_add_game_option` is not called. This is how a store plugin, which cannot start
+ * programs itself, opens its launcher for adding a game. Empty arguments open it as is.
+ */
+launcherArgs?: string, };

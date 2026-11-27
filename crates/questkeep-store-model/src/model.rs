@@ -302,7 +302,7 @@ pub struct Achievements {
 }
 
 /// An extra way to add games, shown in the menu of the "Add game" button.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AddGameOption {
@@ -310,6 +310,29 @@ pub struct AddGameOption {
     pub id: String,
     /// Menu text, e.g. `New Minecraft instance`.
     pub label: String,
+    /// When set, choosing the option opens the store's launcher (what the provider's
+    /// `launcher()` starts) with these command-line arguments added, e.g. `--show-window`, and
+    /// `run_add_game_option` is not called. This is how a store plugin, which cannot start
+    /// programs itself, opens its launcher for adding a game. Empty arguments open it as is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub launcher_args: Option<String>,
+}
+
+impl AddGameOption {
+    pub fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            launcher_args: None,
+        }
+    }
+
+    /// Opens the store's launcher with `args` added instead of calling `run_add_game_option`.
+    pub fn opening_launcher(mut self, args: impl Into<String>) -> Self {
+        self.launcher_args = Some(args.into());
+        self
+    }
 }
 
 /// A game found by searching a store's catalog by name, so a game added by hand can get its

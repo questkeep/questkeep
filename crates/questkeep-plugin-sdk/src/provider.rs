@@ -188,7 +188,9 @@ pub trait Provider {
     fn settings(&self) -> StoreSettings {
         StoreSettings::default()
     }
-    /// Extra ways to add games that this provider offers next to "Add game".
+    /// Extra ways to add games that this provider offers next to "Add game". An option made
+    /// with [`AddGameOption::opening_launcher`] opens the store's [`launcher`](Self::launcher) with
+    /// extra arguments instead of calling [`run_add_game_option`](Self::run_add_game_option).
     fn add_game_options(&self) -> Vec<AddGameOption> {
         Vec::new()
     }

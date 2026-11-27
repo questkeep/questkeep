@@ -2530,6 +2530,22 @@ impl Library {
             )));
         }
         let before = self.installed_ids(provider_id);
+        let option = provider
+            .add_game_options()
+            .into_iter()
+            .find(|o| o.id == option_id);
+        if let Some(args) = option.and_then(|o| o.launcher_args) {
+            let action = with_extra_args(
+                provider.launcher().ok_or_else(|| {
+                    CoreError::Invalid(format!("{} isn't installed on this PC.", provider.name()))
+                })?,
+                &args,
+            );
+            run_store_action(&action).map_err(|err| {
+                CoreError::Launch(format!("Could not open {}: {err}", provider.name()))
+            })?;
+            return Ok(before);
+        }
         provider
             .run_add_game_option(option_id)
             .map_err(|err| match err {
@@ -2644,6 +2660,19 @@ fn note_restored_backup(paths: &DataPaths, activity: &ActivityLog) {
 }
 
 /// Opens a store URI or starts a program (installer or uninstaller) without tracking it.
+/// `action` with `extra` appended to its command-line arguments (a URI is left as it is).
+fn with_extra_args(mut action: PlayAction, extra: &str) -> PlayAction {
+    let extra = extra.trim();
+    if extra.is_empty() || action.kind != ActionKind::File {
+        return action;
+    }
+    action.args = Some(match action.args.as_deref().map(str::trim) {
+        Some(args) if !args.is_empty() => format!("{args} {extra}"),
+        _ => extra.to_string(),
+    });
+    action
+}
+
 fn run_store_action(action: &PlayAction) -> std::io::Result<()> {
     match action.kind {
         ActionKind::Uri => crate::platform::open_uri(&action.target),
@@ -3224,6 +3253,72 @@ mod tests {
         }
     }
 
+    /// A store plugin's way: its option opens the launcher with extra arguments; the provider
+    /// itself is never asked to run it.
+    struct LauncherOptionStore(PathBuf);
+    impl LibraryProvider for LauncherOptionStore {
+        fn is_installed(&self) -> bool {
+            true
+        }
+        fn id(&self) -> &str {
+            "opens"
+        }
+        fn name(&self) -> &str {
+            "Opens"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(Vec::new())
+        }
+        fn launcher(&self) -> Option<PlayAction> {
+            let mut action = PlayAction::file(self.0.to_string_lossy());
+            action.args = Some("--portable".into());
+            Some(action)
+        }
+        fn add_game_options(&self) -> Vec<crate::providers::AddGameOption> {
+            vec![
+                crate::providers::AddGameOption::new("new", "New thing")
+                    .opening_launcher("--show-window"),
+            ]
+        }
+        fn run_add_game_option(&self, _: &str) -> Result<(), ProviderError> {
+            panic!("an option that opens the launcher must not reach the provider");
+        }
+    }
+
+    #[test]
+    fn an_add_game_option_can_open_the_launcher_with_extra_arguments() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("no-such-launcher.exe");
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(LauncherOptionStore(missing)));
+        let (lib, _) = library(tmp.path(), providers);
+        // The launcher is started (and fails here, as it does not exist) instead of the provider.
+        assert!(matches!(
+            lib.run_add_game_option("opens", "new"),
+            Err(CoreError::Launch(_))
+        ));
+
+        let with = |args: Option<&str>, extra| {
+            let mut action = PlayAction::file("launcher.exe");
+            action.args = args.map(Into::into);
+            with_extra_args(action, extra).args
+        };
+        assert_eq!(
+            with(Some("--portable"), " --show-window "),
+            Some("--portable --show-window".into())
+        );
+        assert_eq!(with(None, "--show-window"), Some("--show-window".into()));
+        assert_eq!(with(Some("-x"), "  "), Some("-x".into()));
+        let uri = PlayAction {
+            kind: ActionKind::Uri,
+            ..PlayAction::file("steam://open/main")
+        };
+        assert_eq!(with_extra_args(uri.clone(), "--x"), uri);
+    }
+
     #[test]
     fn add_game_option_imports_the_game_added_in_the_launcher() {
         let tmp = tempfile::tempdir().unwrap();
@@ -3627,10 +3722,7 @@ mod tests {
             Some(self.0.as_ref())
         }
         fn add_game_options(&self) -> Vec<crate::providers::AddGameOption> {
-            vec![crate::providers::AddGameOption {
-                id: "new".into(),
-                label: "New thing".into(),
-            }]
+            vec![crate::providers::AddGameOption::new("new", "New thing")]
         }
     }
 
