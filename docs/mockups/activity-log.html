@@ -69,6 +69,34 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
 .mini .t { color: var(--faint); font-size: 12px; width: 70px; flex: none; }
 .placeholder { height: 70px; border-radius: var(--r-md); background: var(--raised); }
 
+/* Drawer */
+.gp-wrap { position: relative; min-height: 680px; overflow: hidden; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 460px; max-width: 100%; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -16px 0 40px #0008; padding: 16px; overflow: auto; transform: translateX(105%); transition: transform .2s; z-index: 2; }
+.drawer.open { transform: none; }
+.scrim { display: none; position: absolute; inset: 0; background: #0006; z-index: 1; }
+.gp-wrap:has(.drawer.open) .scrim { display: block; }
+.drawer-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.drawer-foot { margin-top: 14px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.drawer .entry { background: var(--raised); }
+.mini .actor { margin-right: 4px; }
+
+.actor.session { background: transparent; border-color: var(--border); color: var(--muted); }
+.entry.session > .head { color: var(--muted); }
+
+/* Ways in */
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+.way h3 { font-size: 14px; margin: 0 0 4px; } .way p { color: var(--muted); font-size: 13px; margin: 0 0 10px; line-height: 1.45; }
+.menu { background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px; box-shadow: 0 12px 32px #000a; }
+.mi { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-sm); font-size: 13px; }
+.mi.hl { background: var(--accent-soft); }
+.mi kbd { margin-left: auto; font: inherit; font-size: 11px; color: var(--faint); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+.mi .ar { margin-left: auto; color: var(--faint); }
+.sep { height: 1px; background: var(--border); margin: 5px 4px; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--text); margin-left: 6px; font-weight: 400; }
+.bell-foot { border-top: 1px solid var(--border); margin-top: 4px; padding: 8px 10px 4px; display: flex; justify-content: space-between; font-size: 12px; color: var(--accent); }
+.cmdbox { background: var(--raised); border: 1px solid var(--accent); border-radius: var(--r-md); }
+.cmdbox .q { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+
 /* Global page */
 .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 3px; }
@@ -106,22 +134,46 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
   Click the tabs to switch views; click entries to expand them.
 </div>
 <div class="tabs">
-  <button class="on" data-v="game">1 · Game page</button>
-  <button data-v="library">2 · Activity page: Library</button>
-  <button data-v="system">3 · Activity page: System</button>
-  <button data-v="settings">4 · Settings: retention</button>
+  <button class="on" data-v="game">1 · Game page + drawer</button>
+  <button data-v="ways">2 · Ways in</button>
+  <button data-v="library">3 · Activity page: Library</button>
+  <button data-v="system">4 · Activity page: System</button>
+  <button data-v="settings">5 · Settings: retention</button>
 </div>
 
 <div class="app">
   <!-- 1. GAME PAGE -->
   <section class="view on" id="game">
+    <div class="gp-wrap">
     <div class="gp">
       <div>
         <div class="hero"><h1>Beat Saber</h1></div>
         <div class="card"><div class="title">About</div><div class="placeholder"></div></div>
+        <div class="card"><div class="title">Details</div><div class="placeholder"></div></div>
+      </div>
+      <div>
+        <div class="card"><div class="title">Library</div><div class="placeholder"></div></div>
         <div class="card">
-          <div class="title">Activity <button class="linkbtn">Show all in Activity →</button></div>
-          <div class="day">Today</div>
+          <div class="title">Recent activity <button class="linkbtn" onclick="document.getElementById('drawer').classList.add('open')">Show all</button></div>
+          <div class="mini"><span class="t">Today</span><span><span class="actor user">You</span> refreshed metadata <small class="sub">3 fields</small></span></div>
+          <div class="mini"><span class="t">Today</span><span><span class="actor plugin">BSManager</span> found version 1.40.0</span></div>
+          <div class="mini"><span class="t">Yesterday</span><span><span class="actor user">You</span> combined it with Beat Saber (1.29.1)</span></div>
+          <div class="sub" style="margin-top:6px">The last 3 entries. “Show all” (also “Activity…” in the page’s “…” menu) opens the drawer.</div>
+        </div>
+      </div>
+    </div>
+    <div class="scrim" onclick="document.getElementById('drawer').classList.remove('open')"></div>
+    <aside class="drawer open" id="drawer" aria-label="Activity of Beat Saber">
+      <div class="drawer-head">
+        <div><b>Activity</b><div class="sub">Beat Saber · 14 entries</div></div>
+        <button class="btn" onclick="document.getElementById('drawer').classList.remove('open')">✕</button>
+      </div>
+      <div class="filters" style="margin:0 0 6px">
+        <span class="chip on">Who: <b>Everyone</b> ▾</span>
+        <span class="chip">What: <b>All</b> ▾</span>
+        <span class="chip on">✓ Sessions</span>
+      </div>
+      <div class="day">Today</div>
           <div class="entry">
             <button class="head"><span class="chev">▶</span><span class="time">14:02</span><span class="actor user">You</span>
               <span class="summary">Refreshed metadata <small>from IGDB</small></span><span class="count">3 fields</span></button>
@@ -144,7 +196,8 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
               </table>
             </div>
           </div>
-          <div class="day">Yesterday</div>
+          <div class="entry session"><button class="head"><span class="chev">▶</span><span class="time">19:30</span><span class="actor session">Session</span><span class="summary">Ran for 1 h 12 min</span><span class="count">BSManager · 1.40.0</span></button><div class="details"><div class="why">From the session list (not stored twice). Edit sessions… to change it.</div></div></div>
+<div class="day">Yesterday</div>
           <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">21:40</span><span class="actor user">You</span>
             <span class="summary">Combined with “Beat Saber (1.29.1)”</span><span class="count">2 copies</span></button>
             <div class="details"><table class="diff">
@@ -158,22 +211,36 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
           <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">18:30</span><span class="actor store">Steam</span>
             <span class="summary">Added to your library</span></button>
             <div class="details"><table class="diff"><tr><td>Name</td><td><span class="new">Beat Saber</span></td></tr><tr><td>Store ID</td><td><span class="new">620980</span></td></tr></table></div></div>
-        </div>
-      </div>
-      <div>
-        <div class="card"><div class="title">Library</div><div class="placeholder"></div></div>
-        <div class="card">
-          <div class="title">Recent activity <button class="linkbtn">All →</button></div>
-          <div class="sub" style="margin-bottom:6px">Alternative: a compact card in the side column instead of a full-width one</div>
-          <div class="mini"><span class="t">Today</span><span>You refreshed metadata (3 fields)</span></div>
-          <div class="mini"><span class="t">Today</span><span>BSManager plugin found version 1.40.0</span></div>
-          <div class="mini"><span class="t">Yesterday</span><span>You combined it with Beat Saber (1.29.1)</span></div>
-        </div>
-      </div>
+      <div class="drawer-foot"><button class="linkbtn">Open in the Activity page →</button><span class="sub">(the global page, filtered to this game)</span></div>
+    </aside>
     </div>
   </section>
 
-  <!-- 2. GLOBAL: LIBRARY -->
+  <!-- 2. WAYS IN -->
+  <section class="view" id="ways">
+    <h1>Opening the Activity page</h1>
+    <div class="sub" style="margin-bottom:18px">The main entry is the Questkeep menu; the others are shortcuts from the places where you notice a change.</div>
+    <div class="ways">
+      <div class="way"><h3>Questkeep menu <span class="tag">main</span></h3><p>Next to Settings, with a shortcut.</p>
+        <div class="menu">
+          <div class="mi">✎ Edit sidebar</div><div class="sep"></div>
+          <div class="mi">＋ Add game <span class="ar">›</span></div><div class="mi">🚀 Open launcher <span class="ar">›</span></div><div class="mi">⟳ Sync <span class="ar">›</span></div><div class="mi">⧉ Games in several stores…</div>
+          <div class="sep"></div>
+          <div class="mi hl">☰ Activity <kbd>Ctrl+Shift+A</kbd></div>
+          <div class="mi">⚙ Settings</div><div class="mi">⏻ Exit</div>
+        </div></div>
+      <div class="way"><h3>Notification bell</h3><p>A footer link: notifications are what needs you now, activity is everything that happened.</p>
+        <div class="menu"><div class="mi">⚠ Epic: sign-in expired</div><div class="mi">ℹ Plugin updates available</div>
+          <div class="bell-foot"><span>Clear all</span><span>Show all activity →</span></div></div></div>
+      <div class="way"><h3>From a game</h3><p>The Recent activity card’s “Show all”, “Activity…” in the page’s “…” menu and in the right-click menu open that game’s drawer; the drawer links to the full page.</p>
+        <div class="menu"><div class="mi">⟳ Refresh metadata</div><div class="mi">✎ Edit sessions…</div><div class="mi hl">☰ Activity…</div><div class="mi">⧉ Combine with another game…</div></div></div>
+      <div class="way"><h3>From a sync or a plugin</h3><p>The sync result toast gets “Details”, and each plugin in Settings › Plugins gets “Activity”; both open the page filtered to that store or plugin.</p>
+        <div class="menu"><div class="mi">✓ Steam synced: 3 added, 12 updated <span class="ar" style="color:var(--accent)">Details</span></div></div></div>
+      <div class="way"><h3>Not proposed</h3><p>Sidebar: it holds your library views and pages you use often; the log is occasional. Ctrl+K: it lists games only for now; commands come later.</p></div>
+    </div>
+  </section>
+
+  <!-- 3. GLOBAL: LIBRARY -->
   <section class="view" id="library">
     <div class="top">
       <div><h1>Activity</h1><div class="sub">What happened to your library, and who did it</div></div>
@@ -184,6 +251,7 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
       <span class="chip on">Who: <b>Everyone</b> ▾</span>
       <span class="chip">What: <b>All changes</b> ▾</span>
       <span class="chip">When: <b>Last 30 days</b> ▾</span>
+      <span class="chip on">✓ Sessions</span>
     </div>
     <div class="day">Today</div>
     <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">14:02</span><span class="actor user">You</span>
@@ -208,13 +276,14 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
     <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">09:15</span><span class="actor store">Steam</span>
       <span class="summary">Synced <small>automatic, after start</small></span><span class="count">3 added · 12 updated · 1 removed</span></button>
       <div class="details"><div class="why">Each game’s own log shows its part of this sync.</div></div></div>
-    <div class="day">Yesterday</div>
+    <div class="entry session"><button class="head"><span class="chev">▶</span><span class="time">08:40</span><span class="actor session">Session</span><span class="summary"><span class="game-link">Hades</span> ran for 48 min</span><span class="count">Steam</span></button><div class="details"><div class="why">From the session list (not stored twice). Edit sessions… to change it.</div></div></div>
+<div class="day">Yesterday</div>
     <div class="entry"><button class="head"><span class="chev">▶</span><span class="time">22:10</span><span class="actor user">You</span>
       <span class="summary">Removed 4 games from your library</span><span class="count">4 games</span></button>
       <div class="details"><div class="why">Names and store IDs are kept here so you can find them again.</div></div></div>
   </section>
 
-  <!-- 3. GLOBAL: SYSTEM -->
+  <!-- 4. GLOBAL: SYSTEM -->
   <section class="view" id="system">
     <div class="top">
       <div><h1>Activity</h1><div class="sub">What Questkeep and its plugins did behind the scenes</div></div>
@@ -245,7 +314,7 @@ table.diff td:first-child { color: var(--muted); width: 140px; }
       <div class="details"><div class="mono">No new permissions</div></div></div>
   </section>
 
-  <!-- 4. SETTINGS -->
+  <!-- 5. SETTINGS -->
   <section class="view" id="settings">
     <div class="set">
       <h1>Activity</h1>
