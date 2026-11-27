@@ -2,6 +2,14 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openPath as openerOpenPath } from "@tauri-apps/plugin-opener";
 import type { AccountStatus } from "../bindings/AccountStatus";
+import type { ActivityCursor } from "../bindings/ActivityCursor";
+import type { ActivityDetails } from "../bindings/ActivityDetails";
+import type { ActivityPage } from "../bindings/ActivityPage";
+import type { ActivityPart } from "../bindings/ActivityPart";
+import type { ActivityQuery } from "../bindings/ActivityQuery";
+import type { ActivityStats } from "../bindings/ActivityStats";
+import type { SystemPage } from "../bindings/SystemPage";
+import type { SystemQuery } from "../bindings/SystemQuery";
 import type { AccountWarning } from "../bindings/AccountWarning";
 import type { Achievements } from "../bindings/Achievements";
 import type { BackupImportCheck } from "../bindings/BackupImportCheck";
@@ -301,6 +309,24 @@ export const gameAchievements = (id: string) =>
   invoke<Achievements | null>("game_achievements", { id });
 /** Playtime per week for the last 12 weeks. */
 export const gameActivity = (id: string) => invoke<GameActivity>("game_activity", { id });
+/** A page of the activity log's library part (entries, batches, sessions), newest first. */
+export const activityPage = (query: ActivityQuery) =>
+  invoke<ActivityPage>("activity_page", { query });
+/** An entry with its field changes and its batch. */
+export const activityDetails = (entryId: number) =>
+  invoke<ActivityDetails>("activity_details", { entryId });
+/** The entries of a batch (a sync, a bulk change), newest first. */
+export const activityBatchEntries = (
+  batchId: number,
+  before: ActivityCursor | null = null,
+  limit = 50,
+) => invoke<ActivityPage>("activity_batch_entries", { batchId, before, limit });
+/** A page of the activity log's system part. */
+export const systemEvents = (query: SystemQuery) => invoke<SystemPage>("system_events", { query });
+/** How large the activity log is. */
+export const activityStats = () => invoke<ActivityStats>("activity_stats");
+/** Empties a part of the activity log (never the library itself). */
+export const clearActivity = (part: ActivityPart) => invoke<void>("clear_activity", { part });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");
 /** Messages the app queued for the UI (each returned once), e.g. after a second start. */
