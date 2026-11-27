@@ -89,6 +89,9 @@ fn send_combo(combo: &KeyCombo) -> bool {
         INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
         KEYEVENTF_KEYUP, SendInput, VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT,
     };
+    if combo.cmd {
+        return false; // the Mac key; parsing for Windows never sets it
+    }
     let input = |vk: u16, flags: KEYBD_EVENT_FLAGS| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
@@ -105,7 +108,7 @@ fn send_combo(combo: &KeyCombo) -> bool {
         (combo.ctrl, VK_CONTROL, 0),
         (combo.shift, VK_SHIFT, 0),
         (combo.alt, VK_MENU, 0),
-        (combo.meta, VK_LWIN, KEYEVENTF_EXTENDEDKEY),
+        (combo.super_key, VK_LWIN, KEYEVENTF_EXTENDEDKEY),
     ]
     .into_iter()
     .filter(|(on, _, _)| *on)

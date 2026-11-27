@@ -2687,7 +2687,7 @@ const KEYS_TIMEOUT: Duration = Duration::from_secs(20);
 /// Presses an add-game option's keys in its launcher on a background thread, once the launcher's
 /// window is in front (never in another program's window). Invalid keys are logged, not pressed.
 fn press_launcher_keys(store: String, keys: questkeep_store_api::model::LauncherKeys) {
-    let steps = match keys.parsed() {
+    let steps = match keys.parsed(questkeep_store_api::model::KeyPlatform::current()) {
         Ok(steps) => steps,
         Err(err) => {
             tracing::warn!(store, %err, "the add-game option's keys are not valid; none pressed");

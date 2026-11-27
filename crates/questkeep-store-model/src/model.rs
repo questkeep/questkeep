@@ -371,7 +371,7 @@ pub struct LauncherKeys {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct KeyStep {
-    /// A combination like `Ctrl+Shift+B`, `Alt+R` or `Enter` (see [`KeyCombo::parse`]).
+    /// A combination like `Mod+N`, `Ctrl+Shift+B`, `Alt+R` or `Enter` (see [`KeyCombo::parse`]).
     pub keys: String,
     /// Milliseconds to wait before pressing, at most [`LauncherKeys::MAX_DELAY_MS`].
     #[serde(default)]
@@ -410,9 +410,10 @@ impl LauncherKeys {
         self
     }
 
-    /// The steps as delays and parsed combinations, or what is wrong with them (an unknown key, a
-    /// wait over 5 seconds, no steps or too many).
-    pub fn parsed(&self) -> Result<Vec<(u32, KeyCombo)>, String> {
+    /// The steps as delays and combinations parsed for `platform`, or what is wrong with them (an
+    /// unknown key, a modifier that platform doesn't have, a wait over 5 seconds, no steps or too
+    /// many).
+    pub fn parsed(&self, platform: KeyPlatform) -> Result<Vec<(u32, KeyCombo)>, String> {
         if self.steps.is_empty() {
             return Err("no keys to press".into());
         }
@@ -429,20 +430,46 @@ impl LauncherKeys {
                         Self::MAX_DELAY_MS
                     ));
                 }
-                Ok((step.delay_ms, KeyCombo::parse(&step.keys)?))
+                Ok((step.delay_ms, KeyCombo::parse(&step.keys, platform)?))
             })
             .collect()
     }
 }
 
-/// A parsed key combination: modifiers plus one key.
+/// The operating system key combinations are parsed for: it decides what `Mod` means and which
+/// modifiers exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyPlatform {
+    Windows,
+    Linux,
+    MacOs,
+}
+
+impl KeyPlatform {
+    /// The system this code was compiled for (Linux for anything that isn't Windows or macOS,
+    /// such as a WASM plugin, which asks `system::platform()` instead).
+    pub fn current() -> Self {
+        if cfg!(windows) {
+            KeyPlatform::Windows
+        } else if cfg!(target_os = "macos") {
+            KeyPlatform::MacOs
+        } else {
+            KeyPlatform::Linux
+        }
+    }
+}
+
+/// A parsed key combination for one [`KeyPlatform`]: modifiers plus one key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyCombo {
     pub ctrl: bool,
     pub shift: bool,
+    /// Alt (Option on a Mac).
     pub alt: bool,
-    /// The Windows key (Super, Command).
-    pub meta: bool,
+    /// The Windows key (Super on Linux). Never set on macOS.
+    pub super_key: bool,
+    /// The Mac Command key. Only set on macOS.
+    pub cmd: bool,
     pub key: Key,
 }
 
@@ -473,20 +500,40 @@ pub enum Key {
 }
 
 impl KeyCombo {
-    /// Parses `Ctrl+Shift+B`: modifiers (`Ctrl`/`Control`, `Shift`, `Alt`, `Win`/`Super`/`Cmd`/
-    /// `Command`/`Meta`), then exactly one key: a letter, a digit, `F1`–`F24`, `Enter`, `Tab`,
-    /// `Esc`, `Space`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown` or an
-    /// arrow (`Up`, `Down`, `Left`, `Right`). Case and spaces around `+` don't matter.
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let (mut ctrl, mut shift, mut alt, mut meta) = (false, false, false, false);
+    /// Parses `Mod+Shift+B` for `platform`: modifiers, then exactly one key. Case and spaces
+    /// around `+` don't matter.
+    ///
+    /// - Modifiers: `Mod` (Ctrl on Windows and Linux, Cmd on macOS: the key most shortcuts use),
+    ///   `Ctrl`/`Control`, `Shift`, `Alt`/`Option`, `Win`/`Super` (Windows and Linux only) and
+    ///   `Cmd`/`Command` (macOS only). A modifier the platform doesn't have is an error, so a
+    ///   shortcut meant for one system is never pressed as something else on another.
+    /// - Keys: a letter, a digit, `F1`–`F24`, `Enter`, `Tab`, `Esc`, `Space`, `Backspace`,
+    ///   `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown` or an arrow (`Up`, `Down`,
+    ///   `Left`, `Right`).
+    pub fn parse(text: &str, platform: KeyPlatform) -> Result<Self, String> {
+        let mac = platform == KeyPlatform::MacOs;
+        let (mut ctrl, mut shift, mut alt, mut super_key, mut cmd) =
+            (false, false, false, false, false);
         let mut key = None;
         for part in text.split('+').map(str::trim) {
             let lower = part.to_ascii_lowercase();
             let modifier = match lower.as_str() {
-                "ctrl" | "control" => Some(&mut ctrl),
+                "mod" if mac => Some(&mut cmd),
+                "mod" | "ctrl" | "control" => Some(&mut ctrl),
                 "shift" => Some(&mut shift),
-                "alt" => Some(&mut alt),
-                "win" | "windows" | "super" | "cmd" | "command" | "meta" => Some(&mut meta),
+                "alt" | "option" => Some(&mut alt),
+                "win" | "windows" | "super" if mac => {
+                    return Err(format!(
+                        "\"{text}\": macOS has no {part} key (Mod is Cmd there)"
+                    ));
+                }
+                "win" | "windows" | "super" => Some(&mut super_key),
+                "cmd" | "command" if mac => Some(&mut cmd),
+                "cmd" | "command" => {
+                    return Err(format!(
+                        "\"{text}\": {part} is the Mac key; Mod is Ctrl on Windows and Linux"
+                    ));
+                }
                 _ => None,
             };
             if let Some(flag) = modifier {
@@ -505,7 +552,8 @@ impl KeyCombo {
             ctrl,
             shift,
             alt,
-            meta,
+            super_key,
+            cmd,
             key: key.ok_or_else(|| format!("\"{text}\" has no key"))?,
         })
     }
@@ -591,14 +639,19 @@ mod add_game_option_tests {
 
     #[test]
     fn key_combos_parse_modifiers_and_one_key() {
-        let combo = KeyCombo::parse("Ctrl + Shift+b").unwrap();
-        assert!(combo.ctrl && combo.shift && !combo.alt && !combo.meta);
+        use KeyPlatform::{Linux, MacOs, Windows};
+        let combo = KeyCombo::parse("Ctrl + Shift+b", Windows).unwrap();
+        assert!(combo.ctrl && combo.shift && !combo.alt && !combo.super_key && !combo.cmd);
         assert_eq!(combo.key, Key::Letter('B'));
-        let combo = KeyCombo::parse("cmd+alt+F12").unwrap();
-        assert!(combo.meta && combo.alt && !combo.ctrl);
+        let combo = KeyCombo::parse("super+alt+F12", Linux).unwrap();
+        assert!(combo.super_key && combo.alt && !combo.ctrl);
         assert_eq!(combo.key, Key::Function(12));
-        assert_eq!(KeyCombo::parse("Enter").unwrap().key, Key::Enter);
-        assert_eq!(KeyCombo::parse("Win+7").unwrap().key, Key::Digit('7'));
+        assert_eq!(KeyCombo::parse("Enter", MacOs).unwrap().key, Key::Enter);
+        assert_eq!(
+            KeyCombo::parse("Win+7", Windows).unwrap().key,
+            Key::Digit('7')
+        );
+        assert!(KeyCombo::parse("Option+X", MacOs).unwrap().alt);
         for bad in [
             "",
             "Ctrl",
@@ -609,9 +662,35 @@ mod add_game_option_tests {
             "F0",
             "Ctrl+Plus",
             "Hyper+A",
+            "Meta+A",
         ] {
-            assert!(KeyCombo::parse(bad).is_err(), "{bad} must not parse");
+            assert!(
+                KeyCombo::parse(bad, Windows).is_err(),
+                "{bad} must not parse"
+            );
         }
+    }
+
+    #[test]
+    fn mod_is_the_shortcut_key_of_each_platform() {
+        use KeyPlatform::{Linux, MacOs, Windows};
+        for platform in [Windows, Linux] {
+            let combo = KeyCombo::parse("Mod+N", platform).unwrap();
+            assert!(combo.ctrl && !combo.cmd, "{platform:?}");
+            assert!(
+                KeyCombo::parse("Cmd+N", platform).is_err(),
+                "Cmd is Mac only"
+            );
+        }
+        let combo = KeyCombo::parse("Mod+N", MacOs).unwrap();
+        assert!(combo.cmd && !combo.ctrl);
+        assert_eq!(KeyCombo::parse("Command+N", MacOs).unwrap(), combo);
+        assert!(
+            KeyCombo::parse("Ctrl+N", MacOs).unwrap().ctrl,
+            "the Control key"
+        );
+        assert!(KeyCombo::parse("Win+N", MacOs).is_err());
+        assert!(KeyCombo::parse("Super+N", MacOs).is_err());
     }
 
     #[test]
@@ -623,7 +702,7 @@ mod add_game_option_tests {
             .wait_ms(2000)
             .press("Alt+R");
         assert_eq!(
-            keys.parsed()
+            keys.parsed(KeyPlatform::Windows)
                 .unwrap()
                 .iter()
                 .map(|s| s.0)
@@ -632,17 +711,22 @@ mod add_game_option_tests {
             "waits add up"
         );
         let wait = |ms| LauncherKeys::new("a.exe", "A").wait_ms(ms).press("A");
-        assert!(wait(5001).parsed().is_err());
-        assert!(LauncherKeys::new("a.exe", "A").parsed().is_err(), "no keys");
+        assert!(wait(5001).parsed(KeyPlatform::Windows).is_err());
+        assert!(
+            LauncherKeys::new("a.exe", "A")
+                .parsed(KeyPlatform::Windows)
+                .is_err(),
+            "no keys"
+        );
         assert!(
             LauncherKeys::new("a.exe", "A")
                 .press("Ctrl+?")
-                .parsed()
+                .parsed(KeyPlatform::Windows)
                 .is_err()
         );
         let many = (0..=LauncherKeys::MAX_STEPS)
             .fold(LauncherKeys::new("a.exe", "A"), |keys, _| keys.press("A"));
-        assert!(many.parsed().is_err());
+        assert!(many.parsed(KeyPlatform::Windows).is_err());
     }
 
     #[test]

@@ -5,7 +5,7 @@
  */
 export type KeyStep = { 
 /**
- * A combination like `Ctrl+Shift+B`, `Alt+R` or `Enter` (see [`KeyCombo::parse`]).
+ * A combination like `Mod+N`, `Ctrl+Shift+B`, `Alt+R` or `Enter` (see [`KeyCombo::parse`]).
  */
 keys: string, 
 /**
