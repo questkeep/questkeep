@@ -105,6 +105,8 @@ pub struct Settings {
     /// Built-in stores that moved to a plugin whose "now a plugin" notice was already posted
     /// (store ids), so it shows once.
     pub moved_store_notices: Vec<String>,
+    /// How much of the activity log is kept.
+    pub activity: crate::activity::ActivitySettings,
 }
 
 /// What the start page shows (each part can be switched off, up to an empty page).
@@ -363,6 +365,7 @@ impl Default for Settings {
             tray: TraySettings::default(),
             start_page: StartPageSettings::default(),
             moved_store_notices: Vec::new(),
+            activity: crate::activity::ActivitySettings::default(),
         }
     }
 }
@@ -736,6 +739,11 @@ mod tests {
                 recently_added: false,
             },
             moved_store_notices: vec!["prism".into()],
+            activity: crate::activity::ActivitySettings {
+                library_max_mb: 20,
+                system_days: 7,
+                record_plugin_requests: false,
+            },
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

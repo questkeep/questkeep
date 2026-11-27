@@ -67,6 +67,7 @@ impl Database {
 
     /// Writes a profile row (insert or replace).
     pub fn save_profile(&self, row: &ProfileRow) -> Result<()> {
+        self.check_recorded("save_profile");
         let action = row.action.as_ref().map(serde_json::to_string).transpose()?;
         self.conn().execute(
             "INSERT INTO launch_profiles (id, entry_id, copy_id, name, args, action, position) \
@@ -95,6 +96,7 @@ impl Database {
         removed: &[Uuid],
         default: Option<Uuid>,
     ) -> Result<()> {
+        self.check_recorded("replace_profiles");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         for id in removed {
@@ -131,6 +133,7 @@ impl Database {
 
     /// Deletes an own profile; a copy's profile only loses its changes.
     pub fn delete_profile(&self, id: Uuid) -> Result<()> {
+        self.check_recorded("delete_profile");
         self.conn().execute(
             "DELETE FROM launch_profiles WHERE id = ?1",
             [id.to_string()],
@@ -159,6 +162,7 @@ impl Database {
     }
 
     pub fn set_default_profile(&self, entry_id: Uuid, profile: Option<Uuid>) -> Result<()> {
+        self.check_recorded("set_default_profile");
         self.conn().execute(
             "UPDATE games SET default_profile = ?2 WHERE id = ?1",
             params![entry_id.to_string(), profile.map(|p| p.to_string())],
@@ -181,6 +185,7 @@ impl Database {
 
     /// Sets (or with `None` drops) the user's own sorting name.
     pub fn set_user_sorting_name(&self, id: Uuid, name: Option<&str>) -> Result<()> {
+        self.check_recorded("set_user_sorting_name");
         let name = name.map(str::trim).filter(|n| !n.is_empty());
         let conn = self.conn();
         let game_name: String = conn
@@ -206,6 +211,7 @@ impl Database {
         score: Option<u8>,
         notes: Option<&str>,
     ) -> Result<()> {
+        self.check_recorded("set_user_score_and_notes");
         if score.is_some_and(|s| s > 100) {
             return Err(CoreError::Invalid("A score goes from 0 to 100.".into()));
         }

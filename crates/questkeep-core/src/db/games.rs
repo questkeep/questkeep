@@ -567,6 +567,7 @@ fn action_json(action: Option<&PlayAction>) -> Result<Option<String>> {
 impl Database {
     /// Inserts a new game and returns it.
     pub fn insert_game(&self, record: &NewGameRecord, now: DateTime<Utc>) -> Result<Game> {
+        self.check_recorded("insert_game");
         let id = Uuid::new_v4();
         self.conn().execute(
             "INSERT INTO games (id, name, sorting_name, search_key, source, source_game_id, \
@@ -717,6 +718,7 @@ impl Database {
 
     /// Applies a partial update and returns the updated game.
     pub fn update_game(&self, id: Uuid, update: &GameUpdate) -> Result<Game> {
+        self.check_recorded("update_game");
         let current = self.get_game(id)?;
         {
             let mut conn = self.conn();
@@ -809,6 +811,7 @@ impl Database {
 
     /// Sets (or clears) the cover path, stored relative to the data dir.
     pub fn set_cover_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        self.check_recorded("set_cover_path");
         let changed = self.conn().execute(
             "UPDATE games SET cover_path = ?2 WHERE id = ?1",
             params![id.to_string(), relative],
@@ -859,6 +862,7 @@ impl Database {
 
     /// Sets (or clears) the icon path, stored relative to the data dir.
     pub fn set_icon_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        self.check_recorded("set_icon_path");
         let changed = self.conn().execute(
             "UPDATE games SET icon_path = ?2 WHERE id = ?1",
             params![id.to_string(), relative],
@@ -870,6 +874,7 @@ impl Database {
     }
 
     pub fn delete_game(&self, id: Uuid) -> Result<()> {
+        self.check_recorded("delete_game");
         let changed = self
             .conn()
             .execute("DELETE FROM games WHERE id = ?1", [id.to_string()])?;
@@ -891,6 +896,7 @@ impl Database {
         games: &[ImportedGame],
         now: DateTime<Utc>,
     ) -> Result<ScanSummary> {
+        self.check_recorded("upsert_imported");
         struct Existing {
             id: String,
             name: String,
@@ -1063,6 +1069,7 @@ impl Database {
 
     /// Sets (or clears) the background path, stored relative to the data dir.
     pub fn set_background_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        self.check_recorded("set_background_path");
         let changed = self.conn().execute(
             "UPDATE games SET background_path = ?2 WHERE id = ?1",
             params![id.to_string(), relative],
@@ -1109,6 +1116,7 @@ impl Database {
 
     /// Removes what one source said about a game row (an unlinked store or IGDB game).
     pub fn delete_source_metadata(&self, game_id: Uuid, source: &str) -> Result<()> {
+        self.check_recorded("delete_source_metadata");
         self.conn().execute(
             "DELETE FROM metadata_sources WHERE game_id = ?1 AND source = ?2",
             rusqlite::params![game_id.to_string(), source],
@@ -1200,6 +1208,7 @@ impl Database {
     /// (copies combined into it drop theirs). Sessions played later add to it, and a store total
     /// larger than it raises it again at the next sync (so 0 plus a sync resets to the store).
     pub fn set_user_playtime(&self, entry_id: Uuid, seconds: u64) -> Result<()> {
+        self.check_recorded("set_user_playtime");
         let seconds = i64::try_from(seconds).unwrap_or(i64::MAX);
         let changed = self.conn().execute(
             "UPDATE games SET playtime_seconds = CASE WHEN id = ?1 THEN ?2 ELSE 0 END \

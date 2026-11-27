@@ -41,6 +41,11 @@ pub trait LibraryProvider: Send + Sync {
     fn name(&self) -> &str;
     /// The store's logo: a complete monochrome `<svg>` drawn with `currentColor`.
     fn icon_svg(&self) -> &str;
+    /// The plugin that brings this store (`None` for built-in stores); the activity log names it
+    /// as the one who synced.
+    fn plugin_id(&self) -> Option<&str> {
+        None
+    }
     /// Whether [`scan_installed`](Self::scan_installed) is meaningful for this provider.
     fn can_scan(&self) -> bool {
         true

@@ -956,6 +956,10 @@ impl LibraryProvider for WasmProvider {
         &self.icon
     }
 
+    fn plugin_id(&self) -> Option<&str> {
+        Some(&self.sandbox.plugin_id)
+    }
+
     fn can_scan(&self) -> bool {
         self.described().can_scan
     }

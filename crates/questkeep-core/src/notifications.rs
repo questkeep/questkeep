@@ -247,12 +247,25 @@ impl Notifications {
             read: false,
         };
         match notification.level {
-            NotificationLevel::Error => {
-                tracing::warn!(message = %notification.message, "error notification")
-            }
-            NotificationLevel::Warning => {
-                tracing::info!(message = %notification.message, "warning notification")
-            }
+            // Errors and warnings also go to the System part of the activity log.
+            NotificationLevel::Error => tracing::error!(
+                target: "activity",
+                source = "app",
+                kind = "notification",
+                title = %notification.title,
+                from = ?notification.source,
+                "{}",
+                notification.message
+            ),
+            NotificationLevel::Warning => tracing::warn!(
+                target: "activity",
+                source = "app",
+                kind = "notification",
+                title = %notification.title,
+                from = ?notification.source,
+                "{}",
+                notification.message
+            ),
             NotificationLevel::Info => {
                 tracing::info!(message = %notification.message, "notification")
             }

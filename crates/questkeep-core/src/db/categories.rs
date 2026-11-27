@@ -239,6 +239,7 @@ impl Database {
     /// Creates a category at the end of the list, or returns the existing one with the same
     /// name (ignoring case).
     pub fn create_category(&self, name: &str) -> Result<Category> {
+        self.check_recorded("create_category");
         let name = clean_name(name)?;
         let id = {
             let mut conn = self.conn();
@@ -252,6 +253,7 @@ impl Database {
 
     /// Renames a category. Store categories mapped to it stay mapped.
     pub fn rename_category(&self, id: &str, name: &str) -> Result<Category> {
+        self.check_recorded("rename_category");
         let name = clean_name(name)?;
         {
             let mut conn = self.conn();
@@ -277,6 +279,7 @@ impl Database {
 
     /// Sets or clears the filter of an auto category. Its search text never counts.
     pub fn set_category_filter(&self, id: &str, filter: Option<&GameQuery>) -> Result<()> {
+        self.check_recorded("set_category_filter");
         let json = filter
             .map(|f| {
                 let mut f = f.clone();
@@ -299,6 +302,7 @@ impl Database {
     /// when `None`). Games that have it already, or that the user took it off, are left alone.
     /// Returns the games that got a category.
     pub fn apply_auto_categories(&self, only: Option<&[Uuid]>) -> Result<Vec<Uuid>> {
+        self.check_recorded("apply_auto_categories");
         if only.is_some_and(<[Uuid]>::is_empty) {
             return Ok(Vec::new());
         }
@@ -380,6 +384,7 @@ impl Database {
     /// Merges `from` into `into`: its games and store categories move over, then `from` is
     /// deleted. Returns the games whose categories changed.
     pub fn merge_categories(&self, from: &str, into: &str) -> Result<Vec<Uuid>> {
+        self.check_recorded("merge_categories");
         if from == into {
             return Err(CoreError::Invalid(
                 "A category can't be merged into itself.".into(),
@@ -422,6 +427,7 @@ impl Database {
         source: &str,
         name: &str,
     ) -> Result<(String, Vec<Uuid>)> {
+        self.check_recorded("separate_category_source");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let name: String = tx
@@ -462,6 +468,7 @@ impl Database {
     /// Deletes a category, its links and its store mappings; the games stay. A store that
     /// still has the category brings it back on its next sync.
     pub fn delete_category(&self, id: &str) -> Result<()> {
+        self.check_recorded("delete_category");
         let changed = self
             .conn()
             .execute("DELETE FROM categories WHERE id = ?1", [id])?;
@@ -474,6 +481,7 @@ impl Database {
     /// Gives a game exactly these categories. Taking off an imported category is remembered,
     /// so the store's next sync doesn't bring it back.
     pub fn set_game_categories(&self, game_id: Uuid, category_ids: &[String]) -> Result<()> {
+        self.check_recorded("set_game_categories");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         set_categories(&tx, game_id, category_ids)?;
@@ -491,6 +499,7 @@ impl Database {
         source: &str,
         by_game: &HashMap<String, Vec<String>>,
     ) -> Result<Vec<Uuid>> {
+        self.check_recorded("sync_imported_categories");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
 

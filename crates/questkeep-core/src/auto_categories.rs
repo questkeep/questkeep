@@ -8,6 +8,7 @@ use std::sync::mpsc;
 
 use uuid::Uuid;
 
+use crate::activity::{Actor, Change, EntryKind, reason};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus, WeakEventBus};
 
@@ -37,7 +38,9 @@ fn run(db: &Database, bus: &WeakEventBus, receiver: &mpsc::Receiver<Vec<Uuid>>) 
             ids.extend(more);
         }
         let ids: Vec<Uuid> = ids.into_iter().collect();
-        match db.apply_auto_categories(Some(&ids)) {
+        let change = Change::new(Actor::app(), reason::AUTO_CATEGORIES).kind(EntryKind::Categories);
+        let applied = db.record_group(&change, &ids, || db.apply_auto_categories(Some(&ids)));
+        match applied {
             Ok(changed) if !changed.is_empty() => {
                 tracing::info!(games = changed.len(), "gave games their auto categories");
                 bus.publish(CoreEvent::CategoriesChanged);

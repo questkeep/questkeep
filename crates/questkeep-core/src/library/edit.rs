@@ -5,6 +5,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use super::Library;
+use crate::activity::{Change, EntryKind, reason};
 use crate::db::ProfileRow;
 use crate::error::{CoreError, Result};
 use crate::events::CoreEvent;
@@ -21,6 +22,11 @@ use crate::providers::ImageCandidate;
 
 /// Icon size requested from Windows for executables and DLLs the user picks.
 const PICKED_ICON_SIZE: u32 = 48;
+
+/// The change of the launch profile commands.
+fn profiles_change() -> Change {
+    Change::by_caller(reason::LAUNCH_PROFILES).kind(EntryKind::Profiles)
+}
 
 fn kind_of(slot: ImageSlot) -> ImageKind {
     match slot {
@@ -124,30 +130,34 @@ impl Library {
                 )));
             }
         }
-        self.db.set_user_edits(entry, &user)?;
-        self.resolver.resolve(entry)?;
-        self.db
-            .set_user_sorting_name(entry, edits.sorting_name.as_deref())?;
-        self.db
-            .set_user_score_and_notes(entry, edits.user_score, edits.notes.as_deref())?;
-        let game = self.db.get_entry(entry)?;
-        if let Some(seconds) = edits.playtime_seconds
-            && seconds != game.playtime_seconds
-        {
-            self.db.set_user_playtime(entry, seconds)?;
-        }
-        let metadata_name = trimmed(edits.metadata_name.as_deref());
-        if metadata_name != game.metadata_name() {
-            self.db.set_extra_value(
-                entry,
-                crate::model::METADATA_NAME_KEY,
-                metadata_name.map(serde_json::Value::String),
-            )?;
-            // Searches by the old name that found nothing are tried again with the new one.
-            for key in crate::images::lookup_markers() {
-                self.db.set_extra_value(entry, key, None)?;
+        let change = Change::by_caller(reason::EDIT).kind(EntryKind::Edit);
+        self.db.record(&change, &[entry], || {
+            self.db.set_user_edits(entry, &user)?;
+            self.resolver.resolve(entry)?;
+            self.db
+                .set_user_sorting_name(entry, edits.sorting_name.as_deref())?;
+            self.db
+                .set_user_score_and_notes(entry, edits.user_score, edits.notes.as_deref())?;
+            let game = self.db.get_entry(entry)?;
+            if let Some(seconds) = edits.playtime_seconds
+                && seconds != game.playtime_seconds
+            {
+                self.db.set_user_playtime(entry, seconds)?;
             }
-        }
+            let metadata_name = trimmed(edits.metadata_name.as_deref());
+            if metadata_name != game.metadata_name() {
+                self.db.set_extra_value(
+                    entry,
+                    crate::model::METADATA_NAME_KEY,
+                    metadata_name.map(serde_json::Value::String),
+                )?;
+                // Searches by the old name that found nothing are tried again with the new one.
+                for key in crate::images::lookup_markers() {
+                    self.db.set_extra_value(entry, key, None)?;
+                }
+            }
+            Ok(())
+        })?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         self.get_game(entry)
@@ -209,27 +219,31 @@ impl Library {
         ext: &str,
         bytes: &[u8],
     ) -> Result<Game> {
-        let relative = self.images.store_image(kind, entry, ext, bytes)?;
-        match kind {
-            ImageKind::Cover => self.db.set_cover_path(entry, Some(&relative))?,
-            ImageKind::Background => self.db.set_background_path(entry, Some(&relative))?,
-            ImageKind::Icon => {
-                self.db.set_icon_path(entry, Some(&relative))?;
-                self.db
-                    .set_extra_value(entry, crate::images::ICON_FROM_COVER_KEY, None)?;
+        let change = Change::by_caller(reason::EDIT).kind(EntryKind::Images);
+        self.db.record(&change, &[entry], || {
+            let relative = self.images.store_image(kind, entry, ext, bytes)?;
+            match kind {
+                ImageKind::Cover => self.db.set_cover_path(entry, Some(&relative))?,
+                ImageKind::Background => self.db.set_background_path(entry, Some(&relative))?,
+                ImageKind::Icon => {
+                    self.db.set_icon_path(entry, Some(&relative))?;
+                    self.db
+                        .set_extra_value(entry, crate::images::ICON_FROM_COVER_KEY, None)?;
+                }
             }
-        }
-        self.db.set_extra_value(
-            entry,
-            user_image_key(kind),
-            Some(serde_json::Value::Bool(true)),
-        )?;
-        if kind == ImageKind::Cover {
-            let game = self.db.get_game(entry)?;
-            if let Err(err) = crate::images::drop_cover_icon(&self.db, &self.images, &game) {
-                tracing::warn!(%err, %entry, "could not drop the icon made from the old cover");
+            self.db.set_extra_value(
+                entry,
+                user_image_key(kind),
+                Some(serde_json::Value::Bool(true)),
+            )?;
+            if kind == ImageKind::Cover {
+                let game = self.db.get_game(entry)?;
+                if let Err(err) = crate::images::drop_cover_icon(&self.db, &self.images, &game) {
+                    tracing::warn!(%err, %entry, "could not drop the icon made from the old cover");
+                }
             }
-        }
+            Ok(())
+        })?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         self.get_game(entry)
@@ -240,15 +254,17 @@ impl Library {
     pub fn remove_user_image(&self, id: Uuid, slot: ImageSlot) -> Result<Game> {
         let entry = self.db.entry_of(id)?;
         let kind = kind_of(slot);
-        self.images.remove_image(kind, entry)?;
-        match kind {
-            ImageKind::Cover => self.db.set_cover_path(entry, None)?,
-            ImageKind::Background => self.db.set_background_path(entry, None)?,
-            ImageKind::Icon => self.db.set_icon_path(entry, None)?,
-        }
-        let marker = (kind != ImageKind::Icon).then_some(serde_json::Value::Bool(true));
-        self.db
-            .set_extra_value(entry, user_image_key(kind), marker)?;
+        let change = Change::by_caller(reason::EDIT).kind(EntryKind::Images);
+        self.db.record(&change, &[entry], || {
+            self.images.remove_image(kind, entry)?;
+            match kind {
+                ImageKind::Cover => self.db.set_cover_path(entry, None)?,
+                ImageKind::Background => self.db.set_background_path(entry, None)?,
+                ImageKind::Icon => self.db.set_icon_path(entry, None)?,
+            }
+            let marker = (kind != ImageKind::Icon).then_some(serde_json::Value::Bool(true));
+            self.db.set_extra_value(entry, user_image_key(kind), marker)
+        })?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         self.get_game(entry)
@@ -547,7 +563,8 @@ impl Library {
                     .into(),
             ));
         }
-        self.db.save_profile(&row)?;
+        self.db
+            .record(&profiles_change(), &[entry], || self.db.save_profile(&row))?;
         self.profiles_changed(entry)
     }
 
@@ -650,7 +667,9 @@ impl Library {
             .map(|p| p.id)
             .collect();
         let default = draft.default_id.filter(|d| rows.iter().any(|r| r.id == *d));
-        self.db.replace_profiles(entry, &rows, &removed, default)?;
+        self.db.record(&profiles_change(), &[entry], || {
+            self.db.replace_profiles(entry, &rows, &removed, default)
+        })?;
         self.profiles_changed(entry)
     }
 
@@ -670,7 +689,9 @@ impl Library {
         if !current.profiles.iter().any(|p| p.id == profile) {
             return Err(CoreError::Invalid("That launch profile is gone.".into()));
         }
-        self.db.delete_profile(profile)?;
+        self.db.record(&profiles_change(), &[entry], || {
+            self.db.delete_profile(profile)
+        })?;
         self.profiles_changed(entry)
     }
 
@@ -691,6 +712,7 @@ impl Library {
                 .filter(|id| !order.contains(id)),
         );
         let rows = self.db.profile_rows(entry)?;
+        let _order = crate::activity::Scope::enter(); // the order is not shown in the log
         for (position, pid) in ids.iter().enumerate() {
             let Some(profile) = current.profiles.iter().find(|p| p.id == *pid) else {
                 continue;
@@ -732,7 +754,9 @@ impl Library {
         {
             return Err(CoreError::Invalid("That launch profile is gone.".into()));
         }
-        self.db.set_default_profile(entry, profile)?;
+        self.db.record(&profiles_change(), &[entry], || {
+            self.db.set_default_profile(entry, profile)
+        })?;
         self.profiles_changed(entry)
     }
 
@@ -873,6 +897,8 @@ mod tests {
     #[test]
     fn edits_survive_and_go_back_to_automatic() {
         let (_tmp, lib, id) = library();
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let igdb = GameMetadata {
             description: Some("From IGDB".into()),
             tags: vec!["Roguelike".into()],
@@ -958,7 +984,10 @@ mod tests {
                 cover_image: None,
             })
             .unwrap();
-        lib.db.combine_games(id, &[other.id]).unwrap();
+        let change = Change::new(crate::activity::Actor::user(), reason::COMBINE);
+        lib.db
+            .record(&change, &[id], || lib.db.combine_games(id, &[other.id]))
+            .unwrap();
         let game = lib.get_game(id).unwrap();
         let qualifiers: Vec<_> = game.copies.iter().map(|c| c.qualifier.clone()).collect();
         assert_eq!(

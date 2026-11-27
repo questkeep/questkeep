@@ -63,6 +63,16 @@ impl DataPaths {
         self.root.join("library.sqlite")
     }
 
+    /// The activity log (see [`crate::activity`]).
+    pub fn activity_file(&self) -> PathBuf {
+        self.root.join(crate::activity::FILE_NAME)
+    }
+
+    /// Left by a restore for the first start after it: when the restored backup was made.
+    pub fn restored_marker(&self) -> PathBuf {
+        self.root.join("restored-backup.json")
+    }
+
     pub fn images_dir(&self) -> PathBuf {
         self.root.join("images")
     }

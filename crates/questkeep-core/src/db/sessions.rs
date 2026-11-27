@@ -58,7 +58,12 @@ impl Database {
             conn.last_insert_rowid()
         };
         // The first start moves a new game to the "played" status (if the user keeps that rule).
-        self.apply_first_start(game_id)?;
+        let change = crate::activity::Change::new(
+            crate::activity::Actor::app(),
+            crate::activity::reason::FIRST_START,
+        )
+        .kind(crate::activity::EntryKind::Status);
+        self.record(&change, &[game_id], || self.apply_first_start(game_id))?;
         Ok(id)
     }
 
@@ -174,6 +179,39 @@ impl Database {
         Ok(sessions)
     }
 
+    /// A finished session and the game row it ran under.
+    pub fn finished_session_by_id(&self, session_id: i64) -> Result<Option<(Uuid, GameSession)>> {
+        let row = self
+            .conn()
+            .query_row(
+                "SELECT game_id, started_at, ended_at, duration_seconds FROM play_sessions \
+                 WHERE id = ?1 AND ended_at IS NOT NULL",
+                [session_id],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, DateTime<Utc>>(1)?,
+                        r.get::<_, DateTime<Utc>>(2)?,
+                        r.get::<_, Option<i64>>(3)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((game, started_at, ended_at, credited)) = row else {
+            return Ok(None);
+        };
+        let credited = credited.unwrap_or_else(|| (ended_at - started_at).num_seconds());
+        Ok(Some((
+            parse_game_id(&game)?,
+            GameSession {
+                id: session_id,
+                started_at,
+                ended_at,
+                duration_seconds: u64::try_from(credited).unwrap_or_default(),
+            },
+        )))
+    }
+
     /// Adds a finished session to a game (its playtime and play count grow, last played moves
     /// up when the session is newer).
     pub fn add_session(
@@ -182,6 +220,7 @@ impl Database {
         started_at: DateTime<Utc>,
         duration_seconds: u64,
     ) -> Result<i64> {
+        self.check_recorded("add_session");
         let ended_at = session_end(started_at, duration_seconds)?;
         let duration = to_i64(duration_seconds);
         let mut conn = self.conn();
@@ -209,6 +248,7 @@ impl Database {
         started_at: DateTime<Utc>,
         duration_seconds: u64,
     ) -> Result<Uuid> {
+        self.check_recorded("update_session");
         let ended_at = session_end(started_at, duration_seconds)?;
         let duration = to_i64(duration_seconds);
         let mut conn = self.conn();
@@ -230,6 +270,7 @@ impl Database {
 
     /// Deletes a finished session and takes its time and its play count off the game.
     pub fn delete_session(&self, session_id: i64) -> Result<Uuid> {
+        self.check_recorded("delete_session");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let (game_id, before) = finished_session(&tx, session_id)?;

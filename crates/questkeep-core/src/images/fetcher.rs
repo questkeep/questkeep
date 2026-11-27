@@ -23,6 +23,7 @@ use super::hltb::Hltb;
 use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
+use crate::activity::{Actor, ActorKind, RunBatches, reason};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus, WorkQueue};
 use crate::metadata::MetadataResolver;
@@ -59,11 +60,13 @@ impl PendingJobs {
         }
     }
 
-    fn finished(&self, events: &EventBus) {
-        self.update(events, |count| count.saturating_sub(1));
+    /// One job ended; true when the queue is empty now.
+    fn finished(&self, events: &EventBus) -> bool {
+        self.update(events, |count| count.saturating_sub(1)) == 0
     }
 
-    fn update(&self, events: &EventBus, change: impl FnOnce(usize) -> usize) {
+    /// Applies `change` to the count and returns the new count.
+    fn update(&self, events: &EventBus, change: impl FnOnce(usize) -> usize) -> usize {
         let pending = {
             let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
             let (before, last) = *state;
@@ -72,8 +75,9 @@ impl PendingJobs {
             let due =
                 now > before || now == 0 || last.is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL);
             *state = (now, if due { Some(Instant::now()) } else { last });
-            due.then_some(now)
+            (now, due.then_some(now))
         };
+        let (now, pending) = pending;
         // Published outside the lock: subscribers may take a while.
         if let Some(pending) = pending {
             events.publish(CoreEvent::BackgroundWork {
@@ -81,6 +85,7 @@ impl PendingJobs {
                 pending: u32::try_from(pending).unwrap_or(u32::MAX),
             });
         }
+        now
     }
 }
 
@@ -94,6 +99,8 @@ pub struct CoverJob {
     /// Replace existing artwork with SteamGridDB's (cover and background), ignoring the
     /// provider, the "checked" marker and the once-per-run limit. Used for manual re-fetching.
     pub force: bool,
+    /// Who asked for it (the activity log's actor); Questkeep for automatic jobs.
+    pub by: crate::activity::Actor,
 }
 
 struct Shared {
@@ -106,6 +113,8 @@ struct Shared {
     /// Games already attempted in this run, so failures aren't retried in a loop.
     attempted: Mutex<HashSet<Uuid>>,
     pending: PendingJobs,
+    /// The activity batches of the current run of the queue.
+    runs: RunBatches,
 }
 
 /// Owns the worker threads. Dropping it closes the queue; workers finish their current job and
@@ -134,6 +143,7 @@ impl CoverFetcher {
             http,
             attempted: Mutex::new(HashSet::new()),
             pending: PendingJobs::new(WorkQueue::Covers),
+            runs: RunBatches::default(),
         });
         let (sender, receiver) = mpsc::channel::<CoverJob>();
         let receiver = Arc::new(Mutex::new(receiver));
@@ -215,8 +225,19 @@ fn worker(shared: &Shared, receiver: &Mutex<Receiver<CoverJob>>) {
         let Ok(job) = job else {
             return; // queue closed
         };
-        process(shared, &job);
-        shared.pending.finished(&shared.events);
+        let reason = if job.force {
+            reason::ARTWORK_REFETCH
+        } else {
+            reason::ARTWORK_FETCH
+        };
+        let change = shared.runs.change(&shared.db, job.by.clone(), reason);
+        let _ = shared.db.record(&change, &[job.game_id], || {
+            process(shared, &job);
+            Ok(())
+        });
+        if shared.pending.finished(&shared.events) {
+            shared.runs.finish_all(&shared.db);
+        }
     }
 }
 
@@ -386,6 +407,8 @@ pub struct MetadataJob {
     /// Ask every site again (a manual refresh). Automatic jobs skip the sites that already
     /// answered for the game, whether they found something or not.
     pub force: bool,
+    /// Who asked for it (the activity log's actor); Questkeep for automatic jobs.
+    pub by: crate::activity::Actor,
 }
 
 struct MetadataShared {
@@ -406,6 +429,8 @@ struct MetadataShared {
     /// game without a cover is forgotten, so it is retried once the cover exists.
     icons_seen: Mutex<HashSet<Uuid>>,
     pending: PendingJobs,
+    /// The activity batches of the current run of the queue.
+    runs: RunBatches,
 }
 
 /// Work of the metadata worker.
@@ -450,6 +475,7 @@ impl MetadataFetcher {
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
             pending: PendingJobs::new(WorkQueue::Details),
+            runs: RunBatches::default(),
         });
         let (sender, receiver) = mpsc::channel::<Job>();
         let worker_shared = shared.clone();
@@ -540,16 +566,36 @@ fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
     let mut last_request: Option<Instant> = None;
     while let Ok(job) = receiver.recv() {
         match job {
-            Job::Metadata(job) => process_metadata(shared, &job, &mut last_request),
+            Job::Metadata(job) => {
+                let reason = if job.by.kind == ActorKind::App {
+                    reason::METADATA_FETCH
+                } else {
+                    reason::METADATA_REFRESH
+                };
+                let change = shared.runs.change(&shared.db, job.by.clone(), reason);
+                let _ = shared.db.record(&change, &[job.game_id], || {
+                    process_metadata(shared, &job, &mut last_request);
+                    Ok(())
+                });
+            }
             Job::Icon(id) => {
-                if fetch_icon(shared, id) {
+                let change = shared
+                    .runs
+                    .change(&shared.db, Actor::app(), reason::METADATA_FETCH);
+                let stored = shared
+                    .db
+                    .record(&change, &[id], || Ok(fetch_icon(shared, id)))
+                    .unwrap_or(false);
+                if stored {
                     shared
                         .events
                         .publish(CoreEvent::GamesChanged { ids: vec![id] });
                 }
             }
         }
-        shared.pending.finished(&shared.events);
+        if shared.pending.finished(&shared.events) {
+            shared.runs.finish_all(&shared.db);
+        }
     }
 }
 
@@ -1085,6 +1131,7 @@ mod tests {
             source: "local".into(),
             source_game_id: g.source_game_id.clone(),
             force: false,
+            by: crate::activity::Actor::app(),
         };
         assert_eq!(fetcher.enqueue([job(&g1), job(&g2)]), 2);
         assert_eq!(
@@ -1144,6 +1191,7 @@ mod tests {
             source: "local".into(),
             source_game_id: Some("1".into()),
             force: false,
+            by: crate::activity::Actor::app(),
         };
         fetcher.enqueue([job(&fake), job(&real)]);
         let start = Instant::now();
@@ -1224,6 +1272,7 @@ mod tests {
             source_game_id: g.source_game_id.clone(),
             igdb: false,
             force: false,
+            by: crate::activity::Actor::app(),
         });
         assert_eq!(fetcher.enqueue(jobs), 3);
 
@@ -1302,6 +1351,7 @@ mod tests {
             source_game_id: Some("7".into()),
             igdb: true,
             force,
+            by: crate::activity::Actor::app(),
         };
         let asked = || store.0.load(std::sync::atomic::Ordering::SeqCst);
         let wait_for = |count: usize| {
@@ -1547,6 +1597,7 @@ mod tests {
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
             pending: PendingJobs::new(WorkQueue::Details),
+            runs: RunBatches::default(),
         };
         assert!(fetch_icon(&shared, game.id));
         assert!(
@@ -1638,6 +1689,7 @@ mod tests {
             source_game_id: None,
             igdb: true,
             force: true,
+            by: crate::activity::Actor::app(),
         }]);
         let start = Instant::now();
         while !fetcher.shared.queued.lock().unwrap().is_empty() {
@@ -1723,6 +1775,7 @@ mod tests {
             source_game_id: g.source_game_id.clone(),
             igdb: g.id != err.id,
             force: false,
+            by: crate::activity::Actor::app(),
         });
         assert_eq!(fetcher.enqueue(jobs), 4);
 
@@ -1803,6 +1856,7 @@ mod tests {
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
             pending: PendingJobs::new(WorkQueue::Details),
+            runs: RunBatches::default(),
         };
         let marked = || {
             db.get_game(game.id)

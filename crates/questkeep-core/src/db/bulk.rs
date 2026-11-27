@@ -11,6 +11,7 @@ use crate::model::{BulkChange, GameKind};
 impl Database {
     /// Applies `change` to every entry in `ids`; nothing changes when one of them is unknown.
     pub fn bulk_change(&self, ids: &[Uuid], change: &BulkChange) -> Result<()> {
+        self.check_recorded("bulk_change");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let categories = !change.add_categories.is_empty() || !change.remove_categories.is_empty();
@@ -44,6 +45,7 @@ impl Database {
 
     /// Deletes several entries; nothing is deleted when one of them is unknown.
     pub fn delete_games(&self, ids: &[Uuid]) -> Result<()> {
+        self.check_recorded("delete_games");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         for id in ids {

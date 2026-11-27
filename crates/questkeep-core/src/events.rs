@@ -112,6 +112,11 @@ pub enum CoreEvent {
     },
     /// Icons of price comparison sites arrived or changed (read them with `price_site_icons`).
     SiteIconsChanged,
+    /// The activity log got entries (for these games; empty for library-level entries, a
+    /// finished batch or a cleared log), so open activity views refresh.
+    ActivityAdded {
+        game_ids: Vec<Uuid>,
+    },
 }
 
 /// Which output of a program a piece of text came from.

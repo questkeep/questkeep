@@ -93,6 +93,7 @@ impl Database {
     /// Creates (`input.id` `None`, placed last in its list) or replaces a script. A game's
     /// script is stored on the game's library entry. The inline text is not stored here.
     pub fn save_script(&self, input: &ScriptInput) -> Result<Script> {
+        self.check_recorded("save_script");
         let name = input.name.trim();
         if name.is_empty() {
             return Err(CoreError::Invalid("Give the script a name.".into()));
@@ -152,6 +153,7 @@ impl Database {
     }
 
     pub fn set_script_enabled(&self, id: Uuid, enabled: bool) -> Result<()> {
+        self.check_recorded("set_script_enabled");
         self.conn().execute(
             "UPDATE scripts SET enabled = ?2 WHERE id = ?1",
             params![id.to_string(), enabled],
@@ -160,6 +162,7 @@ impl Database {
     }
 
     pub fn delete_script(&self, id: Uuid) -> Result<()> {
+        self.check_recorded("delete_script");
         self.conn()
             .execute("DELETE FROM scripts WHERE id = ?1", [id.to_string()])?;
         Ok(())
@@ -168,6 +171,7 @@ impl Database {
     /// The global order of `kind`: the rows in the order given, `GameScripts` where the games'
     /// own scripts run. Scripts not listed keep their place after the listed ones.
     pub fn set_global_order(&self, kind: ScriptKind, order: &[ScriptSlot]) -> Result<()> {
+        self.check_recorded("set_global_order");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let mut slot_seen = false;
@@ -198,6 +202,7 @@ impl Database {
 
     /// The order of a game's own scripts of one kind.
     pub fn set_own_order(&self, ids: &[Uuid]) -> Result<()> {
+        self.check_recorded("set_own_order");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         for (i, id) in ids.iter().enumerate() {
@@ -254,6 +259,7 @@ impl Database {
     }
 
     pub fn set_runs_global_scripts(&self, id: Uuid, run: bool) -> Result<()> {
+        self.check_recorded("set_runs_global_scripts");
         let entry = self.entry_id(id)?;
         let conn = self.conn();
         if run {

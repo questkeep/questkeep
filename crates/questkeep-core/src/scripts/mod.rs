@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
+use crate::activity::{Change, EntryKind, FieldChange, NewEntry, reason};
 use crate::db::Database;
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus, OutputStream};
@@ -32,6 +33,41 @@ use crate::notifications::{
 use crate::paths::DataPaths;
 use crate::platform;
 use crate::providers::ProviderRegistry;
+
+/// A library-level entry about scripts.
+fn library_entry() -> NewEntry {
+    NewEntry {
+        game_id: None,
+        game_name: String::new(),
+        kind: EntryKind::Scripts,
+        changes: Vec::new(),
+        args: None,
+    }
+}
+
+/// The fields of a script that changed (all of them for a new or deleted script). Its content
+/// is a file and shows as changed only.
+fn script_changes(before: Option<&Script>, after: Option<&Script>) -> Vec<FieldChange> {
+    let fields = |s: Option<&Script>| -> serde_json::Map<String, serde_json::Value> {
+        let mut value = s
+            .and_then(|s| serde_json::to_value(s).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        for internal in ["id", "position", "gameId", "content"] {
+            value.remove(internal);
+        }
+        value
+    };
+    let (old, new) = (fields(before), fields(after));
+    let mut keys: Vec<&String> = old.keys().chain(new.keys()).collect();
+    keys.sort();
+    keys.dedup();
+    keys.into_iter()
+        .filter(|k| old.get(*k) != new.get(*k))
+        .map(|k| FieldChange::value(k, old.get(k).cloned(), new.get(k).cloned()))
+        .filter(|c| c.before.is_some() || c.after.is_some())
+        .collect()
+}
 
 /// How many script output logs are kept.
 const KEEP_LOGS: usize = 50;
@@ -234,7 +270,11 @@ impl Scripts {
                 "Choose what runs the script (e.g. PowerShell).".into(),
             ));
         }
-        let saved = self.db().save_script(input)?;
+        let saved = self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_SAVE).kind(EntryKind::Scripts),
+            || self.db().save_script(input),
+            |saved| self.script_entry(saved, script_changes(before.as_ref(), Some(saved))),
+        )?;
         // The file of the old runtime (another extension) or an inline script no longer inline.
         if let Some(old) = before.as_ref().and_then(|b| self.script_file(b))
             && Some(&old) != self.script_file(&saved).as_ref()
@@ -254,7 +294,11 @@ impl Scripts {
 
     pub fn delete(&self, id: Uuid) -> Result<()> {
         let script = self.db().get_script(id)?;
-        self.db().delete_script(id)?;
+        self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_DELETE).kind(EntryKind::Scripts),
+            || self.db().delete_script(id),
+            |()| self.script_entry(&script, script_changes(Some(&script), None)),
+        )?;
         if let Some(file) = self.script_file(&script) {
             let _ = std::fs::remove_file(file);
         }
@@ -263,31 +307,104 @@ impl Scripts {
     }
 
     pub fn set_enabled(&self, id: Uuid, enabled: bool) -> Result<()> {
-        self.db().set_script_enabled(id, enabled)?;
+        let before = self.db().get_script(id)?;
+        self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_SAVE).kind(EntryKind::Scripts),
+            || self.db().set_script_enabled(id, enabled),
+            |()| {
+                let after = Script {
+                    enabled,
+                    ..before.clone()
+                };
+                self.script_entry(&after, script_changes(Some(&before), Some(&after)))
+            },
+        )?;
         self.changed();
         Ok(())
     }
 
     pub fn set_global_order(&self, kind: ScriptKind, order: &[ScriptSlot]) -> Result<()> {
-        self.db().set_global_order(kind, order)?;
+        self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_ORDER)
+                .kind(EntryKind::Scripts)
+                .args(serde_json::json!({ "kind": kind })),
+            || self.db().set_global_order(kind, order),
+            |()| vec![library_entry()],
+        )?;
         self.changed();
         Ok(())
     }
 
     pub fn set_own_order(&self, ids: &[Uuid]) -> Result<()> {
-        self.db().set_own_order(ids)?;
+        let game = ids
+            .first()
+            .and_then(|id| self.db().get_script(*id).ok())
+            .and_then(|s| s.game_id);
+        self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_ORDER).kind(EntryKind::Scripts),
+            || self.db().set_own_order(ids),
+            |()| match game {
+                Some(game) => vec![NewEntry {
+                    game_id: Some(game),
+                    game_name: self.game_name(game),
+                    ..library_entry()
+                }],
+                None => Vec::new(),
+            },
+        )?;
         self.changed();
         Ok(())
     }
 
     pub fn set_run_global(&self, game: Uuid, run: bool) -> Result<()> {
-        self.db().set_runs_global_scripts(game, run)?;
+        let before = self.db().runs_global_scripts(game)?;
+        self.db().record_explicit(
+            &Change::by_caller(reason::SCRIPT_SAVE).kind(EntryKind::Scripts),
+            || self.db().set_runs_global_scripts(game, run),
+            |()| {
+                if before == run {
+                    return Vec::new();
+                }
+                vec![NewEntry {
+                    game_id: Some(game),
+                    game_name: self.game_name(game),
+                    changes: vec![FieldChange::value(
+                        "runGlobalScripts",
+                        Some(serde_json::json!(before)),
+                        Some(serde_json::json!(run)),
+                    )],
+                    ..library_entry()
+                }]
+            },
+        )?;
         self.changed();
         Ok(())
     }
 
     fn changed(&self) {
         self.inner.events.publish(CoreEvent::ScriptsChanged);
+    }
+
+    /// The library entry's name (empty when it is gone).
+    fn game_name(&self, game: Uuid) -> String {
+        self.db()
+            .get_entry(game)
+            .map(|g| g.name)
+            .unwrap_or_default()
+    }
+
+    /// The activity entry of a change to `script` (on its game, or library-level).
+    fn script_entry(&self, script: &Script, changes: Vec<FieldChange>) -> Vec<NewEntry> {
+        vec![NewEntry {
+            game_id: script.game_id,
+            game_name: script
+                .game_id
+                .map(|g| self.game_name(g))
+                .unwrap_or_default(),
+            changes,
+            args: Some(serde_json::json!({ "name": script.name, "kind": script.kind })),
+            ..library_entry()
+        }]
     }
 
     // ----- what runs -----

@@ -43,6 +43,7 @@ impl Database {
         now: DateTime<Utc>,
         day: NaiveDate,
     ) -> Result<()> {
+        self.check_recorded("record_store_playtime");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         for (source_game_id, seconds) in reported {

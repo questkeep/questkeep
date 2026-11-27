@@ -32,6 +32,8 @@ const EXTENSION: &str = ".zip";
 const PARTIAL: &str = ".partial";
 const MANIFEST: &str = "questkeep-backup.json";
 const DB_ENTRY: &str = "library.sqlite";
+/// The activity log; archives from before it existed have none.
+const ACTIVITY_ENTRY: &str = crate::activity::FILE_NAME;
 const SETTINGS_ENTRY: &str = "settings.json";
 const IMAGES_ENTRY: &str = "images";
 /// Staging folder of a restore, inside the data dir.
@@ -285,6 +287,7 @@ pub fn cancelled() -> CoreError {
 /// every file; `cancel` stops the backup between files and deletes the partial archive.
 pub fn create_backup(
     db: &Database,
+    activity: Option<&crate::activity::ActivityLog>,
     paths: &DataPaths,
     dir: &Path,
     keep: u32,
@@ -297,8 +300,14 @@ pub fn create_backup(
     let target = dir.join(&name);
     let partial = dir.join(format!("{name}{PARTIAL}"));
     let snapshot = dir.join(format!("{name}{PARTIAL}.sqlite"));
-    let result = write_archive(db, paths, &partial, &snapshot, now, cancel, progress);
+    let activity_snapshot = dir.join(format!("{name}{PARTIAL}.activity.sqlite"));
+    let snapshots = Snapshots {
+        library: &snapshot,
+        activity: activity.map(|log| (log, activity_snapshot.as_path())),
+    };
+    let result = write_archive(db, paths, &partial, &snapshots, now, cancel, progress);
     let _ = fs::remove_file(&snapshot);
+    let _ = fs::remove_file(&activity_snapshot);
     if let Err(err) = result {
         let _ = fs::remove_file(&partial);
         return Err(err);
@@ -314,11 +323,17 @@ pub fn create_backup(
     })
 }
 
+/// Where the database copies of a backup are written before they go into the archive.
+struct Snapshots<'a> {
+    library: &'a Path,
+    activity: Option<(&'a crate::activity::ActivityLog, &'a Path)>,
+}
+
 fn write_archive(
     db: &Database,
     paths: &DataPaths,
     partial: &Path,
-    snapshot: &Path,
+    snapshots: &Snapshots<'_>,
     now: DateTime<Utc>,
     cancel: &AtomicBool,
     progress: &dyn Fn(u32, u32),
@@ -334,8 +349,15 @@ fn write_archive(
     };
     let fail = |e: &dyn std::fmt::Display| io_error("write", partial, e);
 
-    // A consistent copy of the open database, WAL included.
-    db.copy_to(snapshot)?;
+    // Consistent copies of the open databases, WAL included. A failing copy of the activity log
+    // only leaves it out of the backup.
+    db.copy_to(snapshots.library)?;
+    let activity = snapshots.activity.and_then(|(log, path)| {
+        log.copy_to(path)
+            .inspect_err(|err| tracing::warn!(%err, "could not back up the activity log"))
+            .ok()
+            .map(|()| path)
+    });
     check()?;
     let file = File::create(partial).map_err(|e| fail(&e))?;
     let mut zip = ZipWriter::new(BufWriter::new(file));
@@ -362,7 +384,10 @@ fn write_archive(
         io::copy(&mut input, &mut zip).map_err(|e| fail(&e))?;
         Ok(())
     };
-    add(DB_ENTRY, snapshot, packed)?;
+    add(DB_ENTRY, snapshots.library, packed)?;
+    if let Some(activity) = activity {
+        add(ACTIVITY_ENTRY, activity, packed)?;
+    }
     progress(1, total);
     let settings = paths.settings_file();
     if settings.is_file() {
@@ -438,6 +463,8 @@ fn unpack(archive: &Path, target: &Path) -> Result<()> {
         };
         let name = relative.to_string_lossy().replace('\\', "/");
         let wanted = name == DB_ENTRY
+            || name == ACTIVITY_ENTRY
+            || name == MANIFEST
             || name == SETTINGS_ENTRY
             || name.starts_with(&format!("{IMAGES_ENTRY}/"));
         if !wanted || entry.is_dir() {
@@ -476,10 +503,22 @@ pub fn apply_pending_restore(paths: &DataPaths) -> Result<bool> {
     fs::create_dir_all(&replaced).map_err(|e| io_error("create", &replaced, &e))?;
 
     let db = paths.database_file();
-    let wal = sibling(&db, "-wal");
-    let shm = sibling(&db, "-shm");
+    let activity = paths.activity_file();
+    let journals = [
+        sibling(&db, "-wal"),
+        sibling(&db, "-shm"),
+        sibling(&activity, "-wal"),
+        sibling(&activity, "-shm"),
+    ];
     let swaps: Vec<(PathBuf, PathBuf, PathBuf)> = vec![
         (db.clone(), replaced.join(DB_ENTRY), staging.join(DB_ENTRY)),
+        // Without one in the archive (older backups) the log starts empty: today's history would
+        // not match the old library.
+        (
+            activity.clone(),
+            replaced.join(ACTIVITY_ENTRY),
+            staging.join(ACTIVITY_ENTRY),
+        ),
         (
             paths.settings_file(),
             replaced.join(SETTINGS_ENTRY),
@@ -491,8 +530,8 @@ pub fn apply_pending_restore(paths: &DataPaths) -> Result<bool> {
             staging.join(IMAGES_ENTRY),
         ),
     ];
-    // The old database's journal belongs to the old database.
-    for journal in [&wal, &shm] {
+    // The old databases' journals belong to the old databases.
+    for journal in &journals {
         if journal.exists() {
             let name = journal.file_name().unwrap_or_default();
             fs::rename(journal, replaced.join(name)).map_err(|e| io_error("move", journal, &e))?;
@@ -531,12 +570,21 @@ pub fn apply_pending_restore(paths: &DataPaths) -> Result<bool> {
         for (current, aside, _) in moved_out {
             let _ = fs::rename(aside, current);
         }
-        for journal in [&wal, &shm] {
+        for journal in &journals {
             let name = journal.file_name().unwrap_or_default();
             let _ = fs::rename(replaced.join(name), journal);
         }
         let _ = fs::remove_file(staging.join(READY));
         return Err(err);
+    }
+    // The first start after the restore records it in the activity log.
+    let created_at = fs::read_to_string(staging.join(MANIFEST))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Manifest>(&text).ok())
+        .map(|m| m.created_at);
+    let marker = serde_json::json!({ "createdAt": created_at });
+    if let Err(err) = fs::write(paths.restored_marker(), marker.to_string()) {
+        tracing::warn!(%err, "could not note the restore for the activity log");
     }
     let _ = fs::remove_dir_all(&staging);
     let _ = fs::remove_dir_all(&replaced);
@@ -666,7 +714,7 @@ mod tests {
         let dir = tmp.path().join("archives");
         let calls = Mutex::new(Vec::new());
         let never = AtomicBool::new(false);
-        let first = create_backup(&db, &paths, &dir, 2, &never, &|done, total| {
+        let first = create_backup(&db, None, &paths, &dir, 2, &never, &|done, total| {
             calls.lock().unwrap().push((done, total));
         })
         .unwrap();
@@ -682,7 +730,7 @@ mod tests {
 
         for _ in 0..2 {
             std::thread::sleep(std::time::Duration::from_millis(5));
-            create_backup(&db, &paths, &dir, 2, &never, &|_, _| {}).unwrap();
+            create_backup(&db, None, &paths, &dir, 2, &never, &|_, _| {}).unwrap();
         }
         let kept = list_backups(&dir);
         assert_eq!(kept.len(), 2, "rotation keeps two");
@@ -728,7 +776,7 @@ mod tests {
         let (paths, db) = library(tmp.path());
         let dir = tmp.path().join("archives");
         let cancel = AtomicBool::new(true);
-        assert!(create_backup(&db, &paths, &dir, 5, &cancel, &|_, _| {}).is_err());
+        assert!(create_backup(&db, None, &paths, &dir, 5, &cancel, &|_, _| {}).is_err());
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
 
         // An archive written by a newer Questkeep.
@@ -783,7 +831,7 @@ mod tests {
         let never = AtomicBool::new(false);
 
         // A real backup, renamed: the name does not matter for imports.
-        let made = create_backup(&db, &paths, &elsewhere, 5, &never, &|_, _| {}).unwrap();
+        let made = create_backup(&db, None, &paths, &elsewhere, 5, &never, &|_, _| {}).unwrap();
         let valid = elsewhere.join("my library.zip");
         fs::rename(&made.path, &valid).unwrap();
         let info = inspect_backup(&valid).unwrap();
@@ -848,7 +896,7 @@ mod tests {
         let elsewhere = tmp.path().join("usb stick");
         let never = AtomicBool::new(false);
         let source = PathBuf::from(
-            create_backup(&db, &paths, &elsewhere, 5, &never, &|_, _| {})
+            create_backup(&db, None, &paths, &elsewhere, 5, &never, &|_, _| {})
                 .unwrap()
                 .path,
         );
@@ -889,9 +937,17 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (paths, db) = library(tmp.path());
         let never = AtomicBool::new(false);
-        let source = create_backup(&db, &paths, &tmp.path().join("x"), 5, &never, &|_, _| {})
-            .unwrap()
-            .path;
+        let source = create_backup(
+            &db,
+            None,
+            &paths,
+            &tmp.path().join("x"),
+            5,
+            &never,
+            &|_, _| {},
+        )
+        .unwrap()
+        .path;
         let err = import_backup(Path::new(&source), &paths, &mut || {
             Err(CoreError::Invalid("disk full".into()))
         })

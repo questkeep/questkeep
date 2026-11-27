@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::activity::{ActivityLog, Actor, Change, EntryKind, NewEntry, reason};
 use crate::auth::{AccountStatus, TokenStore};
 use crate::backup::{self, BackupImportCheck, BackupInfo, BackupRun};
 use crate::db::{Database, NewGameRecord, playtime_by_day, playtime_by_week};
@@ -101,6 +102,10 @@ pub struct Library {
     scripts: crate::scripts::Scripts,
     /// Icons of the price comparison sites.
     site_icons: crate::images::SiteIcons,
+    /// Who changed what (also attached to the database, where the recorder finds it).
+    activity: Arc<ActivityLog>,
+    /// Stores whose expired sign-in was noted in the activity log in this run.
+    expired_noted: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Library {
@@ -115,9 +120,19 @@ impl Library {
         paths.ensure_dirs()?;
         // A restore chosen last time is swapped in before anything opens the files.
         match backup::apply_pending_restore(&paths) {
-            Ok(true) => tracing::info!("restored a backup"),
+            Ok(true) => tracing::info!(
+                target: "activity",
+                source = "app",
+                kind = "restore",
+                "restored a backup"
+            ),
             Ok(false) => {}
-            Err(err) => tracing::error!(%err, "could not restore the backup"),
+            Err(err) => tracing::error!(
+                target: "activity",
+                source = "app",
+                kind = "restoreFailed",
+                "could not restore the backup: {err}"
+            ),
         }
         let db = Arc::new(Database::open(&paths.database_file())?);
         Ok(Self::with_database(paths, db, providers, events, secrets))
@@ -134,6 +149,11 @@ impl Library {
         let settings =
             SettingsStore::new(paths.settings_file(), secrets, providers.secret_settings());
         let loaded = settings.load();
+        let activity = Arc::new(ActivityLog::open_or_fresh(&paths.activity_file()));
+        activity.set_settings(loaded.activity);
+        activity.set_events(events.downgrade());
+        db.attach_activity(activity.clone());
+        note_restored_backup(&paths, &activity);
         // Sorting names follow the ignored prefixes and the rules of `sorting_name`; catch up if
         // either changed since the last start (only names that differ are written).
         let prefixes = loaded.sort_prefixes.active();
@@ -157,7 +177,8 @@ impl Library {
         let site_icons = crate::images::SiteIcons::new(&paths, events.clone());
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
-            match resolver.resolve_all() {
+            let change = Change::new(Actor::app(), reason::RESOLVE_ALL);
+            match db.record_batch(&change, None, || resolver.resolve_all()) {
                 Ok(n) => tracing::info!(entries = n, "computed metadata from its sources"),
                 Err(err) => tracing::error!(%err, "could not compute metadata"),
             }
@@ -180,7 +201,14 @@ impl Library {
             notifications,
             scripts,
             site_icons,
+            activity,
+            expired_noted: Mutex::default(),
         }
+    }
+
+    /// The activity log.
+    pub fn activity(&self) -> &Arc<ActivityLog> {
+        &self.activity
     }
 
     pub fn database(&self) -> &Arc<Database> {
@@ -210,6 +238,7 @@ impl Library {
         let last = std::sync::atomic::AtomicU32::new(u32::MAX);
         let result = backup::create_backup(
             &self.db,
+            Some(&self.activity),
             &self.paths,
             &settings.folder(&self.paths),
             settings.keep,
@@ -224,14 +253,21 @@ impl Library {
         self.backup_run.finish();
         match &result {
             Ok(info) => {
-                tracing::info!(path = %info.path, size = info.size, "backup written");
+                tracing::info!(
+                    target: "activity",
+                    source = "app",
+                    kind = "backup",
+                    path = %info.path,
+                    size = info.size,
+                    "backup written"
+                );
                 events.publish(CoreEvent::BackupFinished {
                     backup: Some(info.clone()),
                     error: None,
                 });
             }
             Err(err) => {
-                tracing::warn!(%err, "backup failed");
+                tracing::warn!(target: "activity", source = "app", kind = "backupFailed", "backup failed: {err}");
                 events.publish(CoreEvent::BackupFinished {
                     backup: None,
                     error: Some(err.to_string()),
@@ -444,7 +480,15 @@ impl Library {
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+        let before = self.settings.load().activity;
         self.settings.save(settings)?;
+        self.activity.set_settings(settings.activity);
+        if before != settings.activity {
+            // Lower limits apply now.
+            if let Err(err) = self.activity.prune() {
+                tracing::warn!(%err, "could not prune the activity log");
+            }
+        }
         let prefixes = settings.sort_prefixes.active();
         if set_ignored_prefixes(prefixes.clone()) {
             let ids = self.db.recompute_sorting_names(&prefixes)?;
@@ -465,7 +509,9 @@ impl Library {
             .resolver
             .set_priority(settings.metadata_priority.clone())
         {
-            self.resolver.resolve_all()?;
+            let change = Change::by_caller(reason::RESOLVE_ALL);
+            self.db
+                .record_batch(&change, None, || self.resolver.resolve_all())?;
             let ids = self.db.entry_ids()?;
             self.events.publish(CoreEvent::GamesChanged { ids });
         }
@@ -653,7 +699,13 @@ impl Library {
         duration_seconds: u64,
     ) -> Result<()> {
         let entry = self.db.entry_of(id)?;
-        self.db.add_session(entry, started_at, duration_seconds)?;
+        let name = self.db.get_entry(entry)?.name;
+        let after = session_value(started_at, duration_seconds);
+        self.db.record_explicit(
+            &Change::by_caller(reason::SESSION_EDIT).kind(EntryKind::Sessions),
+            || self.db.add_session(entry, started_at, duration_seconds),
+            |_| vec![session_entry(entry, name, None, Some(after))],
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         Ok(())
@@ -666,9 +718,25 @@ impl Library {
         started_at: chrono::DateTime<Utc>,
         duration_seconds: u64,
     ) -> Result<()> {
-        let game = self
-            .db
-            .update_session(session_id, started_at, duration_seconds)?;
+        let before = self.db.finished_session_by_id(session_id)?;
+        let game = self.db.record_explicit(
+            &Change::by_caller(reason::SESSION_EDIT).kind(EntryKind::Sessions),
+            || {
+                self.db
+                    .update_session(session_id, started_at, duration_seconds)
+            },
+            |game| {
+                let old = before
+                    .as_ref()
+                    .map(|(_, s)| session_value(s.started_at, s.duration_seconds));
+                let new = session_value(started_at, duration_seconds);
+                if old.as_ref() == Some(&new) {
+                    return Vec::new();
+                }
+                let (entry, name) = self.entry_name(*game);
+                vec![session_entry(entry, name, old, Some(new))]
+            },
+        )?;
         self.events.publish(CoreEvent::GamesChanged {
             ids: vec![self.db.entry_of(game)?],
         });
@@ -677,11 +745,29 @@ impl Library {
 
     /// Deletes a play session; its time leaves the game's playtime.
     pub fn delete_game_session(&self, session_id: i64) -> Result<()> {
-        let game = self.db.delete_session(session_id)?;
+        let before = self.db.finished_session_by_id(session_id)?;
+        let game = self.db.record_explicit(
+            &Change::by_caller(reason::SESSION_EDIT).kind(EntryKind::Sessions),
+            || self.db.delete_session(session_id),
+            |game| {
+                let old = before
+                    .as_ref()
+                    .map(|(_, s)| session_value(s.started_at, s.duration_seconds));
+                let (entry, name) = self.entry_name(*game);
+                vec![session_entry(entry, name, old, None)]
+            },
+        )?;
         self.events.publish(CoreEvent::GamesChanged {
             ids: vec![self.db.entry_of(game)?],
         });
         Ok(())
+    }
+
+    /// The entry a game row belongs to and its name (for entries written by hand).
+    fn entry_name(&self, game: Uuid) -> (Uuid, String) {
+        let entry = self.db.entry_of(game).unwrap_or(game);
+        let name = self.db.get_entry(entry).map(|g| g.name).unwrap_or_default();
+        (entry, name)
     }
 
     /// The start page (`"home"`) or view id that was open last.
@@ -785,19 +871,58 @@ impl Library {
 
     /// Creates a category (or returns the one with that name already).
     pub fn create_category(&self, name: &str) -> Result<Category> {
-        let category = self.db.create_category(name)?;
+        let known: Vec<String> = self
+            .db
+            .list_categories()?
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        let category = self.db.record_explicit(
+            &Change::by_caller(reason::CATEGORY_CREATE),
+            || self.db.create_category(name),
+            |c| {
+                if known.contains(&c.id) {
+                    return Vec::new();
+                }
+                vec![library_note(serde_json::json!({ "name": c.name }))]
+            },
+        )?;
         self.events.publish(CoreEvent::CategoriesChanged);
         Ok(category)
     }
 
     pub fn rename_category(&self, id: &str, name: &str) -> Result<Category> {
-        let category = self.db.rename_category(id, name)?;
+        let old = self.db.category(id)?.name;
+        let category = self.db.record_explicit(
+            &Change::by_caller(reason::CATEGORY_RENAME),
+            || self.db.rename_category(id, name),
+            |c| {
+                if c.name == old {
+                    return Vec::new();
+                }
+                let mut note = library_note(serde_json::json!({ "name": old, "to": c.name }));
+                note.changes = vec![crate::activity::FieldChange::value(
+                    "categoryName",
+                    Some(serde_json::json!(old)),
+                    Some(serde_json::json!(c.name)),
+                )];
+                vec![note]
+            },
+        )?;
         self.events.publish(CoreEvent::CategoriesChanged);
         Ok(category)
     }
 
+    /// Deletes a category; the games that had it are recorded with it taken off.
     pub fn delete_category(&self, id: &str) -> Result<()> {
-        self.db.delete_category(id)?;
+        let name = self.db.category(id)?.name;
+        self.db.record_batch(
+            &Change::by_caller(reason::CATEGORY_DELETE)
+                .kind(EntryKind::Categories)
+                .args(serde_json::json!({ "name": name })),
+            Some(library_note(serde_json::json!({ "name": name }))),
+            || self.db.delete_category(id),
+        )?;
         self.events.publish(CoreEvent::CategoriesChanged);
         Ok(())
     }
@@ -811,14 +936,35 @@ impl Library {
 
     /// Merges `from` into `into` (games and store categories) and returns `into`.
     pub fn merge_categories(&self, from: &str, into: &str) -> Result<Category> {
-        let changed = self.db.merge_categories(from, into)?;
+        let args = serde_json::json!({
+            "name": self.db.category(from)?.name,
+            "to": self.db.category(into)?.name,
+        });
+        let changed = self.db.record_batch(
+            &Change::by_caller(reason::CATEGORY_MERGE)
+                .kind(EntryKind::Categories)
+                .args(args.clone()),
+            Some(library_note(args)),
+            || self.db.merge_categories(from, into),
+        )?;
         self.categories_changed(changed);
         self.db.category(into)
     }
 
     /// Gives a store category merged into `id` its own category again and returns that one.
     pub fn separate_category_source(&self, id: &str, source: &str, name: &str) -> Result<Category> {
-        let (target, changed) = self.db.separate_category_source(id, source, name)?;
+        let args = serde_json::json!({
+            "name": self.db.category(id)?.name,
+            "store": source,
+            "to": name,
+        });
+        let (target, changed) = self.db.record_batch(
+            &Change::by_caller(reason::CATEGORY_SEPARATE)
+                .kind(EntryKind::Categories)
+                .args(args.clone()),
+            Some(library_note(args)),
+            || self.db.separate_category_source(id, source, name),
+        )?;
         self.categories_changed(changed);
         self.db.category(&target)
     }
@@ -826,12 +972,24 @@ impl Library {
     /// Sets or clears a category's filter (an auto category); the games matching it get the
     /// category right away, later ones as they are added or change.
     pub fn set_category_filter(&self, id: &str, filter: Option<&GameQuery>) -> Result<Category> {
-        self.db.set_category_filter(id, filter)?;
-        let changed = if filter.is_some() {
-            self.db.apply_auto_categories(None)?
-        } else {
-            Vec::new()
-        };
+        let args = serde_json::json!({
+            "name": self.db.category(id)?.name,
+            "filter": filter.is_some(),
+        });
+        let changed = self.db.record_batch(
+            &Change::by_caller(reason::CATEGORY_FILTER)
+                .kind(EntryKind::Categories)
+                .args(args.clone()),
+            Some(library_note(args)),
+            || {
+                self.db.set_category_filter(id, filter)?;
+                if filter.is_some() {
+                    self.db.apply_auto_categories(None)
+                } else {
+                    Ok(Vec::new())
+                }
+            },
+        )?;
         self.categories_changed(changed);
         self.db.category(id)
     }
@@ -845,7 +1003,11 @@ impl Library {
 
     /// Gives a game exactly these categories.
     pub fn set_game_categories(&self, id: Uuid, category_ids: &[String]) -> Result<Game> {
-        self.db.set_game_categories(id, category_ids)?;
+        self.db.record(
+            &Change::by_caller(reason::SET_CATEGORIES).kind(EntryKind::Categories),
+            &[id],
+            || self.db.set_game_categories(id, category_ids),
+        )?;
         self.events.publish(CoreEvent::CategoriesChanged);
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
@@ -960,7 +1122,11 @@ impl Library {
         settings: &CompletionSettings,
         replacements: &BTreeMap<String, Option<String>>,
     ) -> Result<CompletionSettings> {
-        let saved = self.db.set_completion_settings(settings, replacements)?;
+        let saved = self.db.record_batch(
+            &Change::by_caller(reason::COMPLETION_SETTINGS).kind(EntryKind::Status),
+            None,
+            || self.db.set_completion_settings(settings, replacements),
+        )?;
         let ids = self.db.entry_ids()?;
         self.events.publish(CoreEvent::GamesChanged { ids });
         Ok(saved)
@@ -968,7 +1134,11 @@ impl Library {
 
     /// Sets the completion status of games (`None` clears it).
     pub fn set_completion_status(&self, ids: &[Uuid], status: Option<&str>) -> Result<()> {
-        self.db.set_completion_status(ids, status)?;
+        self.db.record_group(
+            &Change::by_caller(reason::COMPLETION_STATUS).kind(EntryKind::Status),
+            ids,
+            || self.db.set_completion_status(ids, status),
+        )?;
         let entries = ids
             .iter()
             .filter_map(|id| self.db.entry_of(*id).ok())
@@ -981,8 +1151,17 @@ impl Library {
     /// Combines other entries into `into`'s entry (one game owned in several stores) and
     /// returns the combined entry.
     pub fn combine_games(&self, into: Uuid, others: &[Uuid]) -> Result<Game> {
-        let combined = self.db.combine_games(into, others)?;
-        self.resolver.resolve(combined.entry)?;
+        let mut ids = vec![into];
+        ids.extend_from_slice(others);
+        let combined = self.db.record(
+            &Change::by_caller(reason::COMBINE).kind(EntryKind::Combine),
+            &ids,
+            || {
+                let combined = self.db.combine_games(into, others)?;
+                self.resolver.resolve(combined.entry)?;
+                Ok(combined)
+            },
+        )?;
         for id in &combined.absorbed {
             self.events.publish(CoreEvent::GameRemoved { id: *id });
         }
@@ -1014,7 +1193,33 @@ impl Library {
             .then(|| self.db.get_game(parse(&plan.images_from)?))
             .transpose()?;
 
-        let combined = self.db.combine_with_plan(plan, &edits)?;
+        let mut ids = vec![parse(&plan.base)?];
+        for id in &plan.entries {
+            ids.push(parse(id)?);
+        }
+        let combined = self.db.record(
+            &Change::by_caller(reason::COMBINE).kind(EntryKind::Combine),
+            &ids,
+            || self.combine_planned(plan, &edits, images),
+        )?;
+        let entry = combined.entry;
+        for id in &combined.absorbed {
+            self.events.publish(CoreEvent::GameRemoved { id: *id });
+        }
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![entry] });
+        self.events.publish(CoreEvent::CategoriesChanged);
+        self.get_game(entry)
+    }
+
+    /// The writing part of [`Self::combine_with_plan`].
+    fn combine_planned(
+        &self,
+        plan: &CombinePlan,
+        edits: &crate::model::UserEdits,
+        images: Option<Game>,
+    ) -> Result<crate::db::Combined> {
+        let combined = self.db.combine_with_plan(plan, edits)?;
         let entry = combined.entry;
         // The chosen game's images become the entry's own, picked by the user so fetchers keep them.
         if let Some(source) = images {
@@ -1049,20 +1254,21 @@ impl Library {
             }
         }
         self.resolver.resolve(entry)?;
-        for id in &combined.absorbed {
-            self.events.publish(CoreEvent::GameRemoved { id: *id });
-        }
-        self.events
-            .publish(CoreEvent::GamesChanged { ids: vec![entry] });
-        self.events.publish(CoreEvent::CategoriesChanged);
-        self.get_game(entry)
+        Ok(combined)
     }
 
     /// Takes a store's copy out of its entry again and returns the remaining entry.
     pub fn separate_copy(&self, copy: Uuid) -> Result<Game> {
-        let entry = self.db.separate_copy(copy)?;
-        self.resolver.resolve(entry)?;
-        self.resolver.resolve(copy)?;
+        let entry = self.db.record(
+            &Change::by_caller(reason::SEPARATE).kind(EntryKind::Combine),
+            &[copy],
+            || {
+                let entry = self.db.separate_copy(copy)?;
+                self.resolver.resolve(entry)?;
+                self.resolver.resolve(copy)?;
+                Ok(entry)
+            },
+        )?;
         self.events.publish(CoreEvent::GamesChanged {
             ids: vec![entry, copy],
         });
@@ -1072,7 +1278,11 @@ impl Library {
 
     /// Makes a copy the one Play starts (when installed) and returns its entry.
     pub fn prefer_copy(&self, copy: Uuid) -> Result<Game> {
-        let entry = self.db.prefer_copy(copy)?;
+        let entry = self.db.record(
+            &Change::by_caller(reason::PREFER_COPY).kind(EntryKind::Combine),
+            &[copy],
+            || self.db.prefer_copy(copy),
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         self.get_game(entry)
@@ -1130,24 +1340,36 @@ impl Library {
             play_action: Some(action),
             cover_path: None,
         };
-        let game = self.db.insert_game(&record, Utc::now())?;
-        if let Some(cover) = non_empty(&input.cover_image) {
-            // A bad cover must not lose the game the user just added; report and continue.
-            match self
-                .images
-                .import_image(ImageKind::Cover, game.id, Path::new(&cover))
-            {
-                Ok(rel) => self.db.set_cover_path(game.id, Some(&rel))?,
-                Err(err) => tracing::warn!(%err, "could not import cover image"),
-            }
-        }
+        let game = self.db.record_new(
+            &Change::by_caller(reason::ADD_MANUAL).kind(EntryKind::Added),
+            &[],
+            || {
+                let game = self.db.insert_game(&record, Utc::now())?;
+                if let Some(cover) = non_empty(&input.cover_image) {
+                    // A bad cover must not lose the game the user just added; report and continue.
+                    match self
+                        .images
+                        .import_image(ImageKind::Cover, game.id, Path::new(&cover))
+                    {
+                        Ok(rel) => self.db.set_cover_path(game.id, Some(&rel))?,
+                        Err(err) => tracing::warn!(%err, "could not import cover image"),
+                    }
+                }
+                Ok(game)
+            },
+            |game| vec![game.id],
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![game.id] });
         self.get_game(game.id)
     }
 
     pub fn update_game(&self, id: Uuid, update: &GameUpdate) -> Result<Game> {
-        self.db.update_game(id, update)?;
+        self.db.record(
+            &Change::by_caller(reason::EDIT).kind(EntryKind::Edit),
+            &[id],
+            || self.db.update_game(id, update),
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         self.get_game(id)
@@ -1156,19 +1378,26 @@ impl Library {
     /// Replaces the cover with a user-picked image, or clears it with `None`.
     pub fn set_cover(&self, id: Uuid, image: Option<&Path>) -> Result<Game> {
         self.db.get_game(id)?;
-        let relative = match image {
-            Some(path) => Some(self.images.import_image(ImageKind::Cover, id, path)?),
-            None => {
-                self.images.remove_image(ImageKind::Cover, id)?;
-                None
-            }
-        };
-        self.db.set_cover_path(id, relative.as_deref())?;
-        // An icon cropped from the old cover is made again from the new one.
-        let game = self.db.get_game(id)?;
-        if let Err(err) = crate::images::drop_cover_icon(&self.db, &self.images, &game) {
-            tracing::warn!(%err, %id, "could not drop the icon made from the old cover");
-        }
+        self.db.record(
+            &Change::by_caller(reason::EDIT).kind(EntryKind::Images),
+            &[id],
+            || {
+                let relative = match image {
+                    Some(path) => Some(self.images.import_image(ImageKind::Cover, id, path)?),
+                    None => {
+                        self.images.remove_image(ImageKind::Cover, id)?;
+                        None
+                    }
+                };
+                self.db.set_cover_path(id, relative.as_deref())?;
+                // An icon cropped from the old cover is made again from the new one.
+                let game = self.db.get_game(id)?;
+                if let Err(err) = crate::images::drop_cover_icon(&self.db, &self.images, &game) {
+                    tracing::warn!(%err, %id, "could not drop the icon made from the old cover");
+                }
+                Ok(())
+            },
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         self.get_game(id)
@@ -1176,7 +1405,10 @@ impl Library {
 
     /// Changes several entries at once (multi-select), all or nothing.
     pub fn bulk_change(&self, ids: &[Uuid], change: &BulkChange) -> Result<()> {
-        self.db.bulk_change(ids, change)?;
+        self.db
+            .record_group(&Change::by_caller(reason::BULK_CHANGE), ids, || {
+                self.db.bulk_change(ids, change)
+            })?;
         if !change.add_categories.is_empty() || !change.remove_categories.is_empty() {
             self.events.publish(CoreEvent::CategoriesChanged);
         }
@@ -1187,7 +1419,11 @@ impl Library {
 
     /// Removes several entries at once, all or nothing.
     pub fn remove_games(&self, ids: &[Uuid]) -> Result<()> {
-        self.db.delete_games(ids)?;
+        self.db.record_group(
+            &Change::by_caller(reason::REMOVE).kind(EntryKind::Removed),
+            ids,
+            || self.db.delete_games(ids),
+        )?;
         for id in ids {
             if let Err(err) = self.images.remove_all(*id) {
                 tracing::warn!(%err, %id, "could not delete cached images");
@@ -1198,7 +1434,11 @@ impl Library {
     }
 
     pub fn remove_game(&self, id: Uuid) -> Result<()> {
-        self.db.delete_game(id)?;
+        self.db.record(
+            &Change::by_caller(reason::REMOVE).kind(EntryKind::Removed),
+            &[id],
+            || self.db.delete_game(id),
+        )?;
         if let Err(err) = self.images.remove_all(id) {
             tracing::warn!(%err, %id, "could not delete cached images");
         }
@@ -1248,6 +1488,10 @@ impl Library {
         for status in self.account_statuses() {
             let known = self.db.known_account(&status.provider)?;
             if status.signed_in {
+                self.expired_noted
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&status.provider);
                 let now = crate::db::KnownAccount {
                     display_name: status.display_name.clone(),
                     dismissed: false,
@@ -1256,6 +1500,29 @@ impl Library {
                     self.db.set_known_account(&status.provider, &now)?;
                 }
             } else if let Some(known) = known.filter(|k| !k.dismissed) {
+                let first = self
+                    .expired_noted
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(status.provider.clone());
+                if first {
+                    let source = match self
+                        .providers
+                        .get(&status.provider)
+                        .and_then(|p| p.plugin_id().map(str::to_string))
+                    {
+                        Some(plugin) => format!("plugin:{plugin}"),
+                        None => format!("store:{}", status.provider),
+                    };
+                    tracing::warn!(
+                        target: "activity",
+                        source = source.as_str(),
+                        kind = "signInExpired",
+                        store = status.provider.as_str(),
+                        "the sign-in to {} expired",
+                        status.name
+                    );
+                }
                 warnings.push(AccountWarning {
                     provider: status.provider,
                     name: status.name,
@@ -1295,7 +1562,7 @@ impl Library {
         if let Err(err) = self.db.reset_metadata_checked(provider.id()) {
             tracing::warn!(%err, "could not reset metadata markers");
         }
-        if let Err(err) = self.scan(provider_id) {
+        if let Err(err) = self.sync(provider_id, SyncTrigger::SignIn) {
             tracing::warn!(provider = provider_id, %err, "scan after sign-in failed");
         }
         Ok(account.status())
@@ -1321,29 +1588,73 @@ impl Library {
     /// scanned. Announced as `ScanStarted`, then `LibraryScanned` or `ScanFailed`, so the UI can
     /// show one sync status for all scans.
     pub fn scan(&self, provider_id: &str) -> Result<ScanSummary> {
-        self.scan_as(provider_id, false)
+        self.sync(provider_id, SyncTrigger::Manual)
     }
 
     /// [`Self::scan`], marked as started by Questkeep itself when `background` (no result
     /// message in the UI).
     pub fn scan_as(&self, provider_id: &str, background: bool) -> Result<ScanSummary> {
+        let trigger = if background {
+            SyncTrigger::Auto
+        } else {
+            SyncTrigger::Manual
+        };
+        self.sync(provider_id, trigger)
+    }
+
+    /// [`Self::scan`], saying what started it (the activity log tells syncs apart by it).
+    pub fn sync(&self, provider_id: &str, trigger: SyncTrigger) -> Result<ScanSummary> {
+        let background = trigger.is_background();
         let _running = self.scans.enter();
         self.events.publish(CoreEvent::ScanStarted {
             provider: provider_id.to_string(),
             background,
         });
-        let result = self.scan_provider(provider_id);
+        let started = std::time::Instant::now();
+        let result = self.scan_provider(provider_id, trigger);
+        let source = match self
+            .providers
+            .get(provider_id)
+            .and_then(|p| p.plugin_id().map(str::to_string))
+        {
+            Some(plugin) => format!("plugin:{plugin}"),
+            None => format!("store:{provider_id}"),
+        };
         match &result {
-            Ok(_) => self.watch_install_folders(),
-            Err(err) => self.events.publish(CoreEvent::ScanFailed {
-                provider: provider_id.to_string(),
-                message: err.to_string(),
-            }),
+            Ok(summary) => {
+                tracing::info!(
+                    target: "activity",
+                    source = source.as_str(),
+                    kind = "sync",
+                    store = provider_id,
+                    trigger = trigger.as_str(),
+                    added = summary.added,
+                    updated = summary.updated,
+                    uninstalled = summary.uninstalled,
+                    ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    "synced"
+                );
+                self.watch_install_folders();
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "activity",
+                    source = source.as_str(),
+                    kind = "syncFailed",
+                    store = provider_id,
+                    trigger = trigger.as_str(),
+                    "sync failed: {err}"
+                );
+                self.events.publish(CoreEvent::ScanFailed {
+                    provider: provider_id.to_string(),
+                    message: err.to_string(),
+                });
+            }
         }
         result
     }
 
-    fn scan_provider(&self, provider_id: &str) -> Result<ScanSummary> {
+    fn scan_provider(&self, provider_id: &str, trigger: SyncTrigger) -> Result<ScanSummary> {
         let provider = self
             .providers
             .get(provider_id)
@@ -1388,20 +1699,32 @@ impl Library {
         };
         let games = merge_owned(installed, owned.unwrap_or_default());
         let now = Utc::now();
-        let mut summary = self.db.upsert_imported(provider.id(), &games, now)?;
-        let reported: Vec<(String, u64)> = games
-            .iter()
-            .filter_map(|g| Some((g.source_game_id.clone(), g.playtime_seconds?)))
-            .collect();
-        if let Err(err) = self.db.record_store_playtime(
-            provider.id(),
-            &reported,
-            now,
-            chrono::Local::now().date_naive(),
-        ) {
-            tracing::warn!(provider = provider_id, %err, "could not record the playtime history");
-        }
-        self.import_categories(provider.as_ref(), config, &mut summary);
+        // One batch per sync, with one snapshot of the library before and after.
+        let change = Change::new(Actor::for_provider(provider.as_ref()), trigger.reason())
+            .args(serde_json::json!({ "store": provider.id(), "trigger": trigger.as_str() }));
+        let mut batch = self.db.begin_batch(&change);
+        let (summary, recorded) = self.db.record_all(batch.change(), || {
+            let mut summary = self.db.upsert_imported(provider.id(), &games, now)?;
+            let reported: Vec<(String, u64)> = games
+                .iter()
+                .filter_map(|g| Some((g.source_game_id.clone(), g.playtime_seconds?)))
+                .collect();
+            if let Err(err) = self.db.record_store_playtime(
+                provider.id(),
+                &reported,
+                now,
+                chrono::Local::now().date_naive(),
+            ) {
+                tracing::warn!(provider = provider_id, %err, "could not record the playtime history");
+            }
+            self.import_categories(provider.as_ref(), config, &mut summary);
+            Ok(summary)
+        })?;
+        batch.count("added", u64::from(summary.added));
+        batch.count("updated", u64::from(summary.updated));
+        batch.count("uninstalled", u64::from(summary.uninstalled));
+        batch.count("playtime", recorded.playtime);
+        batch.finish();
         if let Err(err) = self.db.record_sync(Some(provider_id), now) {
             tracing::warn!(provider = provider_id, %err, "could not record the sync time");
         }
@@ -1459,7 +1782,7 @@ impl Library {
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
     pub fn scan_all(&self) -> Vec<(String, Result<ScanSummary>)> {
-        self.scan_all_as(false)
+        self.scan_all_with(SyncTrigger::Manual)
     }
 
     /// Whether the automatic sync is due: turned on, and the last full sync (manual or automatic)
@@ -1489,6 +1812,16 @@ impl Library {
 
     /// [`Self::scan_all`], marked as started by Questkeep itself when `background`.
     pub fn scan_all_as(&self, background: bool) -> Vec<(String, Result<ScanSummary>)> {
+        self.scan_all_with(if background {
+            SyncTrigger::Auto
+        } else {
+            SyncTrigger::Manual
+        })
+    }
+
+    /// [`Self::scan_all`], saying what started it.
+    pub fn scan_all_with(&self, trigger: SyncTrigger) -> Vec<(String, Result<ScanSummary>)> {
+        let background = trigger.is_background();
         // Counts as one run, so a waiting backup does not start between two stores.
         let _running = self.scans.enter();
         // Stores whose client is missing are skipped unless an account reads their owned games.
@@ -1505,7 +1838,7 @@ impl Library {
         let results = scannable
             .into_iter()
             .map(|p| {
-                let result = self.scan_as(&p.id, background);
+                let result = self.sync(&p.id, trigger);
                 if let Err(err) = &result {
                     tracing::warn!(provider = %p.id, %err, "scan failed");
                 }
@@ -1545,6 +1878,7 @@ impl Library {
                 source,
                 source_game_id,
                 force: false,
+                by: Actor::app(),
             })
             .collect())
     }
@@ -1588,6 +1922,7 @@ impl Library {
             source: game.source,
             source_game_id: game.source_game_id,
             force: true,
+            by: crate::activity::current_actor(),
         })
     }
 
@@ -1608,6 +1943,7 @@ impl Library {
                 source_game_id: Some(source_game_id),
                 igdb: true,
                 force: false,
+                by: Actor::app(),
             })
             .collect();
         // Games added by hand and linked to a store game whose store was not asked yet (the
@@ -1626,6 +1962,7 @@ impl Library {
                     source_game_id: Some(store_id),
                     igdb: true,
                     force: false,
+                    by: Actor::app(),
                 });
             }
         }
@@ -1646,6 +1983,7 @@ impl Library {
                         source_game_id: None,
                         igdb: true,
                         force: false,
+                        by: Actor::app(),
                     }),
             );
         }
@@ -1698,6 +2036,7 @@ impl Library {
                 source_game_id: c.source_game_id.clone(),
                 igdb: false,
                 force: true,
+                by: crate::activity::current_actor(),
             })
             .collect();
         match jobs.first_mut() {
@@ -1711,6 +2050,7 @@ impl Library {
                     source_game_id,
                     igdb: true,
                     force: true,
+                    by: crate::activity::current_actor(),
                 });
             }
         }
@@ -1827,33 +2167,12 @@ impl Library {
         if old == link {
             return Ok((Vec::new(), None));
         }
-        if let Some(old) = &old {
-            self.db.delete_source_metadata(id, &old.source)?;
-        }
-        // IGDB's answer by name is replaced by the linked game's (or asked again by name).
-        self.db.delete_source_metadata(id, IGDB_SOURCE)?;
-        self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
-        let value = link.as_ref().map(serde_json::to_value).transpose()?;
-        self.db.set_extra_value(id, METADATA_LINK_KEY, value)?;
         let store_link = link.as_ref().is_some_and(|l| l.source != IGDB_SOURCE);
-        if store_link {
-            for kind in [ImageKind::Cover, ImageKind::Background] {
-                if crate::images::is_user_image(&game, kind) {
-                    continue;
-                }
-                self.images.remove_image(kind, id)?;
-                match kind {
-                    ImageKind::Cover => {
-                        self.db.set_cover_path(id, None)?;
-                        crate::images::drop_cover_icon(&self.db, &self.images, &game)?;
-                    }
-                    _ => self.db.set_background_path(id, None)?,
-                }
-                self.db
-                    .set_extra_value(id, crate::images::checked_key(kind), None)?;
-            }
-        }
-        self.resolver.resolve(id)?;
+        self.db.record(
+            &Change::by_caller(reason::METADATA_LINK).kind(EntryKind::Edit),
+            &[id],
+            || self.relink(id, &game, old.as_ref(), link.as_ref(), store_link),
+        )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         let game = self.db.get_game(id)?;
@@ -1864,8 +2183,46 @@ impl Library {
             source,
             source_game_id,
             force: false,
+            by: crate::activity::current_actor(),
         });
         Ok((jobs, cover))
+    }
+
+    /// The writing part of [`Self::set_metadata_link`].
+    fn relink(
+        &self,
+        id: Uuid,
+        game: &Game,
+        old: Option<&MetadataLink>,
+        link: Option<&MetadataLink>,
+        store_link: bool,
+    ) -> Result<()> {
+        if let Some(old) = old {
+            self.db.delete_source_metadata(id, &old.source)?;
+        }
+        // IGDB's answer by name is replaced by the linked game's (or asked again by name).
+        self.db.delete_source_metadata(id, IGDB_SOURCE)?;
+        self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
+        let value = link.map(serde_json::to_value).transpose()?;
+        self.db.set_extra_value(id, METADATA_LINK_KEY, value)?;
+        if store_link {
+            for kind in [ImageKind::Cover, ImageKind::Background] {
+                if crate::images::is_user_image(game, kind) {
+                    continue;
+                }
+                self.images.remove_image(kind, id)?;
+                match kind {
+                    ImageKind::Cover => {
+                        self.db.set_cover_path(id, None)?;
+                        crate::images::drop_cover_icon(&self.db, &self.images, game)?;
+                    }
+                    _ => self.db.set_background_path(id, None)?,
+                }
+                self.db
+                    .set_extra_value(id, crate::images::checked_key(kind), None)?;
+            }
+        }
+        self.resolver.resolve(id)
     }
 
     /// The store action that installs a game that is owned but not installed. The caller opens
@@ -1950,7 +2307,7 @@ impl Library {
             if done.is_empty() {
                 continue;
             }
-            if let Err(err) = self.scan(&source) {
+            if let Err(err) = self.sync(&source, SyncTrigger::Install) {
                 tracing::warn!(%source, %err, "install watch: sync failed");
                 continue;
             }
@@ -2021,7 +2378,7 @@ impl Library {
     fn poll_install_folders_at(&self, now: std::time::Instant) {
         let due = self.folders.due(now);
         for store in &due.removed {
-            if let Err(err) = self.scan_as(store, true) {
+            if let Err(err) = self.sync(store, SyncTrigger::InstallFolder) {
                 tracing::warn!(%store, %err, "sync after an uninstall failed");
             }
         }
@@ -2057,7 +2414,7 @@ impl Library {
             if found.is_empty() {
                 continue;
             }
-            if let Err(err) = self.scan_as(&store, true) {
+            if let Err(err) = self.sync(&store, SyncTrigger::InstallFolder) {
                 tracing::warn!(%store, %err, "sync after an install failed");
                 continue;
             }
@@ -2209,7 +2566,7 @@ impl Library {
                 .iter()
                 .any(|id| !before.contains(id))
             {
-                if let Err(err) = self.scan(provider_id) {
+                if let Err(err) = self.sync(provider_id, SyncTrigger::AddGame) {
                     tracing::warn!(provider = provider_id, %err, "scan after adding a game failed");
                 }
                 return true;
@@ -2225,6 +2582,62 @@ impl Library {
         self.events
             .publish(CoreEvent::GamesChanged { ids: Vec::new() });
         Ok(inserted)
+    }
+}
+
+/// A library-level activity entry about categories (no game), described by `args`.
+fn library_note(args: serde_json::Value) -> NewEntry {
+    NewEntry {
+        game_id: None,
+        game_name: String::new(),
+        kind: EntryKind::Categories,
+        changes: Vec::new(),
+        args: Some(args),
+    }
+}
+
+/// A play session as the activity log shows it.
+fn session_value(started_at: chrono::DateTime<Utc>, duration_seconds: u64) -> serde_json::Value {
+    serde_json::json!({ "startedAt": started_at, "durationSeconds": duration_seconds })
+}
+
+/// The activity entry of a session the user added (`before` none), changed or deleted.
+fn session_entry(
+    entry: Uuid,
+    name: String,
+    before: Option<serde_json::Value>,
+    after: Option<serde_json::Value>,
+) -> NewEntry {
+    NewEntry {
+        game_id: Some(entry),
+        game_name: name,
+        kind: EntryKind::Sessions,
+        changes: vec![crate::activity::FieldChange::value(
+            "session", before, after,
+        )],
+        args: None,
+    }
+}
+
+/// Records "Restored the backup from <date>" on the first start after a restore (the restore
+/// leaves a marker with the backup's date).
+fn note_restored_backup(paths: &DataPaths, activity: &ActivityLog) {
+    let marker = paths.restored_marker();
+    let Ok(text) = std::fs::read_to_string(&marker) else {
+        return;
+    };
+    let created_at = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v.get("createdAt").cloned())
+        .unwrap_or(serde_json::Value::Null);
+    activity.note(
+        &Change::new(Actor::user(), reason::RESTORE_BACKUP)
+            .args(serde_json::json!({ "createdAt": created_at })),
+        EntryKind::Other,
+        Vec::new(),
+    );
+    if let Err(err) = std::fs::remove_file(&marker) {
+        tracing::warn!(%err, "could not remove the restore marker");
     }
 }
 
@@ -2279,6 +2692,52 @@ fn merge_owned(mut installed: Vec<ImportedGame>, owned: Vec<ImportedGame>) -> Ve
         }
     }
     installed
+}
+
+/// What started a store sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncTrigger {
+    /// The user (sync buttons).
+    Manual,
+    /// The automatic sync.
+    Auto,
+    /// The sync when Questkeep starts.
+    Startup,
+    /// Right after signing in to the store.
+    SignIn,
+    /// An install started from Questkeep finished.
+    Install,
+    /// The folder watch noticed an install or uninstall.
+    InstallFolder,
+    /// A game added through the store's own dialog (`run_add_game_option`).
+    AddGame,
+}
+
+impl SyncTrigger {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Auto => "auto",
+            Self::Startup => "startup",
+            Self::SignIn => "signIn",
+            Self::Install => "install",
+            Self::InstallFolder => "installFolder",
+            Self::AddGame => "addGame",
+        }
+    }
+
+    /// Started by Questkeep itself: the UI shows no result message.
+    pub fn is_background(self) -> bool {
+        matches!(self, Self::Auto | Self::InstallFolder)
+    }
+
+    /// The activity log's reason: syncs the user asked for, or those Questkeep started.
+    fn reason(self) -> &'static str {
+        match self {
+            Self::Manual | Self::SignIn | Self::Install | Self::AddGame => reason::SYNC,
+            Self::Auto | Self::Startup | Self::InstallFolder => reason::AUTO_SYNC,
+        }
+    }
 }
 
 /// How long the automatic backup waits for a running sync.
@@ -2377,7 +2836,12 @@ mod tests {
         let events = EventBus::new();
         let seen = Arc::new(Mutex::new(Vec::new()));
         let s = seen.clone();
-        events.subscribe(move |e| s.lock().unwrap().push(e.clone()));
+        // Activity events are checked by the activity tests.
+        events.subscribe(move |e| {
+            if !matches!(e, CoreEvent::ActivityAdded { .. }) {
+                s.lock().unwrap().push(e.clone())
+            }
+        });
         let db = Arc::new(Database::open_in_memory().unwrap());
         let secrets = Arc::new(crate::auth::MemoryTokenStore::default());
         (
@@ -2390,6 +2854,8 @@ mod tests {
     fn importing_a_backup_backs_up_the_current_library_only_when_asked() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let outside = tmp.path().join("outside");
         std::fs::create_dir_all(&outside).unwrap();
         let archive = outside.join("from another pc.zip");
@@ -2438,6 +2904,8 @@ mod tests {
     fn a_store_that_moved_to_a_plugin_is_noticed_once_while_its_games_are_unsynced() {
         use crate::notifications::NotificationAction;
         let (_tmp, lib) = test_library();
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         lib.notice_moved_stores();
         assert!(
             lib.notifications().list().is_empty(),
@@ -2638,6 +3106,8 @@ mod tests {
     fn combined_games_play_their_preferred_installed_copy() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, seen) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let db = lib.database();
         let mut owned = ImportedGame::installed("1", "Rocket League");
         owned.installed = false;
@@ -3358,6 +3828,8 @@ mod tests {
     fn store_games_without_genres_get_igdb_only_jobs() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let game = lib
             .database()
             .insert_game(
@@ -3471,6 +3943,8 @@ mod tests {
         let mut providers = ProviderRegistry::new();
         providers.register(Arc::new(Catalog));
         let (lib, _) = library(tmp.path(), providers);
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         std::fs::write(tmp.path().join("hades.exe"), b"x").unwrap();
         let game = lib
             .add_manual_game(&NewManualGame {
@@ -3593,6 +4067,8 @@ mod tests {
     fn games_without_icons_are_listed_for_the_icon_fetcher() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         lib.seed_fake_library(5).unwrap();
         let exe = tmp.path().join("x.exe");
         std::fs::write(&exe, b"").unwrap();
@@ -3620,6 +4096,8 @@ mod tests {
     fn new_cover_drops_only_icons_made_from_the_old_cover() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let exe = tmp.path().join("x.exe");
         std::fs::write(&exe, b"").unwrap();
         let add = |name: &str| {
@@ -3705,6 +4183,8 @@ mod tests {
     fn install_folder_is_the_games_install_dir() {
         let tmp = tempfile::tempdir().unwrap();
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        // Test data is written straight to the database, outside recorded changes.
+        let _setup = crate::activity::Scope::enter();
         let mut known = ImportedGame::installed("1", "Known");
         known.install_dir = Some(r"C:\Games\Known".into());
         let unknown = ImportedGame::installed("2", "Unknown");

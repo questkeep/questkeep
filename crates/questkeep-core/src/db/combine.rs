@@ -155,6 +155,7 @@ impl Database {
     /// copies (after them), favorites and categories carry over, and name, cover and details
     /// stay `into`'s.
     pub fn combine_games(&self, into: Uuid, others: &[Uuid]) -> Result<Combined> {
+        self.check_recorded("combine_games");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let entry = entry_of(&tx, into)?;
@@ -191,6 +192,7 @@ impl Database {
     /// screen), all in one transaction. `edits` are the user's edited details the combined
     /// entry keeps (the caller folds the chosen links into them). Images are left to the caller.
     pub fn combine_with_plan(&self, plan: &CombinePlan, edits: &UserEdits) -> Result<Combined> {
+        self.check_recorded("combine_with_plan");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let entries = &plan.entries;
@@ -343,6 +345,7 @@ impl Database {
     /// entry's own row, the next copy becomes the entry and keeps the favorite and categories.
     /// The two are not suggested as duplicates again. Returns the remaining entry.
     pub fn separate_copy(&self, copy: Uuid) -> Result<Uuid> {
+        self.check_recorded("separate_copy");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let entry = entry_of(&tx, copy)?;
@@ -392,6 +395,7 @@ impl Database {
 
     /// Makes `copy` the first of its entry's copies: Play starts it when it is installed.
     pub fn prefer_copy(&self, copy: Uuid) -> Result<Uuid> {
+        self.check_recorded("prefer_copy");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         let entry = entry_of(&tx, copy)?;

@@ -49,6 +49,7 @@ impl Database {
         data: Option<&GameMetadata>,
         now: DateTime<Utc>,
     ) -> Result<()> {
+        self.check_recorded("set_source_metadata");
         let json = data.map(serde_json::to_string).transpose()?;
         let conn = self.conn();
         conn.execute(
@@ -144,6 +145,7 @@ impl Database {
 
     /// Replaces the user's edits of a library entry (edits of its copies are folded in).
     pub fn set_user_edits(&self, entry_id: Uuid, edits: &UserEdits) -> Result<()> {
+        self.check_recorded("set_user_edits");
         let json = serde_json::to_string(edits)?;
         let mut conn = self.conn();
         let tx = conn.transaction()?;
@@ -185,6 +187,7 @@ impl Database {
         priority: &MetadataPriority,
         sources: &[String],
     ) -> Result<()> {
+        self.check_recorded("resolve_entry");
         let records = self.source_records(entry_id)?;
         let user = self.user_edits(entry_id)?;
         let resolved = resolve(&records, Some(&user), priority, sources);
@@ -198,6 +201,7 @@ impl Database {
     /// Computes the shown values of every entry again (after the priority changed or the
     /// migration asked for it). Returns how many entries were updated.
     pub fn resolve_all(&self, priority: &MetadataPriority, sources: &[String]) -> Result<usize> {
+        self.check_recorded("resolve_all");
         let ids = self.entry_ids()?;
         let mut records_by_entry = Vec::with_capacity(ids.len());
         for id in &ids {
@@ -353,6 +357,7 @@ impl Database {
         settings: &CompletionSettings,
         replacements: &BTreeMap<String, Option<String>>,
     ) -> Result<CompletionSettings> {
+        self.check_recorded("set_completion_settings");
         {
             let mut conn = self.conn();
             let tx = conn.transaction()?;
@@ -417,6 +422,7 @@ impl Database {
     /// Sets the completion status of library entries (`None` clears it). Unknown statuses are
     /// rejected.
     pub fn set_completion_status(&self, entry_ids: &[Uuid], status: Option<&str>) -> Result<()> {
+        self.check_recorded("set_completion_status");
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         if let Some(status) = status {
@@ -448,6 +454,7 @@ impl Database {
     /// Applies the "first start" rule to an entry that was just started: while it still has the
     /// new-game status, it gets the first-start status. Returns whether it changed.
     pub fn apply_first_start(&self, game_id: Uuid) -> Result<bool> {
+        self.check_recorded("apply_first_start");
         let changed = self.conn().execute(
             "UPDATE games SET completion_status = \
                 (SELECT value FROM app_state WHERE key = 'completion.firstStart') \
