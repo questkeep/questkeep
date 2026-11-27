@@ -38,7 +38,14 @@ use std::time::{Duration, Instant};
 use questkeep_store_api::model::{
     GameLink, GameMetadata, ImportedGame, PlayAction, Score, TrackingMode,
 };
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
+
+/// Codes are redeemed for the Meta account on the website.
+const SHOP: ShopPages = ShopPages {
+    redeem_url: Some("https://secure.oculus.com/redeem-code"),
+    ..ShopPages::web("https://www.meta.com/experiences/")
+};
 
 use catalog::Catalog;
 use manifest::{Install, name_from_canonical, plausible_app_id};
@@ -266,8 +273,8 @@ impl LibraryProvider for MetaProvider {
         "Meta Horizon Link"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://www.meta.com/experiences/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

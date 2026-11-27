@@ -301,19 +301,39 @@ pub struct Achievements {
     pub unlocked: Vec<Achievement>,
 }
 
-/// An extra way to add games, shown in the menu of the "Add game" button.
+/// An entry a store adds to the menu of the "Add game" button: a way to add games, the store's
+/// shop, or where to redeem a product key.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AddGameOption {
     /// Stable within the provider.
     pub id: String,
-    /// Menu text, e.g. `New Minecraft instance`.
+    /// Menu text, e.g. `New Minecraft instance`. For [`buy`](AddGameSection::Buy) and
+    /// [`activate`](AddGameSection::Activate) options the store's name: it follows "Buy from" or
+    /// "Activate on".
     pub label: String,
-    /// What choosing it does. Afterwards Questkeep watches the store's installed games for a few
-    /// minutes and adds the new one by itself.
+    /// The submenu it is listed in.
+    #[serde(default)]
+    pub section: AddGameSection,
+    /// What choosing it does. After an [`add`](AddGameSection::Add) option Questkeep watches the
+    /// store's installed games for a few minutes and adds the new one by itself.
     #[serde(default)]
     pub opens: AddGameTarget,
+}
+
+/// The submenu of the "Add game" menu an [`AddGameOption`] is listed in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum AddGameSection {
+    /// "Add": a way to add a game, e.g. the launcher's "new instance" dialog.
+    #[default]
+    Add,
+    /// "Buy from": the store's shop.
+    Buy,
+    /// "Activate on": where the store redeems a product key.
+    Activate,
 }
 
 /// What an [`AddGameOption`] opens.
@@ -340,6 +360,9 @@ pub enum AddGameTarget {
     },
     /// A web page (`https://` only) in the user's browser, e.g. a site to get games from.
     Browser { url: String },
+    /// A store URI the system opens, e.g. `steam://open/activateproduct`. Built-in stores only:
+    /// options of store plugins that use it are dropped.
+    Uri { uri: String },
 }
 
 /// Key presses in the launcher's window after an add-game option opened it (Windows only).
@@ -599,8 +622,38 @@ impl AddGameOption {
         Self {
             id: id.into(),
             label: label.into(),
+            section: AddGameSection::Add,
             opens: AddGameTarget::Provider,
         }
+    }
+
+    /// A "Buy from" entry; `store_name` follows "Buy from". Give it a target, e.g.
+    /// [`opening_browser`](Self::opening_browser).
+    pub fn buy(id: impl Into<String>, store_name: impl Into<String>) -> Self {
+        Self {
+            section: AddGameSection::Buy,
+            ..Self::new(id, store_name)
+        }
+    }
+
+    /// An "Activate on" entry (where a product key is redeemed); `store_name` follows "Activate
+    /// on". Give it a target, e.g. [`opening_browser`](Self::opening_browser).
+    pub fn activate(id: impl Into<String>, store_name: impl Into<String>) -> Self {
+        Self {
+            section: AddGameSection::Activate,
+            ..Self::new(id, store_name)
+        }
+    }
+
+    /// Opens the store URI `uri` (built-in stores only, see [`AddGameTarget::Uri`]).
+    pub fn opening_uri(mut self, uri: impl Into<String>) -> Self {
+        self.opens = AddGameTarget::Uri { uri: uri.into() };
+        self
+    }
+
+    /// Whether choosing it only opens a web page, which works without the store's client.
+    pub fn opens_browser(&self) -> bool {
+        matches!(self.opens, AddGameTarget::Browser { .. })
     }
 
     /// Opens the store's launcher with `args` added instead of calling `run_add_game_option`.
@@ -733,6 +786,11 @@ mod add_game_option_tests {
     fn add_game_options_without_a_target_ask_the_provider() {
         let option: AddGameOption = serde_json::from_str(r#"{"id":"x","label":"X"}"#).unwrap();
         assert_eq!(option.opens, AddGameTarget::Provider);
+        assert_eq!(
+            option.section,
+            AddGameSection::Add,
+            "older plugins add games"
+        );
         let json = serde_json::to_value(AddGameOption::new("x", "X").opening_launcher_with_keys(
             "--show-window",
             LauncherKeys::new("p.exe", "P").wait_ms(100).press("Ctrl+N"),
@@ -760,6 +818,21 @@ mod add_game_option_tests {
                 url: "https://example.com".into()
             }
         );
+    }
+
+    #[test]
+    fn buy_and_activate_options_name_their_section() {
+        let buy = AddGameOption::buy("shop", "Steam").opening_browser("https://example.com");
+        assert_eq!(buy.section, AddGameSection::Buy);
+        assert!(buy.opens_browser());
+        let activate = AddGameOption::activate("key", "Steam").opening_uri("steam://open/x");
+        let json = serde_json::to_value(&activate).unwrap();
+        assert_eq!(json["section"], "activate");
+        assert_eq!(
+            json["opens"],
+            serde_json::json!({ "kind": "uri", "uri": "steam://open/x" })
+        );
+        assert!(!activate.opens_browser());
     }
 }
 

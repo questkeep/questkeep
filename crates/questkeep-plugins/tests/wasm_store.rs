@@ -18,7 +18,7 @@ use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
 use questkeep_plugins::wasm::GENERIC_ICON;
 use questkeep_plugins::{CallLimits, PluginManager};
-use questkeep_store_api::model::{ActionKind, ImportedGame};
+use questkeep_store_api::model::{ActionKind, AddGameSection, AddGameTarget, ImportedGame};
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
 use serde_json::{Value, json};
 
@@ -171,7 +171,23 @@ fn example_store_loads_scans_reloads_and_unloads() {
     let store = fx.provider("example-store");
     assert_eq!(store.name(), "Example Store");
     assert!(store.icon_svg().starts_with("<svg") && store.icon_svg() != GENERIC_ICON);
-    assert_eq!(store.shop_url(), Some("https://example.com/store"));
+    let options = store.add_game_options(&Value::Null);
+    assert_eq!(
+        options
+            .iter()
+            .map(|o| (o.id.as_str(), o.section))
+            .collect::<Vec<_>>(),
+        [
+            ("shop", AddGameSection::Buy),
+            ("redeem", AddGameSection::Activate)
+        ]
+    );
+    assert_eq!(
+        options[0].opens,
+        AddGameTarget::Browser {
+            url: "https://example.com/store".into()
+        }
+    );
     assert!(store.can_scan() && store.can_scan_owned() && store.is_installed());
     assert!(!store.can_uninstall() && !store.has_launcher_pages());
     assert!(store.launcher().is_none() && store.account().is_none());

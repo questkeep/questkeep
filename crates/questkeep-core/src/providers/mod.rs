@@ -29,13 +29,12 @@ pub struct ProviderInfo {
     pub can_uninstall: bool,
     /// Games can be shown in the store's launcher (see [`LibraryProvider::launcher_page`]).
     pub launcher_pages: bool,
-    /// The store's website for buying games (see [`LibraryProvider::shop_url`]).
-    pub shop_url: Option<String>,
     /// The store's client is on this PC (see [`LibraryProvider::is_installed`]).
     pub installed: bool,
     /// Syncing does something: the client is installed or owned games can be read without it.
     pub syncable: bool,
-    /// Extra ways to add games (see [`LibraryProvider::add_game_options`]).
+    /// The store's entries in the "Add game" menu (see [`LibraryProvider::add_game_options`]):
+    /// only those opening a web page while the store isn't installed.
     pub add_game_options: Vec<AddGameOption>,
     /// The store's own settings (see [`LibraryProvider::settings`]).
     pub settings: StoreSettings,
@@ -127,6 +126,7 @@ impl ProviderRegistry {
         self.iter()
             .map(|p| {
                 let installed = p.is_installed();
+                let config = config(p.id());
                 ProviderInfo {
                     id: p.id().to_string(),
                     name: p.name().to_string(),
@@ -135,20 +135,29 @@ impl ProviderRegistry {
                     can_scan_owned: p.can_scan_owned(),
                     can_uninstall: p.can_uninstall(),
                     launcher_pages: p.has_launcher_pages(),
-                    shop_url: p.shop_url().map(str::to_string),
                     installed,
-                    syncable: p.can_scan() && (installed || p.has_owned_source(&config(p.id()))),
-                    add_game_options: if installed {
-                        p.add_game_options()
-                    } else {
-                        Vec::new()
-                    },
+                    syncable: p.can_scan() && (installed || p.has_owned_source(&config)),
+                    add_game_options: available_options(p.as_ref(), &config),
                     settings: p.settings(),
                     launcher_close: p.launcher_process().map(|l| l.close),
                 }
             })
             .collect()
     }
+}
+
+/// The provider's "Add game" menu entries that work right now: all of them while its client is
+/// installed, otherwise only those opening a web page.
+pub fn available_options(
+    provider: &dyn LibraryProvider,
+    config: &serde_json::Value,
+) -> Vec<AddGameOption> {
+    let installed = provider.is_installed();
+    provider
+        .add_game_options(config)
+        .into_iter()
+        .filter(|option| installed || option.opens_browser())
+        .collect()
 }
 
 impl std::fmt::Debug for ProviderRegistry {
@@ -194,7 +203,6 @@ mod tests {
                 can_scan_owned: false,
                 can_uninstall: false,
                 launcher_pages: false,
-                shop_url: None,
                 installed: false,
                 syncable: false,
                 add_game_options: Vec::new(),

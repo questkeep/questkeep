@@ -644,6 +644,16 @@ Short log of choices made while building. Newest at the bottom of each section.
   to `POST /api/search/site`; a refused token is renewed once, otherwise the lookup gives up
   quietly. Asked only when IGDB has no time to beat; never in unit tests.
 - **The tray popup's game menu** (right click, Shift+click, context-menu key or Shift+F10; middle click opens the game page) is a native Win32 menu like the "..." overflow menu: Windows provides its keyboard handling, screen-reader support and placement past the popup's edges. Launch profiles are asked from the app (`PopupHost::profiles`) only when the menu opens.
+- **The Add game menu is sectioned, with a quick-access list on top** (2026-11-27, spec
+  `docs/superpowers/specs/2026-11-27-title-bar-menu-design.md`): Add, Compare on, Buy from,
+  Activate on; the user picks entries for the top (Settings → Window and tray). Stores report
+  "Buy from" and "Activate on" as `add_game_options` with a `section`, replacing `shop_url`
+  (plugins' `shop_url` still becomes a "Buy from" entry). "Activate on" only opens the store's
+  key redemption: detecting the store from a pasted key was dropped, as formats collide (Microsoft,
+  EA and Meta all use 5×5), several stores have none, and only Steam and GOG take a key in a link.
+  Launcher or browser is a store option (`shop::ShopPages`), not core logic, so
+  `add_game_options` gets the store's config; the WASM host re-runs `configure` when it changed.
+  Only built-in stores may open store URIs (`AddGameTarget::Uri`).
 - **Copies of one store in an entry get a qualifier** computed in core (`copy_qualifiers`: own name, then the install folder's last part, then the store id, then #n), only when a store appears more than once. It lives on `GameCopy`, so the copy list, menus and launch profile names show the same label; custom profile names are never changed.
 
 ## Edit game (step 3)

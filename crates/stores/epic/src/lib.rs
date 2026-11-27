@@ -24,7 +24,9 @@ use serde::Deserialize;
 
 use questkeep_store_api::auth::{AccountAuth, system_clock};
 use questkeep_store_api::model::{GameMetadata, ImportedGame, PlayAction};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::settings::StoreSettings;
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
 use questkeep_store_heroic::{self as heroic, HeroicPaths, owned_with_local};
 
 mod account;
@@ -35,6 +37,15 @@ mod web;
 pub use account::{EpicAccount, REDIRECT_URL as CODE_REDIRECT_URL};
 
 pub const EPIC_SOURCE: &str = "epic";
+
+/// The store opens in the launcher too; codes are redeemed on the website only.
+const SHOP: ShopPages = ShopPages {
+    shop_url: "https://store.epicgames.com/",
+    shop_uri: Some("com.epicgames.launcher://store"),
+    redeem_url: Some("https://store.epicgames.com/redeem"),
+    redeem_uri: None,
+    redeem_in_launcher: false,
+};
 
 /// Catalog namespace and item id of an installed game.
 type CatalogIds = (String, String);
@@ -524,8 +535,15 @@ impl LibraryProvider for EpicProvider {
         "Epic Games"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://store.epicgames.com/")
+    fn settings(&self) -> StoreSettings {
+        StoreSettings {
+            options: SHOP.option().into_iter().collect(),
+            ..StoreSettings::default()
+        }
+    }
+
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

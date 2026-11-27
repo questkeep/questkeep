@@ -105,7 +105,10 @@ pub trait Provider {
     fn has_launcher_pages(&self) -> bool {
         false
     }
-    /// The store's website where games are bought (an https URL).
+    /// Deprecated: return an [`AddGameOption::buy`] from
+    /// [`add_game_options`](Self::add_game_options) instead. The store's website where games are
+    /// bought (an https URL); the app turns it into a "Buy from" entry when the store declares
+    /// none.
     fn shop_url(&self) -> Option<String> {
         None
     }
@@ -188,8 +191,14 @@ pub trait Provider {
     fn settings(&self) -> StoreSettings {
         StoreSettings::default()
     }
-    /// Extra ways to add games that this provider offers next to "Add game". A plugin cannot start
-    /// programs, so its options open something for the user instead of calling
+    /// The store's entries in the "Add game" menu. Each is listed in a section:
+    /// [`AddGameOption::new`] adds games ("Add"), [`AddGameOption::buy`] opens the shop ("Buy
+    /// from") and [`AddGameOption::activate`] opens where product keys are redeemed ("Activate
+    /// on"); give the latter two the store's name as label. The app asks again after every
+    /// [`configure`](Self::configure), so options can follow the store's settings (e.g. launcher
+    /// or browser). Entries opening a web page are shown even while the store's client isn't
+    /// installed, the others only while it is. A plugin cannot start programs, so its options open
+    /// something for the user instead of calling
     /// [`run_add_game_option`](Self::run_add_game_option):
     /// [`AddGameOption::opening_launcher`] opens the store's [`launcher`](Self::launcher) with extra
     /// arguments, [`AddGameOption::opening_launcher_with_keys`] also presses keys in its window

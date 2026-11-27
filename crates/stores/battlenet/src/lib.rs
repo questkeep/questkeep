@@ -38,7 +38,14 @@ use questkeep_store_api::auth::{
     AccountAuth, LoginWindow, WebAccount, WebAccountSpec, WebSessionPage, capture_whole,
 };
 use questkeep_store_api::model::{ImportedGame, PlayAction};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
+
+/// Codes are redeemed in the account overview ("Redeem a code").
+const SHOP: ShopPages = ShopPages {
+    redeem_url: Some("https://account.battle.net/"),
+    ..ShopPages::web("https://shop.battle.net/")
+};
 
 pub const BATTLENET_SOURCE: &str = "battlenet";
 /// Product codes of the agent and the Battle.net app itself.
@@ -450,8 +457,8 @@ impl LibraryProvider for BattleNetProvider {
         }
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://shop.battle.net/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

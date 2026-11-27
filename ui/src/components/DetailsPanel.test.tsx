@@ -30,7 +30,6 @@ async function loadProviders(canUninstall: boolean, launcherPages = false) {
       canUninstall,
       launcherPages,
       launcherClose: null,
-      shopUrl: null,
       installed: true,
       syncable: true,
       addGameOptions: [],

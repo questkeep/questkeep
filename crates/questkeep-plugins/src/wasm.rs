@@ -14,8 +14,8 @@ use std::time::Duration;
 use questkeep_plugin_sdk::wire::{self, CallArgs, Method, ProviderDescriptor};
 use questkeep_store_api::auth::{AccountAuth, AccountStatus, AuthError, LoginWindow, WebSession};
 use questkeep_store_api::model::{
-    AccountInfo, Achievements, ActionKind, AddGameOption, GameMetadata, GameNews, ImportedGame,
-    LauncherClose, LauncherProcess, PlayAction, TrackingMode,
+    AccountInfo, Achievements, ActionKind, AddGameOption, AddGameSection, GameMetadata, GameNews,
+    ImportedGame, LauncherClose, LauncherProcess, PlayAction, TrackingMode,
 };
 use questkeep_store_api::settings::StoreSettings;
 use questkeep_store_api::traffic::Traffic;
@@ -684,6 +684,7 @@ pub struct WasmProvider {
     id: String,
     name: String,
     icon: String,
+    /// The deprecated `shop_url` of older plugins, offered as a "Buy from" entry.
     shop_url: Option<String>,
     /// The last `describe` answer.
     described: RwLock<ProviderDescriptor>,
@@ -759,7 +760,7 @@ impl WasmProvider {
             shop_url: described
                 .shop_url
                 .clone()
-                .filter(|url| url.starts_with("https://") || url.starts_with("http://")),
+                .filter(|url| url.starts_with("https://")),
             described: RwLock::new(described),
             config: Mutex::new(None),
             slot: Mutex::new(Slot {
@@ -1053,10 +1054,6 @@ impl LibraryProvider for WasmProvider {
         self.described().has_launcher_pages
     }
 
-    fn shop_url(&self) -> Option<&str> {
-        self.shop_url.as_deref()
-    }
-
     fn launcher_page(&self, source_game_id: &str) -> Option<PlayAction> {
         self.action(Method::LauncherPage, &CallArgs::game(source_game_id))
     }
@@ -1160,13 +1157,34 @@ impl LibraryProvider for WasmProvider {
         }
     }
 
-    fn add_game_options(&self) -> Vec<AddGameOption> {
-        self.described()
+    /// The options of the last `describe`, after `configure` with `config` when that differs from
+    /// what the store last got (its options may follow its settings). An older plugin's shop URL
+    /// becomes its "Buy from" entry.
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        let stale = self
+            .config
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .is_none_or(|last| last != config);
+        if stale {
+            self.configure(config);
+        }
+        let mut options: Vec<AddGameOption> = self
+            .described()
             .add_game_options
             .iter()
             .cloned()
-            .map(|option| crate::access::gate_add_game_option(option, &self.sandbox.launcher_names))
-            .collect()
+            .filter_map(|option| {
+                crate::access::gate_add_game_option(option, &self.sandbox.launcher_names)
+            })
+            .collect();
+        if let Some(url) = &self.shop_url
+            && !options.iter().any(|o| o.section == AddGameSection::Buy)
+        {
+            options.push(AddGameOption::buy("shop", self.name.clone()).opening_browser(url));
+        }
+        options
     }
 
     fn run_add_game_option(&self, option_id: &str) -> std::result::Result<(), ProviderError> {

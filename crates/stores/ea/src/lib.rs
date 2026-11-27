@@ -30,7 +30,14 @@ pub use account::{
 use questkeep_store_api::auth::{AccountAuth, Http, UreqHttp, WebAccount};
 use questkeep_store_api::model::{ImportedGame, PlayAction, TrackingMode};
 use questkeep_store_api::platform::UninstallEntry;
-use questkeep_store_api::{LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, LibraryProvider, ProviderError};
+
+/// The EA app has no link to its store or its "Redeem code" dialog: both open on the website.
+const SHOP: ShopPages = ShopPages {
+    redeem_url: Some("https://www.ea.com/redeem"),
+    ..ShopPages::web("https://www.ea.com/games")
+};
 
 pub const EA_SOURCE: &str = "ea";
 /// A token capture this recent is reused (the scan right after signing in); tokens live an hour.
@@ -313,8 +320,8 @@ impl LibraryProvider for EaProvider {
         "EA app"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://www.ea.com/games")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

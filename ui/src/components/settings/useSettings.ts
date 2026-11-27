@@ -147,6 +147,8 @@ export function createSettingsModel() {
       store.pushToast("error", errorMessage(error));
       return;
     }
+    // The store's Add game menu entries may follow the option (launcher or browser).
+    void store.loadProviders().catch(() => undefined);
     try {
       await api.scanLibrary(providerId);
       store.scheduleRefresh();

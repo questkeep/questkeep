@@ -118,6 +118,7 @@ popup's More menu, and hidden games in Explore.
 - Activity log: every change to the library with who did it, why and what changed (game page card and drawer, an Activity page with Library and System parts, Ctrl+Shift+A), play sessions in the timeline, size-based retention, included in backups.
 - Prism Launcher moved out into the Prism Launcher plugin (questkeep/plugin-prism); a bell entry points users with Prism games to it.
 - Playtime is called running time, "played" labels say "started" (Last started, Times started, …), and apps say Start instead of Play in more places.
+- Add game menu in submenus (Add, Compare on, Buy from, Activate on) with your own quick-access entries on top (Settings > Window and tray > Title bar); "Activate on <store>" opens where the store redeems product keys; Steam and Epic open their store in the launcher unless set to the browser.
 
 ## Next
 

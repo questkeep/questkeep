@@ -24,11 +24,21 @@ use std::sync::Arc;
 use questkeep_store_api::auth::AccountAuth;
 use questkeep_store_api::model::{Achievements, GameMetadata, GameNews, ImportedGame, PlayAction};
 use questkeep_store_api::settings::{CredentialField, StoreCredentials, StoreSettings};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
 
 pub use account::{CAPTURE_PREFIX, LOGIN_URL, SESSION_URL, SteamAccount};
 
 pub const STEAM_SOURCE: &str = "steam";
+
+/// The store and key activation, in the client (`steam://`) or on the website.
+const SHOP: ShopPages = ShopPages {
+    shop_url: "https://store.steampowered.com/",
+    shop_uri: Some("steam://openurl/https://store.steampowered.com/"),
+    redeem_url: Some("https://store.steampowered.com/account/registerkey"),
+    redeem_uri: Some("steam://open/activateproduct"),
+    redeem_in_launcher: false,
+};
 
 /// Reads installed games from one or more Steam installation directories.
 #[derive(Debug, Clone, Default)]
@@ -76,7 +86,7 @@ impl LibraryProvider for SteamProvider {
     fn settings(&self) -> StoreSettings {
         // The Steam Web API key: the alternative to signing in.
         StoreSettings {
-            options: Vec::new(),
+            options: SHOP.option().into_iter().collect(),
             credentials: Some(StoreCredentials {
                 noun: "Steam key".into(),
                 offer: "Use a Steam Web API key instead".into(),
@@ -118,8 +128,8 @@ impl LibraryProvider for SteamProvider {
         "Steam"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://store.steampowered.com/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

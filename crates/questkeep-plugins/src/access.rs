@@ -232,8 +232,15 @@ pub fn is_protected(path: &Path, protected: &[PathBuf]) -> bool {
 
 /// A plugin store's add-game option: its launcher keys (pressed in another program's window) are
 /// kept only when the manifest declares that process (`permissions.launcher.processNames`);
-/// otherwise the option just opens the launcher.
-pub fn gate_add_game_option(mut option: AddGameOption, declared: &[String]) -> AddGameOption {
+/// otherwise the option just opens the launcher. Options opening a store URI are dropped: only
+/// built-in stores may open those.
+pub fn gate_add_game_option(
+    mut option: AddGameOption,
+    declared: &[String],
+) -> Option<AddGameOption> {
+    if matches!(option.opens, AddGameTarget::Uri { .. }) {
+        return None;
+    }
     if let AddGameTarget::Launcher { keys, .. } = &mut option.opens {
         let allowed = keys.as_ref().is_some_and(|keys| {
             declared
@@ -244,7 +251,7 @@ pub fn gate_add_game_option(mut option: AddGameOption, declared: &[String]) -> A
             *keys = None;
         }
     }
-    option
+    Some(option)
 }
 
 /// What a plugin store may tell Questkeep to close after a game: only processes whose names the
@@ -299,16 +306,18 @@ mod tests {
         );
         let declared = vec!["prismlauncher.exe".to_string()];
         let kept = gate_add_game_option(option.clone(), &declared);
-        assert_eq!(kept, option, "declared (any case): kept");
+        assert_eq!(kept, Some(option.clone()), "declared (any case): kept");
         let still_opens = AddGameOption::new("new", "New").opening_launcher("--show-window");
         assert_eq!(
             gate_add_game_option(option.clone(), &["other.exe".to_string()]),
-            still_opens,
+            Some(still_opens.clone()),
             "keys dropped, the launcher still opens"
         );
-        assert_eq!(gate_add_game_option(option, &[]), still_opens);
-        let browser = AddGameOption::new("web", "Web").opening_browser("https://example.com");
-        assert_eq!(gate_add_game_option(browser.clone(), &[]), browser);
+        assert_eq!(gate_add_game_option(option, &[]), Some(still_opens));
+        let browser = AddGameOption::buy("web", "Web").opening_browser("https://example.com");
+        assert_eq!(gate_add_game_option(browser.clone(), &[]), Some(browser));
+        let uri = AddGameOption::activate("key", "Key").opening_uri("steam://open/activateproduct");
+        assert_eq!(gate_add_game_option(uri, &declared), None, "no store URIs");
     }
     use questkeep_store_api::model::PlayAction;
 

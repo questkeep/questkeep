@@ -53,6 +53,13 @@ export function settingEntries(): SearchEntry[] {
     e("startMinimized", "windowTray", general("startMinimized")),
     e("closeToTray", "windowTray", general("closeToTray")),
     e("minimizeToTray", "windowTray", general("minimizeToTray")),
+    e(
+      "quickAccess",
+      "windowTray",
+      general("quickAccess"),
+      undefined,
+      "title bar add game menu buy activate key redeem",
+    ),
     e("trayIcon", "windowTray", general("trayIcon")),
     e("quickLaunchRows", "windowTray", general("quickLaunchRows")),
     e("quickLaunch", "windowTray", general("quickLaunch")),

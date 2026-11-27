@@ -170,6 +170,8 @@ describe("title bar buttons", () => {
     expect(open).toHaveBeenCalledTimes(1);
 
     await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    // Extension entries close the Add submenu.
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Add" }));
     expect(screen.getByRole("menuitem", { name: "Import from file" })).toBeInTheDocument();
   });
 });

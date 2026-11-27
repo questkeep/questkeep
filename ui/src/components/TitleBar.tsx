@@ -18,16 +18,22 @@ import Square from "lucide-solid/icons/square";
 import X from "lucide-solid/icons/x";
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
 import * as api from "../lib/api";
-import { addGameMenuItems, type AddGameMenuItem } from "../lib/addGameOptions";
+import { quickItems, type AddMenuItem } from "../lib/addMenu";
 import { translator } from "../i18n";
 import { shellCommandBar } from "../i18n/shellCommandBar";
 import { shellTitleBar } from "../i18n/shellTitleBar";
 import { readCssPx } from "../lib/layoutMode";
-import { shopping } from "../i18n/shopping";
 import { activity } from "../i18n/activity";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
+import {
+  AddMenuIcon,
+  currentAddMenuGroups,
+  quickItemLabel,
+  SectionIcon,
+  sectionName,
+} from "./AddMenuParts";
 import { AppsLauncher } from "./AppsLauncher";
 import { CommandBar, type CommandBarHandle } from "./CommandBar";
 import { ExtensionTitleBarButtons } from "./ExtensionButtons";
@@ -36,49 +42,67 @@ import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
 import { NotificationBell } from "./NotificationBell";
 import type { PopoverAnchor } from "./Popover";
-import { SiteIcon } from "./SiteIcon";
 import { sourceName, SourceIcon } from "./SourceIcon";
 import { openLink } from "./settings/openLink";
 import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
 
 const tr = translator(shellTitleBar);
 const trCommand = translator(shellCommandBar);
-const trShop = translator(shopping);
 const trActivity = translator(activity);
 
-/** "Buy from …" for each store with a website, then "Compare on …" for each price site, as
- * separated groups; all open in the user's browser. */
-function shopEntries(): MenuEntry[] {
-  const stores = store
-    .providers()
-    .filter((p) => p.shopUrl !== null)
-    .map((p): MenuEntry => ({
-      label: trShop("buyFrom", { store: p.name }),
-      icon: () => <SourceIcon source={p.id} />,
-      onSelect: () => void openLink(p.shopUrl ?? ""),
-    }));
-  const sites = store.priceSites().map((site): MenuEntry => ({
-    label: trShop("compareOn", { site: site.name }),
-    icon: () => <SiteIcon url={site.url} />,
-    onSelect: () => void openLink(site.url),
-  }));
-  const entries: MenuEntry[] = [];
-  for (const group of [stores, sites]) {
-    if (group.length > 0) entries.push({ kind: "separator" }, ...group);
+/** Runs a menu entry: the manual add dialog, a store's option or a price site. */
+async function runAddMenuItem(item: AddMenuItem, onManual: () => void) {
+  const action = item.action;
+  if (action.kind === "manual") {
+    onManual();
+    return;
   }
-  return entries;
-}
-
-async function runAddOption(item: AddGameMenuItem) {
+  if (action.kind === "site") {
+    void openLink(action.url);
+    return;
+  }
   try {
-    await api.addGameWithOption(item.providerId, item.optionId);
-    store.pushToast(
-      "info",
-      tr(item.inBrowser ? "openedInBrowser" : "opened", { provider: item.providerName }),
-    );
+    await api.addGameWithOption(action.providerId, action.optionId);
+    // Only a way to add games ends with a new game to wait for.
+    if (item.section === "add") {
+      store.pushToast(
+        "info",
+        tr(action.inBrowser ? "openedInBrowser" : "opened", { provider: action.providerName }),
+      );
+    }
   } catch (error) {
     store.pushToast("error", errorMessage(error));
   }
+}
+
+/**
+ * The "Add game" menu: the quick-access entries (Settings → Window and tray), then a submenu per
+ * section; extension entries close the Add submenu.
+ */
+function addMenuEntries(onManual: () => void): MenuEntry[] {
+  const groups = currentAddMenuGroups();
+  const entry = (item: AddMenuItem, label: string, hint?: string): MenuEntry => ({
+    label,
+    hint,
+    icon: () => <AddMenuIcon item={item} />,
+    onSelect: () => void runAddMenuItem(item, onManual),
+  });
+  const quick = quickItems(store.quickAccess(), groups).map((item) =>
+    entry(item, quickItemLabel(item)),
+  );
+  const extensions = extensionEntries("add");
+  const submenus = groups.map((group): MenuEntry => ({
+    kind: "submenu",
+    label: sectionName(group.section),
+    icon: () => <SectionIcon section={group.section} />,
+    entries: () => [
+      ...group.items.map((item) => entry(item, item.label, item.hint)),
+      ...(group.section === "add" && extensions.length > 0
+        ? [{ kind: "separator" } as const, ...extensions]
+        : []),
+    ],
+  }));
+  return [...quick, ...(quick.length > 0 ? [{ kind: "separator" } as const] : []), ...submenus];
 }
 
 async function openLauncher(id: string) {
@@ -235,25 +259,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
     if (returnFocus && which) buttons[which]?.focus();
   }
 
-  const addEntries = (): MenuEntry[] => {
-    const options = addGameMenuItems(store.providers());
-    return [
-      {
-        label: tr("addGameEllipsis"),
-        icon: () => <Plus class="icon" aria-hidden="true" />,
-        onSelect: props.onAdd,
-      },
-      ...(options.length > 0 ? [{ kind: "separator" } as const] : []),
-      ...options.map((item): MenuEntry => ({
-        label: item.label,
-        hint: item.providerName,
-        icon: () => <SourceIcon source={item.providerId} />,
-        onSelect: () => void runAddOption(item),
-      })),
-      ...shopEntries(),
-      ...extensionEntries("add"),
-    ];
-  };
+  const addEntries = (): MenuEntry[] => addMenuEntries(props.onAdd);
 
   const appEntries = (): MenuEntry[] => [
     {
@@ -311,6 +317,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
   const toolButton = (
     which: "add" | "launch" | "apps" | "sync",
     label: string,
+    tooltip: string,
     icon: () => JSX.Element,
   ) => (
     <button
@@ -319,7 +326,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       class="titlebar__tool"
       classList={{ "titlebar__tool--open": open() === which }}
       aria-label={label}
-      data-tooltip={label}
+      data-tooltip={tooltip}
       aria-haspopup={which === "sync" || which === "apps" ? "dialog" : "menu"}
       aria-expanded={open() === which}
       onClick={() => toggle(which)}
@@ -373,17 +380,17 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           </button>
           <span class="titlebar__separator titlebar__separator--start" aria-hidden="true" />
         </div>
-        {toolButton("add", tr("addGame"), () => (
+        {toolButton("add", tr("addGame"), tr("addGameHint"), () => (
           <Plus class="icon" aria-hidden="true" />
         ))}
-        {toolButton("launch", tr("openLauncher"), () => (
+        {toolButton("launch", tr("openLauncher"), tr("openLauncher"), () => (
           <Rocket class="icon" aria-hidden="true" />
         ))}
-        {toolButton("apps", tr("apps"), () => (
+        {toolButton("apps", tr("apps"), tr("apps"), () => (
           <LayoutGrid class="icon" aria-hidden="true" />
         ))}
         <span class="titlebar__sync">
-          {toolButton("sync", syncButtonLabel(), () => (
+          {toolButton("sync", syncButtonLabel(), syncButtonLabel(), () => (
             <RefreshCw
               class="icon"
               classList={{ "icon--spin": store.syncBusy() || downloading() }}

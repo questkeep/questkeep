@@ -28,7 +28,14 @@ pub use install::InstallRecord;
 
 use questkeep_store_api::model::{ImportedGame, PlayAction};
 use questkeep_store_api::settings::{StoreOption, StoreSettings};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
+
+/// Keys are activated in Ubisoft Connect only (Menu → Activate a key); there is no web page.
+const SHOP: ShopPages = ShopPages {
+    redeem_in_launcher: true,
+    ..ShopPages::web("https://store.ubisoft.com/")
+};
 
 pub const UBISOFT_SOURCE: &str = "ubisoft";
 /// Provider setting that turns on importing the launcher's product cache.
@@ -177,8 +184,8 @@ impl LibraryProvider for UbisoftProvider {
         "Ubisoft Connect"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://store.ubisoft.com/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

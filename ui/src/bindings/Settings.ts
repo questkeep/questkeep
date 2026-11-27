@@ -9,6 +9,7 @@ import type { PriceSite } from "./PriceSite";
 import type { SortPrefixes } from "./SortPrefixes";
 import type { StartPageSettings } from "./StartPageSettings";
 import type { StartupPage } from "./StartupPage";
+import type { TitleBarSettings } from "./TitleBarSettings";
 import type { TraySettings } from "./TraySettings";
 import type { WindowOnGameStart } from "./WindowOnGameStart";
 
@@ -168,4 +169,8 @@ movedStoreNotices: Array<string>,
 /**
  * How much of the activity log is kept.
  */
-activity: ActivitySettings, };
+activity: ActivitySettings, 
+/**
+ * The title bar's "Add game" menu.
+ */
+titleBar: TitleBarSettings, };

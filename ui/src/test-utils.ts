@@ -134,7 +134,6 @@ export function makeProvider(overrides: Partial<ProviderInfo> & { id: string }):
     canUninstall: false,
     launcherPages: false,
     launcherClose: null,
-    shopUrl: null,
     installed: true,
     syncable: true,
     addGameOptions: [],

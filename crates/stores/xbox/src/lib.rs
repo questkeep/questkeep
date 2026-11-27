@@ -28,7 +28,14 @@ use questkeep_store_api::auth::{AccountAuth, Http, UreqHttp};
 use questkeep_store_api::model::{Achievements, GameMetadata, ImportedGame, PlayAction};
 use questkeep_store_api::platform::{self, AppxPackage};
 use questkeep_store_api::settings::{StoreOption, StoreSettings};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
+
+/// Codes (25 characters) are redeemed for the Microsoft account on the website.
+const SHOP: ShopPages = ShopPages {
+    redeem_url: Some("https://redeem.microsoft.com/"),
+    ..ShopPages::web("https://www.xbox.com/")
+};
 
 pub use account::{LOGIN_REDIRECT_PREFIX, XboxAccount};
 
@@ -147,8 +154,8 @@ impl LibraryProvider for XboxProvider {
         "Xbox"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://www.xbox.com/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

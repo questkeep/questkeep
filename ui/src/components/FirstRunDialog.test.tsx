@@ -42,6 +42,7 @@ const SETTINGS: Settings = {
   tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
   startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
   movedStoreNotices: [],
+  titleBar: { quickAccess: ["add:manual"] },
   activity: { libraryMaxMb: 50, systemDays: 30, recordPluginRequests: true },
   detectExternalLaunches: true,
   showStartPage: true,

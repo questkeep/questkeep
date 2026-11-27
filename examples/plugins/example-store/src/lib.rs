@@ -2,7 +2,9 @@
 
 use std::cell::Cell;
 
-use questkeep_plugin_sdk::model::{GameLink, GameMetadata, ImportedGame, PlayAction};
+use questkeep_plugin_sdk::model::{
+    AddGameOption, GameLink, GameMetadata, ImportedGame, PlayAction,
+};
 use questkeep_plugin_sdk::settings::{StoreOption, StoreSettings};
 use questkeep_plugin_sdk::{ImageCandidate, Provider, ProviderError, export_provider, log};
 use serde::Deserialize;
@@ -89,8 +91,13 @@ impl Provider for ExampleStore {
         true
     }
 
-    fn shop_url(&self) -> Option<String> {
-        Some(SHOP_URL.into())
+    /// "Buy from Example Store" and "Activate on Example Store" in the "Add game" menu.
+    fn add_game_options(&self) -> Vec<AddGameOption> {
+        vec![
+            AddGameOption::buy("shop", "Example Store").opening_browser(SHOP_URL),
+            AddGameOption::activate("redeem", "Example Store")
+                .opening_browser(format!("{SHOP_URL}/redeem")),
+        ]
     }
 
     fn settings(&self) -> StoreSettings {

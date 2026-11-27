@@ -4,4 +4,4 @@ import type { LauncherKeys } from "./LauncherKeys";
 /**
  * What an [`AddGameOption`] opens.
  */
-export type AddGameTarget = { "kind": "provider" } | { "kind": "launcher", args: string, keys?: LauncherKeys, } | { "kind": "browser", url: string, };
+export type AddGameTarget = { "kind": "provider" } | { "kind": "launcher", args: string, keys?: LauncherKeys, } | { "kind": "browser", url: string, } | { "kind": "uri", uri: string, };

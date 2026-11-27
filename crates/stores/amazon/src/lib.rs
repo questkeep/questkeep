@@ -20,7 +20,11 @@ use std::sync::Arc;
 
 use questkeep_store_api::auth::AccountAuth;
 use questkeep_store_api::model::{ImportedGame, PlayAction};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
+
+/// Prime Gaming codes are redeemed at the store the offer names, so there is no "Activate on".
+const SHOP: ShopPages = ShopPages::web("https://gaming.amazon.com/");
 use questkeep_store_heroic::{self as heroic, HeroicPaths};
 
 pub use account::{AmazonAccount, CODE_PARAM, LOGIN_RETURN_PREFIX};
@@ -93,8 +97,8 @@ impl LibraryProvider for AmazonProvider {
         "Amazon Games"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://gaming.amazon.com/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

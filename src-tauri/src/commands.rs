@@ -394,9 +394,10 @@ pub async fn scan_library(
     .await
 }
 
-/// Opens one of a provider's extra ways to add games (e.g. Prism Launcher's "Add Instance"
-/// dialog). A worker then checks the provider every few seconds for up to ten minutes and
-/// imports the first new game it sees, so the game shows up without a manual sync.
+/// Runs one of a provider's "Add game" menu entries. For a way to add games (e.g. Prism
+/// Launcher's "Add Instance" dialog) a worker then checks the provider every few seconds for up to
+/// ten minutes and imports the first new game it sees, so the game shows up without a manual
+/// sync; the shop and key redemption entries just open their page.
 #[tauri::command]
 pub async fn add_game_with_option(
     state: State<'_, Arc<AppState>>,
@@ -406,7 +407,9 @@ pub async fn add_game_with_option(
 ) -> CmdResult<()> {
     let app_state = Arc::clone(&state);
     acting(state, caller, move |s| {
-        let before = s.library.run_add_game_option(&provider_id, &option_id)?;
+        let Some(before) = s.library.run_add_game_option(&provider_id, &option_id)? else {
+            return Ok(());
+        };
         std::thread::Builder::new()
             .name("add-game-watch".into())
             .spawn(move || {

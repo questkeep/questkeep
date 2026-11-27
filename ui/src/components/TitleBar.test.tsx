@@ -27,18 +27,29 @@ function provider(id: string, name: string, canScan = true): ProviderInfo {
     canUninstall: false,
     launcherPages: false,
     launcherClose: null,
-    shopUrl: null,
     installed: true,
     syncable: canScan,
     addGameOptions:
       id === "prism"
-        ? [{ id: "new-instance", label: "New Minecraft instance", opens: { kind: "provider" } }]
+        ? [
+            {
+              id: "new-instance",
+              label: "New Minecraft instance",
+              section: "add",
+              opens: { kind: "provider" },
+            },
+          ]
         : [],
     settings: { options: [], credentials: null, notice: null },
   };
 }
 
 const send = (event: CoreEvent) => store.handleCoreEvent(event);
+const labels = (menu: HTMLElement) =>
+  within(menu)
+    .getAllByRole("menuitem")
+    .map((i) => i.textContent);
+const web = (url: string) => ({ kind: "browser", url }) as const;
 const scanned = (id: string, added: number, updated: number): CoreEvent => ({
   type: "libraryScanned",
   provider: id,
@@ -132,38 +143,60 @@ describe("Sync", () => {
 });
 
 describe("Menus", () => {
-  it("adds games from the Add game menu", async () => {
+  it("adds games from the quick access entries and the Add submenu", async () => {
     const onAdd = vi.fn<() => void>();
     render(() => <TitleBar onAdd={onAdd} />);
     await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
     const menu = screen.getByRole("menu", { name: "Add game" });
-    expect(
-      within(menu).getByRole("menuitem", { name: /New Minecraft instance/ }),
-    ).toHaveTextContent("Prism Launcher");
-    await fireEvent.click(within(menu).getByRole("menuitem", { name: /Add a game/ }));
+    expect(labels(menu)).toEqual(["Add a game…", "Add"]);
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Add" }));
+    const add = screen.getByRole("menu", { name: "Add" });
+    expect(within(add).getByRole("menuitem", { name: /New Minecraft instance/ })).toHaveTextContent(
+      "Prism Launcher",
+    );
+    await fireEvent.click(within(add).getByRole("menuitem", { name: "Manual game…" }));
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("offers the store websites and price sites, opened in the browser", async () => {
+  it("sorts shops, key activation and price sites into submenus, chosen ones on top", async () => {
     vi.mocked(api.listProviders).mockResolvedValue([
-      { ...provider("steam", "Steam"), shopUrl: "https://store.steampowered.com/" },
+      {
+        ...provider("steam", "Steam"),
+        addGameOptions: [
+          { id: "shop", label: "Steam", section: "buy", opens: web("https://s.example/") },
+          { id: "redeem", label: "Steam", section: "activate", opens: web("https://s.example/k") },
+        ],
+      },
       provider("epic", "Epic Games"),
     ]);
+    vi.mocked(api.addGameWithOption).mockResolvedValue(undefined);
     vi.mocked(api.getSettings).mockResolvedValue({
       language: null,
       showStartPage: true,
       startupPage: { kind: "start" },
       priceSites: [{ name: "GG.deals", url: "https://gg.deals/" }],
+      titleBar: { quickAccess: ["activate:steam/redeem", "gone:x", "compare:https://gg.deals/"] },
     } as unknown as Settings);
     store.reset();
     await store.init();
     render(() => <TitleBar onAdd={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
     const menu = screen.getByRole("menu", { name: "Add game" });
-    expect(within(menu).queryByRole("menuitem", { name: "Buy from Epic Games" })).toBeNull();
-    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Buy from Steam" }));
-    expect(openUrl).toHaveBeenLastCalledWith("https://store.steampowered.com/");
+    expect(labels(menu)).toEqual([
+      "Activate on Steam",
+      "Compare on GG.deals",
+      "Add",
+      "Compare on",
+      "Buy from",
+      "Activate on",
+    ]);
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Buy from" }));
+    const buy = screen.getByRole("menu", { name: "Buy from" });
+    expect(labels(buy)).toEqual(["Steam"]);
+    await fireEvent.click(within(buy).getByRole("menuitem", { name: "Steam" }));
+    expect(api.addGameWithOption).toHaveBeenLastCalledWith("steam", "shop");
+    expect(store.toasts()).toEqual([]);
     await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "Compare on GG.deals" }));
     expect(openUrl).toHaveBeenLastCalledWith("https://gg.deals/");

@@ -2,6 +2,8 @@ import { For, Show } from "solid-js";
 import type { WindowOnGameStart } from "../../bindings/WindowOnGameStart";
 import { translator } from "../../i18n";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
+import { MANUAL_ID } from "../../lib/addMenu";
+import { QuickAccessPicker } from "./QuickAccessPicker";
 import { CheckOption, saveWhole } from "./SettingsControls";
 import { TraySettings } from "./TraySettings";
 import type { SettingsModel } from "./useSettings";
@@ -54,6 +56,20 @@ export function WindowTraySection(props: { model: SettingsModel }) {
               option="minimizeToTray"
               checked={current().minimizeToTray}
             />
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("titleBarGroup")}</legend>
+            <div class="settings-row">
+              <div class="settings-row__text">
+                <span id="quick-access-label">{tr("quickAccess")}</span>
+                <span class="field__hint">{tr("quickAccessHint")}</span>
+              </div>
+              <QuickAccessPicker
+                ids={current().titleBar?.quickAccess ?? [MANUAL_ID]}
+                labelledBy="quick-access-label"
+                onChange={(quickAccess) => void props.model.update({ titleBar: { quickAccess } })}
+              />
+            </div>
           </fieldset>
           <fieldset class="fieldset settings-group">
             <legend class="fieldset__legend">{tr("trayGroup")}</legend>

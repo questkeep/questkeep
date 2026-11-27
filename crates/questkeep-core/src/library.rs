@@ -34,7 +34,7 @@ use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderReg
 use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
-use questkeep_store_api::model::AddGameTarget;
+use questkeep_store_api::model::{AddGameOption, AddGameSection, AddGameTarget};
 
 mod edit;
 
@@ -2513,31 +2513,35 @@ impl Library {
             .map_err(|err| CoreError::Launch(format!("Could not open the launcher: {err}")))
     }
 
-    /// Starts one of a provider's extra ways to add games (e.g. Prism Launcher's "new instance"
-    /// dialog) and returns the ids its installed scan sees now, for [`Self::wait_for_new_games`].
+    /// Runs one of a provider's "Add game" menu entries: opens a way to add games (e.g. Prism
+    /// Launcher's "new instance" dialog), the store's shop or its key redemption. For a way to add
+    /// games it returns the ids the store's installed scan sees now, for
+    /// [`Self::wait_for_new_games`]; `None` for the others, which install nothing.
     pub fn run_add_game_option(
         &self,
         provider_id: &str,
         option_id: &str,
-    ) -> Result<std::collections::HashSet<String>> {
+    ) -> Result<Option<std::collections::HashSet<String>>> {
         let provider = self
             .providers
             .get(provider_id)
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
-        let opens = provider
-            .add_game_options()
+        let settings = self.settings();
+        let option = provider
+            .add_game_options(settings.provider_config(provider_id))
             .into_iter()
             .find(|o| o.id == option_id)
-            .map(|o| o.opens)
-            .unwrap_or_default();
-        if let AddGameTarget::Browser { url } = &opens {
+            .unwrap_or_else(|| AddGameOption::new(option_id, ""));
+        let adds = option.section == AddGameSection::Add;
+        let before = || adds.then(|| self.installed_ids(provider_id));
+        if let AddGameTarget::Browser { url } = &option.opens {
             if !is_https_url(url) {
                 return Err(CoreError::Invalid(format!(
                     "{} gave a web address that isn't https: {url}",
                     provider.name()
                 )));
             }
-            let before = self.installed_ids(provider_id);
+            let before = before();
             crate::platform::open_uri(url).map_err(|err| {
                 CoreError::Launch(format!("Could not open {url} in the browser: {err}"))
             })?;
@@ -2549,8 +2553,15 @@ impl Library {
                 provider.name()
             )));
         }
-        let before = self.installed_ids(provider_id);
-        if let AddGameTarget::Launcher { args, keys } = opens {
+        let before = before();
+        if let AddGameTarget::Uri { uri } = &option.opens {
+            crate::providers::platform::allow_foreground_handoff();
+            run_store_action(&PlayAction::uri(uri.clone())).map_err(|err| {
+                CoreError::Launch(format!("Could not open {}: {err}", provider.name()))
+            })?;
+            return Ok(before);
+        }
+        if let AddGameTarget::Launcher { args, keys } = option.opens {
             let action = with_extra_args(
                 provider.launcher().ok_or_else(|| {
                     CoreError::Invalid(format!("{} isn't installed on this PC.", provider.name()))
@@ -3302,7 +3313,13 @@ mod tests {
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(self.0.lock().unwrap().clone())
         }
+        fn add_game_options(&self, _: &serde_json::Value) -> Vec<AddGameOption> {
+            vec![AddGameOption::activate("key", "Dialog")]
+        }
         fn run_add_game_option(&self, option_id: &str) -> Result<(), ProviderError> {
+            if option_id == "key" {
+                return Ok(());
+            }
             if option_id != "new" {
                 return Err(ProviderError::Unsupported);
             }
@@ -3338,11 +3355,8 @@ mod tests {
             action.args = Some("--portable".into());
             Some(action)
         }
-        fn add_game_options(&self) -> Vec<crate::providers::AddGameOption> {
-            vec![
-                crate::providers::AddGameOption::new("new", "New thing")
-                    .opening_launcher("--show-window"),
-            ]
+        fn add_game_options(&self, _: &serde_json::Value) -> Vec<AddGameOption> {
+            vec![AddGameOption::new("new", "New thing").opening_launcher("--show-window")]
         }
         fn run_add_game_option(&self, _: &str) -> Result<(), ProviderError> {
             panic!("an option that opens the launcher must not reach the provider");
@@ -3414,7 +3428,12 @@ mod tests {
         let before = lib.installed_ids("dialog");
         assert!(!lib.wait_for_new_games("dialog", &before, short, short * 5));
 
-        let before = lib.run_add_game_option("dialog", "new").unwrap();
+        assert_eq!(
+            lib.run_add_game_option("dialog", "key").unwrap(),
+            None,
+            "activating a key installs nothing to watch for"
+        );
+        let before = lib.run_add_game_option("dialog", "new").unwrap().unwrap();
         assert_eq!(before.len(), 1);
         assert!(lib.wait_for_new_games(
             "dialog",
@@ -3795,8 +3814,11 @@ mod tests {
         fn account(&self) -> Option<&dyn crate::auth::AccountAuth> {
             Some(self.0.as_ref())
         }
-        fn add_game_options(&self) -> Vec<crate::providers::AddGameOption> {
-            vec![crate::providers::AddGameOption::new("new", "New thing")]
+        fn add_game_options(&self, _: &serde_json::Value) -> Vec<AddGameOption> {
+            vec![
+                AddGameOption::new("new", "New thing"),
+                AddGameOption::buy("shop", "Account").opening_browser("https://example.com/"),
+            ]
         }
     }
 
@@ -3850,7 +3872,16 @@ mod tests {
         let info = |lib: &Library| lib.provider_infos().remove(0);
         assert!(!info(&lib).installed);
         assert!(!info(&lib).syncable);
-        assert!(info(&lib).add_game_options.is_empty());
+        let options: Vec<_> = info(&lib)
+            .add_game_options
+            .into_iter()
+            .map(|o| o.id)
+            .collect();
+        assert_eq!(
+            options,
+            ["shop"],
+            "only the web page works without the client"
+        );
         assert!(lib.scan_all().is_empty(), "skipped by Sync all");
         let err = lib.scan("acct").unwrap_err().to_string();
         assert!(err.contains("isn't installed"), "{err}");

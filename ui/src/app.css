@@ -1804,6 +1804,53 @@ ul {
   display: flex;
   gap: var(--qk-space-2);
 }
+/* Settings → Window and tray → Title bar: the quick-access popup (chosen entries, then a tree). */
+.quick-access {
+  width: var(--qk-quick-access-width);
+  max-width: calc(100vw - 2 * var(--qk-space-2));
+}
+.quick-access .quick-launch {
+  margin: 0 var(--qk-space-1) var(--qk-space-1);
+}
+.quick-access__empty {
+  margin: 0 var(--qk-space-2) var(--qk-space-2);
+}
+.quick-access__tree,
+.quick-access__tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quick-access__section:focus-visible,
+.quick-access__item:focus-visible {
+  outline: none;
+}
+.quick-access__row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-1) var(--qk-space-2);
+  border-radius: var(--qk-radius-sm);
+  cursor: pointer;
+}
+.quick-access__section > .quick-access__row {
+  font-weight: var(--qk-font-weight-bold);
+}
+.quick-access__item {
+  padding-left: calc(var(--qk-space-2) + var(--qk-icon-size) + var(--qk-space-2));
+}
+.quick-access__row:hover,
+:where(html[data-keyboard-focus]) .quick-access__item:focus-visible,
+:where(html[data-keyboard-focus]) .quick-access__section:focus-visible > .quick-access__row {
+  background: var(--qk-color-surface-hover);
+}
+.quick-access__item input {
+  margin: 0;
+  pointer-events: none;
+}
+.quick-access__chevron {
+  color: var(--qk-color-text-faint);
+}
 .edit-playtime {
   display: flex;
   gap: var(--qk-space-3);

@@ -107,6 +107,27 @@ pub struct Settings {
     pub moved_store_notices: Vec<String>,
     /// How much of the activity log is kept.
     pub activity: crate::activity::ActivitySettings,
+    /// The title bar's "Add game" menu.
+    pub title_bar: TitleBarSettings,
+}
+
+/// The title bar's "Add game" menu.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct TitleBarSettings {
+    /// The entries shown at the top of the menu, in order, besides their submenus: `add:manual`,
+    /// `add:<store>/<option>`, `buy:<store>/<option>`, `activate:<store>/<option>` or
+    /// `compare:<price site url>`. Entries whose store or site is gone stay listed but aren't shown.
+    pub quick_access: Vec<String>,
+}
+
+impl Default for TitleBarSettings {
+    fn default() -> Self {
+        Self {
+            quick_access: vec!["add:manual".into()],
+        }
+    }
 }
 
 /// What the start page shows (each part can be switched off, up to an empty page).
@@ -365,6 +386,7 @@ impl Default for Settings {
             tray: TraySettings::default(),
             start_page: StartPageSettings::default(),
             moved_store_notices: Vec::new(),
+            title_bar: TitleBarSettings::default(),
             activity: crate::activity::ActivitySettings::default(),
         }
     }
@@ -743,6 +765,9 @@ mod tests {
                 library_max_mb: 20,
                 system_days: 7,
                 record_plugin_requests: false,
+            },
+            title_bar: TitleBarSettings {
+                quick_access: vec!["activate:steam/redeem".into(), "add:manual".into()],
             },
         };
         store.save(&custom).unwrap();

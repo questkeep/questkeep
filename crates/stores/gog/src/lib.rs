@@ -36,9 +36,16 @@ pub const LAUNCH_THROUGH_GALAXY: &str = "launchThroughGalaxy";
 use questkeep_store_api::auth::AccountAuth;
 use questkeep_store_api::model::{CatalogHit, GameMetadata, ImportedGame, PlayAction};
 use questkeep_store_api::settings::{StoreOption, StoreSettings};
-use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
+use questkeep_store_api::shop::ShopPages;
+use questkeep_store_api::{AddGameOption, ImageCandidate, LibraryProvider, ProviderError};
 
 pub const GOG_SOURCE: &str = "gog";
+
+/// Galaxy has no link to its store or its "Redeem GOG code" dialog: both open on the website.
+const SHOP: ShopPages = ShopPages {
+    redeem_url: Some("https://www.gog.com/redeem"),
+    ..ShopPages::web("https://www.gog.com/")
+};
 
 /// Store lookups kept in memory so cover, background and metadata of one game share a request.
 const CACHE_LIMIT: usize = 64;
@@ -225,8 +232,8 @@ impl LibraryProvider for GogProvider {
         "GOG"
     }
 
-    fn shop_url(&self) -> Option<&'static str> {
-        Some("https://www.gog.com/")
+    fn add_game_options(&self, config: &serde_json::Value) -> Vec<AddGameOption> {
+        SHOP.entries(self.name(), self.is_installed(), config)
     }
 
     fn icon_svg(&self) -> &'static str {

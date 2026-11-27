@@ -16,10 +16,6 @@ icon: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean,
  */
 launcherPages: boolean, 
 /**
- * The store's website for buying games (see [`LibraryProvider::shop_url`]).
- */
-shopUrl: string | null, 
-/**
  * The store's client is on this PC (see [`LibraryProvider::is_installed`]).
  */
 installed: boolean, 
@@ -28,7 +24,8 @@ installed: boolean,
  */
 syncable: boolean, 
 /**
- * Extra ways to add games (see [`LibraryProvider::add_game_options`]).
+ * The store's entries in the "Add game" menu (see [`LibraryProvider::add_game_options`]):
+ * only those opening a web page while the store isn't installed.
  */
 addGameOptions: Array<AddGameOption>, 
 /**

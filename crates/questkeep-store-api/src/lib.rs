@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod platform;
 mod provider;
+pub mod shop;
 pub mod sqlite;
 pub mod traffic;
 

@@ -66,7 +66,6 @@ const provider = (id: string, canScan = true, installed = true) => ({
   canUninstall: false,
   launcherPages: false,
   launcherClose: null,
-  shopUrl: null,
   installed,
   syncable: canScan && installed,
   addGameOptions: [],

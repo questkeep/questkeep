@@ -86,11 +86,6 @@ pub trait LibraryProvider: Send + Sync {
     fn has_launcher_pages(&self) -> bool {
         false
     }
-    /// The store's website where games are bought (an https URL), opened in the user's browser
-    /// from the + menu. `None` for stores without one.
-    fn shop_url(&self) -> Option<&str> {
-        None
-    }
     /// Opens the game's own page in the store's launcher (e.g. its Steam library page), usually a
     /// store URI. `None` when the store has no such page for this game.
     fn launcher_page(&self, _source_game_id: &str) -> Option<PlayAction> {
@@ -207,12 +202,16 @@ pub trait LibraryProvider: Send + Sync {
     fn settings(&self) -> StoreSettings {
         StoreSettings::default()
     }
-    /// Extra ways to add games that this provider offers next to "Add game", e.g. the launcher's
-    /// own "new instance" dialog. Empty by default.
-    fn add_game_options(&self) -> Vec<AddGameOption> {
+    /// The store's entries in the "Add game" menu, each in its section: ways to add games (e.g.
+    /// the launcher's own "new instance" dialog), the shop ("Buy from") and where product keys are
+    /// redeemed ("Activate on"). `config` is the store's settings section, e.g. a choice between
+    /// the launcher and the browser. Entries that need the client are only shown while the store
+    /// is installed; ones opening a web page always. Empty by default. Must be cheap.
+    fn add_game_options(&self, _config: &serde_json::Value) -> Vec<AddGameOption> {
         Vec::new()
     }
-    /// Starts one of [`add_game_options`](Self::add_game_options) (opens the launcher's dialog)
+    /// Starts one of [`add_game_options`](Self::add_game_options) that has the
+    /// [`Provider`](crate::model::AddGameTarget::Provider) target (opens the launcher's dialog)
     /// and returns without waiting for the user. The library watches the installed scan for the
     /// game the user adds there.
     fn run_add_game_option(&self, _option_id: &str) -> Result<(), ProviderError> {

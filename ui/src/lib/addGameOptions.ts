@@ -1,28 +1,3 @@
-import type { ProviderInfo } from "../bindings/ProviderInfo";
-
-/** One entry of the "Add game" menu: a provider's own way to add games. */
-export interface AddGameMenuItem {
-  providerId: string;
-  providerName: string;
-  optionId: string;
-  label: string;
-  /** The option opens a web page in the browser (not the store's launcher). */
-  inBrowser: boolean;
-}
-
-/** Every provider's add-game options, in provider order. */
-export function addGameMenuItems(providers: ProviderInfo[]): AddGameMenuItem[] {
-  return providers.flatMap((provider) =>
-    (provider.addGameOptions ?? []).map((option) => ({
-      providerId: provider.id,
-      providerName: provider.name,
-      optionId: option.id,
-      label: option.label,
-      inBrowser: option.opens.kind === "browser",
-    })),
-  );
-}
-
 /** Index of the item to focus after `key` in a menu of `count` items (null: not a menu key). */
 export function nextMenuIndex(key: string, current: number, count: number): number | null {
   if (count === 0) return null;

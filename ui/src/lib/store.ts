@@ -265,6 +265,8 @@ function createAppStore() {
   });
   /** Price comparison sites offered in the + menu. */
   const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
+  /** The ids of the Add game menu's quick-access entries (Settings → Window and tray). */
+  const [quickAccess, setQuickAccess] = createSignal<string[]>(["add:manual"]);
   /** Icons of the price sites by host (webview addresses); a site without one shows a globe. */
   const [siteIcons, setSiteIcons] = createSignal<Record<string, string>>({});
   /** Combined groups per grouping field (settings). */
@@ -820,6 +822,7 @@ function createAppStore() {
     setShowStatisticsPage(settings.showStatistics);
     if (settings.startPage) setStartPageSettings(settings.startPage);
     setPriceSites(settings.priceSites);
+    if (settings.titleBar) setQuickAccess(settings.titleBar.quickAccess);
     setGroupMergesState(settings.groupMerges ?? {});
     if (
       (!settings.showStartPage && page() === "home") ||
@@ -1513,6 +1516,7 @@ function createAppStore() {
           setShowStatisticsPage(settings.showStatistics);
           if (settings.startPage) setStartPageSettings(settings.startPage);
           setPriceSites(settings.priceSites);
+          if (settings.titleBar) setQuickAccess(settings.titleBar.quickAccess);
           setGroupMergesState(settings.groupMerges ?? {});
         }
         void loadSiteIcons();
@@ -1776,6 +1780,7 @@ function createAppStore() {
     page,
     showSettings: () => setPage("settings"),
     priceSites,
+    quickAccess,
     /** The icon address of a price site, or null (show the globe). */
     siteIconUrl: (url: string) => siteIconUrl(siteIcons(), url),
     loadSiteIcons,
