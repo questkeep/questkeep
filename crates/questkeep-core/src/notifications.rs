@@ -66,6 +66,8 @@ pub enum NotificationAction {
     StoreSettings { store: String },
     /// Opens the Plugin updates dialog.
     PluginUpdates,
+    /// Opens the plugin browser at a registry plugin.
+    InstallPlugin { id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -190,6 +190,8 @@ function createAppStore() {
   const [pluginUpdates, setPluginUpdates] = createSignal<PluginUpdate[]>([]);
   /** The Plugin updates dialog is open (the bell entry, the Updates button in Settings > Plugins). */
   const [pluginUpdatesOpen, setPluginUpdatesOpen] = createSignal(false);
+  /** A registry plugin the plugin browser should open at (a bell entry asked for it). */
+  const [pluginBrowserTarget, setPluginBrowserTarget] = createSignal<string | null>(null);
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
@@ -1511,6 +1513,18 @@ function createAppStore() {
     pluginUpdatesOpen,
     openPluginUpdates: () => setPluginUpdatesOpen(true),
     closePluginUpdates: () => setPluginUpdatesOpen(false),
+    /** Opens Settings › Plugins with the plugin browser at one registry plugin. */
+    openPluginBrowser: (id: string) => {
+      setPluginBrowserTarget(id);
+      showSettingsSection("plugins");
+    },
+    /** The plugin the browser should open at; reading it clears it. */
+    takePluginBrowserTarget: () => {
+      const id = pluginBrowserTarget();
+      if (id !== null) setPluginBrowserTarget(null);
+      return id;
+    },
+    pluginBrowserTarget,
     appInfo,
     sources,
     toasts,

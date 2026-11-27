@@ -44,6 +44,9 @@ function runAction(action: NotificationAction) {
     case "pluginUpdates":
       store.openPluginUpdates();
       break;
+    case "installPlugin":
+      store.openPluginBrowser(action.id);
+      break;
   }
 }
 

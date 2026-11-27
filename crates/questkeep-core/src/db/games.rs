@@ -668,6 +668,16 @@ impl Database {
             .optional()?)
     }
 
+    /// How many store copies of `source` are in the library (combined ones included).
+    pub fn count_source_games(&self, source: &str) -> Result<u64> {
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM games WHERE source = ?1",
+            [source],
+            |r| r.get(0),
+        )?;
+        Ok(u64::try_from(n).unwrap_or_default())
+    }
+
     pub fn count_games(&self) -> Result<u64> {
         let n: i64 = self.conn().query_row(
             "SELECT COUNT(*) FROM games WHERE merged_into IS NULL",

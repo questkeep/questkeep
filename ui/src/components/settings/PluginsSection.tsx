@@ -1,6 +1,6 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import ChevronRight from "lucide-solid/icons/chevron-right";
-import { createSignal, For, type JSX, Show } from "solid-js";
+import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
 import type { PluginFolder } from "../../bindings/PluginFolder";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import type { PluginPreview } from "../../bindings/PluginPreview";
@@ -73,6 +73,13 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [open, setOpen] = createSignal<ReadonlySet<string>>(new Set());
   const [browsing, setBrowsing] = createSignal(false);
+  /** The plugin a bell entry asked the browser to open at. */
+  const [browseTo, setBrowseTo] = createSignal<string | null>(null);
+  createEffect(() => {
+    if (store.pluginBrowserTarget() === null) return;
+    setBrowseTo(store.takePluginBrowserTarget());
+    setBrowsing(true);
+  });
   /** Updating a registry plugin from its row: the same download, check and confirm as the browser. */
   const registryInstall = createRegistryInstall();
 
@@ -525,7 +532,13 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
         }}
       </Show>
       <Show when={browsing()}>
-        <PluginBrowser onClose={() => setBrowsing(false)} />
+        <PluginBrowser
+          initial={browseTo() ?? undefined}
+          onClose={() => {
+            setBrowsing(false);
+            setBrowseTo(null);
+          }}
+        />
       </Show>
       {registryInstall.dialog()}
       <Show when={removing()}>

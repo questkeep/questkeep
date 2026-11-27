@@ -23,9 +23,10 @@ type State =
  * The plugin registry: search and filter its plugins, open one for its versions, install or
  * update. Esc leaves a plugin's page first, then closes the browser.
  */
-export function PluginBrowser(props: { onClose: () => void }) {
+/** `initial`: a registry plugin id to open at (its detail page) instead of the list. */
+export function PluginBrowser(props: { initial?: string; onClose: () => void }) {
   const [state, setState] = createSignal<State>({ status: "loading" });
-  const [selected, setSelected] = createSignal<string | null>(null);
+  const [selected, setSelected] = createSignal<string | null>(props.initial ?? null);
   const [filter, setFilter] = createSignal<RegistryFilter>(NO_FILTER);
   const [root, setRoot] = createSignal<HTMLDivElement>();
 

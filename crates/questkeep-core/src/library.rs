@@ -372,6 +372,46 @@ impl Library {
         self.settings.load()
     }
 
+    /// Posts a "now a plugin" bell entry, once, for each built-in store that moved to a plugin
+    /// ([`MOVED_TO_PLUGINS`]) while the library still has its games and no store of that id is
+    /// registered. Call after the plugins are loaded.
+    pub fn notice_moved_stores(&self) {
+        use crate::notifications::{NewNotification, NotificationAction, NotificationSource};
+        let mut settings = self.settings.load();
+        let mut posted = false;
+        for &(store, plugin, name) in MOVED_TO_PLUGINS {
+            if settings.moved_store_notices.iter().any(|s| s == store)
+                || self.providers.get(store).is_some()
+            {
+                continue;
+            }
+            let count = match self.db.count_source_games(store) {
+                Ok(0) => continue,
+                Ok(n) => n,
+                Err(err) => {
+                    tracing::warn!(%err, store, "could not count the games of a moved store");
+                    continue;
+                }
+            };
+            self.notifications.post(
+                NewNotification::info(
+                    NotificationSource::Plugins,
+                    format!("{name} is now a plugin"),
+                    format!(
+                        "Install the {name} plugin to keep syncing your games from {name} \
+                         ({count}). They stay in your library and still start without it."
+                    ),
+                )
+                .action(NotificationAction::InstallPlugin { id: plugin.into() }),
+            );
+            settings.moved_store_notices.push(store.into());
+            posted = true;
+        }
+        if posted && let Err(err) = self.settings.save(&settings) {
+            tracing::warn!(%err, "could not remember the moved-store notices");
+        }
+    }
+
     /// The settings file (for parts that read the settings on their own threads).
     pub fn settings_store(&self) -> &SettingsStore {
         &self.settings
@@ -2224,6 +2264,10 @@ fn merge_owned(mut installed: Vec<ImportedGame>, owned: Vec<ImportedGame>) -> Ve
 }
 
 /// How long the automatic backup waits for a running sync.
+/// Built-in stores that became plugins: store id, registry plugin id, store name. The plugin keeps
+/// the store id, so the library's games match it again once installed.
+const MOVED_TO_PLUGINS: &[(&str, &str, &str)] = &[("prism", "prism", "Prism Launcher")];
+
 const SYNC_WAIT: Duration = Duration::from_secs(30 * 60);
 
 /// Counts running scans so the automatic backup can wait until none runs.
@@ -2370,6 +2414,34 @@ mod tests {
             lib.paths().root().join("restore-pending/READY").is_file(),
             "a refused archive leaves the staged restore alone"
         );
+    }
+
+    #[test]
+    fn a_store_that_moved_to_a_plugin_is_noticed_once_while_its_games_are_unsynced() {
+        use crate::notifications::NotificationAction;
+        let (_tmp, lib) = test_library();
+        lib.notice_moved_stores();
+        assert!(lib.notifications().list().is_empty(), "no Prism games, no notice");
+
+        lib.db
+            .upsert_imported(
+                "prism",
+                &[ImportedGame::installed("pack", "Modpack")],
+                Utc::now(),
+            )
+            .unwrap();
+        lib.notice_moved_stores();
+        let list = lib.notifications().list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(
+            list[0].action,
+            Some(NotificationAction::InstallPlugin { id: "prism".into() })
+        );
+        assert!(list[0].message.contains("(1)"));
+
+        lib.notifications().clear();
+        lib.notice_moved_stores();
+        assert!(lib.notifications().list().is_empty(), "shown once only");
     }
 
     #[test]

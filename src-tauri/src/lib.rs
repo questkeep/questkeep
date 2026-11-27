@@ -286,6 +286,8 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
             state.library.notifications(),
             state.library.settings().check_plugin_updates,
         );
+        // Games of a store that moved to a plugin: say once which plugin syncs them now.
+        state.library.notice_moved_stores();
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
         } else {

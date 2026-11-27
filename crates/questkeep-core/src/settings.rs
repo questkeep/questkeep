@@ -102,6 +102,9 @@ pub struct Settings {
     pub tray: TraySettings,
     /// What the start page shows.
     pub start_page: StartPageSettings,
+    /// Built-in stores that moved to a plugin whose "now a plugin" notice was already posted
+    /// (store ids), so it shows once.
+    pub moved_store_notices: Vec<String>,
 }
 
 /// What the start page shows (each part can be switched off, up to an empty page).
@@ -359,6 +362,7 @@ impl Default for Settings {
             system_notifications: true,
             tray: TraySettings::default(),
             start_page: StartPageSettings::default(),
+            moved_store_notices: Vec::new(),
         }
     }
 }
