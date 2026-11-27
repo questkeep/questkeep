@@ -34,6 +34,10 @@ updates:
       # together with `windows`.
       - dependency-name: windows-numerics
     groups:
+      # `wasmtime` and `wasmtime-wasi` must move together (a lone bump fails to compile), majors
+      # included. Listed first: a dependency joins the first group that matches it.
+      wasmtime:
+        patterns: ["wasmtime", "wasmtime-*"]
       cargo-minor-patch:
         update-types: [minor, patch]
 
