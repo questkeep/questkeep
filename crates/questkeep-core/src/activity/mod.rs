@@ -870,11 +870,10 @@ pub(crate) fn sizes(conn: &Connection) -> Result<Sizes> {
         |r| r.get(0),
     )?;
     let total = u64::try_from(system.max(0) + library.max(0)).unwrap_or_default();
-    let system_share = if total == 0 {
-        0
-    } else {
-        used.saturating_mul(u64::try_from(system.max(0)).unwrap_or_default()) / total
-    };
+    let system_share = used
+        .saturating_mul(u64::try_from(system.max(0)).unwrap_or_default())
+        .checked_div(total)
+        .unwrap_or(0);
     Ok(Sizes {
         library: used - system_share,
         system: system_share,

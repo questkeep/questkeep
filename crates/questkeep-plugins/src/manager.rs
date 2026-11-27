@@ -460,7 +460,13 @@ impl PluginManager {
         self.inner.load(&id);
         self.sync_watch(&id);
         self.inner.changed();
-        tracing::info!(plugin = %id, source = %source.display(), "plugin installed");
+        tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginInstalled",
+            from = %source.display(),
+            "installed from a folder"
+        );
         saved?;
         self.info(&id)
     }
@@ -533,10 +539,12 @@ impl PluginManager {
         self.inner.changed();
         registry::prune_cache(&self.inner.paths, id, &source);
         tracing::info!(
-            plugin = id,
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginInstalled",
             version,
             pinned,
-            "plugin installed from the registry"
+            "installed version {version} from the plugin list"
         );
         saved?;
         self.info(id)
@@ -779,7 +787,13 @@ impl PluginManager {
             install::remove_dir(&self.inner.paths.plugin_data_dir().join(id))?;
             registry::remove_backups(&self.inner.paths, id)?;
         }
-        tracing::info!(plugin = id, delete_data, "plugin removed");
+        tracing::info!(
+            target: "activity",
+            source = %format_args!("plugin:{id}"),
+            kind = "pluginRemoved",
+            delete_data,
+            "removed"
+        );
         Ok(())
     }
 
@@ -996,8 +1010,24 @@ impl Inner {
             Ok(manifest) => (Some(manifest), Ok(Vec::new())),
             Err(err) => (None, Err(err)),
         };
-        if let Err(err) = &outcome {
-            tracing::warn!(plugin = id, %err, "plugin could not be loaded");
+        // The activity log notes what each start (and change) loaded.
+        match (&outcome, &manifest) {
+            (Err(err), _) => tracing::error!(
+                target: "activity",
+                source = %format_args!("plugin:{id}"),
+                kind = "pluginFailed",
+                "the plugin could not be loaded: {err}"
+            ),
+            (Ok(_), Some(manifest)) if enabled => tracing::info!(
+                target: "activity",
+                source = %format_args!("plugin:{id}"),
+                kind = "pluginLoaded",
+                version = %manifest.version,
+                "loaded {} {}",
+                manifest.name,
+                manifest.version
+            ),
+            _ => {}
         }
         let mut plugins = self.plugins();
         let Some(plugin) = plugins.iter_mut().find(|p| p.entry.id == id) else {

@@ -5,7 +5,7 @@
 //! call that crashes or takes too long is stopped, its instance thrown away and the next call
 //! starts a fresh one.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
@@ -325,6 +325,16 @@ struct HostState {
     hosts: Arc<[HostRule]>,
     http: ureq::Agent,
     sandbox: Arc<Sandbox>,
+    /// Requests of the running call per host, reported to the activity log when it ends.
+    traffic: BTreeMap<String, Traffic>,
+}
+
+/// What a plugin asked of one host during one call.
+#[derive(Debug, Default, Clone, PartialEq)]
+struct Traffic {
+    requests: u64,
+    bytes: u64,
+    failed: u64,
 }
 
 /// What a store needs for its website session: its login setup, the service and the store id.
@@ -398,11 +408,17 @@ impl WasiView for HostState {
 impl host::Host for HostState {
     fn log(&mut self, level: host::LogLevel, message: String) {
         let plugin = &*self.plugin_id;
+        // Warnings and errors also go to the activity log (its system part).
+        let source = format!("plugin:{plugin}");
         match level {
             host::LogLevel::Debug => tracing::debug!(plugin, "{message}"),
             host::LogLevel::Info => tracing::info!(plugin, "{message}"),
-            host::LogLevel::Warn => tracing::warn!(plugin, "{message}"),
-            host::LogLevel::Error => tracing::error!(plugin, "{message}"),
+            host::LogLevel::Warn => {
+                tracing::warn!(target: "activity", source = source.as_str(), kind = "log", "{message}");
+            }
+            host::LogLevel::Error => {
+                tracing::error!(target: "activity", source = source.as_str(), kind = "log", "{message}");
+            }
         }
     }
 
@@ -520,6 +536,30 @@ impl host::Host for HostState {
         request: host::Request,
     ) -> std::result::Result<host::Response, String> {
         check_url(&self.hosts, &request.url)?;
+        let host = request
+            .url
+            .parse::<ureq::http::Uri>()
+            .ok()
+            .and_then(|uri| uri.host().map(str::to_ascii_lowercase))
+            .unwrap_or_default();
+        let answer = self.send(request);
+        let traffic = self.traffic.entry(host).or_default();
+        traffic.requests += 1;
+        match &answer {
+            Ok(response) => {
+                traffic.bytes += response.body.len() as u64;
+                if response.status >= 400 {
+                    traffic.failed += 1;
+                }
+            }
+            Err(_) => traffic.failed += 1,
+        }
+        answer
+    }
+}
+
+impl HostState {
+    fn send(&mut self, request: host::Request) -> std::result::Result<host::Response, String> {
         tracing::debug!(plugin = &*self.plugin_id, method = %request.method, url = %request.url, "plugin request");
         let mut builder = ureq::http::Request::builder()
             .method(request.method.as_str())
@@ -793,12 +833,49 @@ impl WasmProvider {
             return Err(ProviderError::Unsupported);
         };
         live.store.set_epoch_deadline(Runtime::ticks(deadline));
-        match work(live) {
+        let result = work(live);
+        self.report_traffic(std::mem::take(&mut live.store.data_mut().traffic));
+        match result {
             Ok(value) => Ok(value),
             Err(err) => {
                 // Whatever state the instance is in now, it is not trusted again.
                 slot.live = None;
                 Err(self.failure(&err, deadline))
+            }
+        }
+    }
+
+    /// Notes a call's requests in the activity log: one event per host.
+    fn report_traffic(&self, traffic: BTreeMap<String, Traffic>) {
+        let source = format!("plugin:{}", self.sandbox.plugin_id);
+        for (host, t) in traffic {
+            let message = format!(
+                "{} request{} to {host}",
+                t.requests,
+                if t.requests == 1 { "" } else { "s" }
+            );
+            if t.failed > 0 {
+                tracing::warn!(
+                    target: "activity",
+                    source = source.as_str(),
+                    kind = "http",
+                    host = host.as_str(),
+                    requests = t.requests,
+                    bytes = t.bytes,
+                    failed = t.failed,
+                    "{message}, {} failed",
+                    t.failed
+                );
+            } else {
+                tracing::info!(
+                    target: "activity",
+                    source = source.as_str(),
+                    kind = "http",
+                    host = host.as_str(),
+                    requests = t.requests,
+                    bytes = t.bytes,
+                    "{message}"
+                );
             }
         }
     }
@@ -929,6 +1006,7 @@ fn instantiate(
         hosts: sandbox.hosts.clone().into(),
         http: http_agent(),
         sandbox: Arc::new(sandbox.clone()),
+        traffic: BTreeMap::new(),
     };
     let mut store = Store::new(&runtime.engine, state);
     store.limiter(|state| &mut state.limits);

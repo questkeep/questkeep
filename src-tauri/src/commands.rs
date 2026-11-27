@@ -5,6 +5,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use questkeep_core::activity::{
+    self, ActivityDetails, ActivityPage, ActivityQuery, ActivityStats, Actor, ClearPart,
+    Cursor as ActivityCursor, SystemPage, SystemQuery,
+};
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::backup::{BackupImportCheck, BackupInfo};
 use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
@@ -22,6 +26,7 @@ use questkeep_plugins::{
     PluginInfo, PluginUpdate, RegistryConfig, RegistryListing, RegistryPluginPreview,
 };
 use tauri::State;
+use tauri::ipc::{CommandArg, CommandItem, InvokeError};
 use uuid::Uuid;
 
 use crate::updates::{UpdateInfo, Updates};
@@ -47,6 +52,46 @@ where
         })
 }
 
+/// Who calls a command: the user, or a plugin's JavaScript, which the extension host marks with
+/// the `Questkeep-Actor: plugin:<id>` header. Anything else counts as the user. The header can be
+/// forged by any script in the window; it is a label for the activity log, not a permission.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Caller(pub Actor);
+
+/// The IPC header that names the caller.
+pub const ACTOR_HEADER: &str = "questkeep-actor";
+
+impl Caller {
+    fn from_header(value: Option<&str>) -> Self {
+        Self(
+            value
+                .and_then(Actor::from_header)
+                .unwrap_or_else(Actor::user),
+        )
+    }
+}
+
+impl<'de, R: tauri::Runtime> CommandArg<'de, R> for Caller {
+    fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
+        let header = command.message.headers().get(ACTOR_HEADER);
+        Ok(Self::from_header(header.and_then(|v| v.to_str().ok())))
+    }
+}
+
+/// [`blocking`] for a command that changes the library: the activity log names `caller` as
+/// the one who did it.
+async fn acting<T, F>(state: State<'_, Arc<AppState>>, caller: Caller, f: F) -> CmdResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&AppState) -> Result<T, CoreError> + Send + 'static,
+{
+    blocking(state, move |s| {
+        let _acting = activity::acting_as(caller.0);
+        f(s)
+    })
+    .await
+}
+
 fn parse_id(id: &str) -> Result<Uuid, CoreError> {
     Uuid::parse_str(id).map_err(|_| CoreError::Invalid(format!("Invalid game id '{id}'")))
 }
@@ -64,9 +109,10 @@ pub async fn get_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<
 #[tauri::command]
 pub async fn add_manual_game(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     input: NewManualGame,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let game = s.library.add_manual_game(&input)?;
         // Cover (SteamGridDB) and metadata (IGDB) right away, not only on the next start.
         s.queue_downloads();
@@ -78,10 +124,11 @@ pub async fn add_manual_game(
 #[tauri::command]
 pub async fn update_game(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     update: GameUpdate,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.update_game(parse_id(&id)?, &update)
     })
     .await
@@ -90,10 +137,11 @@ pub async fn update_game(
 #[tauri::command]
 pub async fn set_cover(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     image_path: Option<String>,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let path = image_path.map(PathBuf::from);
         s.library.set_cover(parse_id(&id)?, path.as_deref())
     })
@@ -101,8 +149,15 @@ pub async fn set_cover(
 }
 
 #[tauri::command]
-pub async fn remove_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| s.library.remove_game(parse_id(&id)?)).await
+pub async fn remove_game(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
+        s.library.remove_game(parse_id(&id)?)
+    })
+    .await
 }
 
 fn parse_ids(ids: &[String]) -> Result<Vec<Uuid>, CoreError> {
@@ -112,10 +167,11 @@ fn parse_ids(ids: &[String]) -> Result<Vec<Uuid>, CoreError> {
 #[tauri::command]
 pub async fn bulk_change(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     ids: Vec<String>,
     change: BulkChange,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.bulk_change(&parse_ids(&ids)?, &change)
     })
     .await
@@ -124,14 +180,22 @@ pub async fn bulk_change(
 #[tauri::command]
 pub async fn combine_with_plan(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     plan: CombinePlan,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| s.library.combine_with_plan(&plan)).await
+    acting(state, caller, move |s| s.library.combine_with_plan(&plan)).await
 }
 
 #[tauri::command]
-pub async fn remove_games(state: State<'_, Arc<AppState>>, ids: Vec<String>) -> CmdResult<()> {
-    blocking(state, move |s| s.library.remove_games(&parse_ids(&ids)?)).await
+pub async fn remove_games(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    ids: Vec<String>,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
+        s.library.remove_games(&parse_ids(&ids)?)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -302,8 +366,8 @@ pub async fn remove_plugin(
 /// Scans every store, one after another. Progress and results arrive as core events
 /// (`scansQueued`, `scanStarted`, `libraryScanned`, `scanFailed`); failures are not an error here.
 #[tauri::command]
-pub async fn scan_all_libraries(state: State<'_, Arc<AppState>>) -> CmdResult<()> {
-    blocking(state, |s| {
+pub async fn scan_all_libraries(state: State<'_, Arc<AppState>>, caller: Caller) -> CmdResult<()> {
+    acting(state, caller, |s| {
         s.library.scan_all();
         s.queue_downloads();
         Ok(())
@@ -314,9 +378,10 @@ pub async fn scan_all_libraries(state: State<'_, Arc<AppState>>) -> CmdResult<()
 #[tauri::command]
 pub async fn scan_library(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     provider_id: String,
 ) -> CmdResult<ScanSummary> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let summary = s.library.scan(&provider_id)?;
         s.queue_downloads();
         Ok(summary)
@@ -330,11 +395,12 @@ pub async fn scan_library(
 #[tauri::command]
 pub async fn add_game_with_option(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     provider_id: String,
     option_id: String,
 ) -> CmdResult<()> {
     let app_state = Arc::clone(&state);
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let before = s.library.run_add_game_option(&provider_id, &option_id)?;
         std::thread::Builder::new()
             .name("add-game-watch".into())
@@ -382,10 +448,11 @@ pub async fn launch_game(
 #[tauri::command]
 pub async fn install_game(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     copy_id: Option<String>,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let copy = copy_id.as_deref().map(parse_id).transpose()?;
         s.library.install_game(parse_id(&id)?, copy)
     })
@@ -410,10 +477,11 @@ pub async fn open_launcher_page(
 #[tauri::command]
 pub async fn uninstall_game(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     copy_id: Option<String>,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let copy = copy_id.as_deref().map(parse_id).transpose()?;
         s.library.uninstall_game(parse_id(&id)?, copy)
     })
@@ -424,10 +492,11 @@ pub async fn uninstall_game(
 #[tauri::command]
 pub async fn combine_games(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     into: String,
     others: Vec<String>,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let others = others
             .iter()
             .map(|id| parse_id(id))
@@ -439,14 +508,28 @@ pub async fn combine_games(
 
 /// Takes a store's copy out of its combined game; returns the remaining game.
 #[tauri::command]
-pub async fn separate_copy(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Game> {
-    blocking(state, move |s| s.library.separate_copy(parse_id(&id)?)).await
+pub async fn separate_copy(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<Game> {
+    acting(state, caller, move |s| {
+        s.library.separate_copy(parse_id(&id)?)
+    })
+    .await
 }
 
 /// Makes a store's copy the one Play starts; returns its game.
 #[tauri::command]
-pub async fn prefer_copy(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Game> {
-    blocking(state, move |s| s.library.prefer_copy(parse_id(&id)?)).await
+pub async fn prefer_copy(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<Game> {
+    acting(state, caller, move |s| {
+        s.library.prefer_copy(parse_id(&id)?)
+    })
+    .await
 }
 
 /// Groups of games that look like the same game in different stores.
@@ -473,8 +556,12 @@ pub async fn dismiss_duplicates(
 
 /// Re-downloads store metadata (and a missing background) for one game in the background.
 #[tauri::command]
-pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| {
+pub async fn refresh_metadata(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
         let jobs = s.library.metadata_jobs(parse_id(&id)?)?;
         s.metadata.enqueue(jobs);
         Ok(())
@@ -524,10 +611,11 @@ pub async fn search_metadata(
 #[tauri::command]
 pub async fn set_metadata_link(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     link: Option<MetadataLink>,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let id = parse_id(&id)?;
         let (jobs, cover) = s.library.set_metadata_link(id, link)?;
         s.metadata.enqueue(jobs);
@@ -543,8 +631,11 @@ pub async fn set_metadata_link(
 /// Re-downloads metadata for every game in the background (Settings → Metadata). Returns how
 /// many jobs were queued.
 #[tauri::command]
-pub async fn refresh_all_metadata(state: State<'_, Arc<AppState>>) -> CmdResult<usize> {
-    blocking(state, move |s| {
+pub async fn refresh_all_metadata(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+) -> CmdResult<usize> {
+    acting(state, caller, move |s| {
         let jobs = s.library.all_metadata_jobs()?;
         Ok(s.metadata.enqueue(jobs))
     })
@@ -577,10 +668,11 @@ pub async fn completion_settings(state: State<'_, Arc<AppState>>) -> CmdResult<C
 #[tauri::command]
 pub async fn set_completion_settings(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     settings: CompletionSettings,
     replacements: BTreeMap<String, Option<String>>,
 ) -> CmdResult<CompletionSettings> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.set_completion_settings(&settings, &replacements)
     })
     .await
@@ -590,10 +682,11 @@ pub async fn set_completion_settings(
 #[tauri::command]
 pub async fn set_completion_status(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     ids: Vec<String>,
     status: Option<String>,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let ids = ids
             .iter()
             .map(|id| parse_id(id))
@@ -607,8 +700,12 @@ pub async fn set_completion_status(
 /// Fails with a readable message when no API key is configured. Results arrive as
 /// `gamesChanged` events.
 #[tauri::command]
-pub async fn refetch_artwork(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| {
+pub async fn refetch_artwork(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
         let job = s.library.refetch_artwork(parse_id(&id)?)?;
         s.covers.enqueue([job]);
         Ok(())
@@ -651,9 +748,10 @@ pub async fn set_group_merges(
 pub async fn save_settings(
     app: tauri::AppHandle,
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     settings: Settings,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let had_key = s.library.artwork().is_configured();
         let had_igdb = s.library.igdb().is_configured();
         let before = s.library.settings();
@@ -749,6 +847,7 @@ pub async fn account_status(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<Ac
 pub async fn sign_in(
     app: tauri::AppHandle,
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     provider: String,
 ) -> CmdResult<bool> {
     let ((login_url, window), profile) = {
@@ -762,7 +861,7 @@ pub async fn sign_in(
     match crate::signin::run(&app, &provider, &login_url, window, profile).await? {
         crate::signin::Outcome::Closed => Ok(false),
         crate::signin::Outcome::Code(code) => {
-            blocking(state, move |s| {
+            acting(state, caller, move |s| {
                 s.library.sign_in_with_code(&provider, &code)?;
                 s.queue_downloads();
                 Ok(true)
@@ -777,10 +876,11 @@ pub async fn sign_in(
 #[tauri::command]
 pub async fn sign_in_with_code(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     provider: String,
     code: String,
 ) -> CmdResult<AccountStatus> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let status = s.library.sign_in_with_code(&provider, &code)?;
         s.queue_downloads();
         Ok(status)
@@ -998,35 +1098,48 @@ pub async fn list_categories(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<C
 }
 
 #[tauri::command]
-pub async fn create_category(state: State<'_, Arc<AppState>>, name: String) -> CmdResult<Category> {
-    blocking(state, move |s| s.library.create_category(&name)).await
+pub async fn create_category(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    name: String,
+) -> CmdResult<Category> {
+    acting(state, caller, move |s| s.library.create_category(&name)).await
 }
 
 #[tauri::command]
 pub async fn rename_category(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     name: String,
 ) -> CmdResult<Category> {
-    blocking(state, move |s| s.library.rename_category(&id, &name)).await
+    acting(state, caller, move |s| {
+        s.library.rename_category(&id, &name)
+    })
+    .await
 }
 
 /// Sets or clears a category's filter; matching games get the category.
 #[tauri::command]
 pub async fn set_category_filter(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     filter: Option<GameQuery>,
 ) -> CmdResult<Category> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.set_category_filter(&id, filter.as_ref())
     })
     .await
 }
 
 #[tauri::command]
-pub async fn delete_category(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| s.library.delete_category(&id)).await
+pub async fn delete_category(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| s.library.delete_category(&id)).await
 }
 
 #[tauri::command]
@@ -1040,20 +1153,25 @@ pub async fn reorder_categories(
 #[tauri::command]
 pub async fn merge_categories(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     from: String,
     into: String,
 ) -> CmdResult<Category> {
-    blocking(state, move |s| s.library.merge_categories(&from, &into)).await
+    acting(state, caller, move |s| {
+        s.library.merge_categories(&from, &into)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn separate_category_source(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     source: String,
     name: String,
 ) -> CmdResult<Category> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.separate_category_source(&id, &source, &name)
     })
     .await
@@ -1062,10 +1180,11 @@ pub async fn separate_category_source(
 #[tauri::command]
 pub async fn set_game_categories(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     category_ids: Vec<String>,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.set_game_categories(parse_id(&id)?, &category_ids)
     })
     .await
@@ -1155,11 +1274,12 @@ pub async fn game_sessions(
 #[tauri::command]
 pub async fn add_game_session(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     started_at: chrono::DateTime<chrono::Utc>,
     duration_seconds: u64,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library
             .add_game_session(parse_id(&id)?, started_at, duration_seconds)
     })
@@ -1170,11 +1290,12 @@ pub async fn add_game_session(
 #[tauri::command]
 pub async fn update_game_session(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     session_id: i64,
     started_at: chrono::DateTime<chrono::Utc>,
     duration_seconds: u64,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library
             .update_game_session(session_id, started_at, duration_seconds)
     })
@@ -1185,9 +1306,13 @@ pub async fn update_game_session(
 #[tauri::command]
 pub async fn delete_game_session(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     session_id: i64,
 ) -> CmdResult<()> {
-    blocking(state, move |s| s.library.delete_game_session(session_id)).await
+    acting(state, caller, move |s| {
+        s.library.delete_game_session(session_id)
+    })
+    .await
 }
 
 /// What the Edit dialog needs: the user's edits, the automatic values and all links.
@@ -1202,10 +1327,11 @@ pub async fn game_edit_info(
 #[tauri::command]
 pub async fn save_game_edits(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     edits: GameEdits,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.save_game_edits(parse_id(&id)?, &edits)
     })
     .await
@@ -1215,11 +1341,12 @@ pub async fn save_game_edits(
 #[tauri::command]
 pub async fn set_user_image(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     slot: ImageSlot,
     source: String,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.set_user_image(parse_id(&id)?, slot, &source)
     })
     .await
@@ -1228,10 +1355,11 @@ pub async fn set_user_image(
 #[tauri::command]
 pub async fn remove_user_image(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     slot: ImageSlot,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.remove_user_image(parse_id(&id)?, slot)
     })
     .await
@@ -1309,10 +1437,11 @@ pub async fn launch_profiles(
 #[tauri::command]
 pub async fn replace_launch_profiles(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     draft: questkeep_core::model::ProfilesDraft,
 ) -> CmdResult<LaunchProfiles> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.replace_launch_profiles(parse_id(&id)?, &draft)
     })
     .await
@@ -1321,11 +1450,12 @@ pub async fn replace_launch_profiles(
 #[tauri::command]
 pub async fn save_launch_profile(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     profile_id: Option<String>,
     input: ProfileInput,
 ) -> CmdResult<LaunchProfiles> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let profile = profile_id.as_deref().map(parse_id).transpose()?;
         s.library
             .save_launch_profile(parse_id(&id)?, profile, &input)
@@ -1336,10 +1466,11 @@ pub async fn save_launch_profile(
 #[tauri::command]
 pub async fn delete_launch_profile(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     profile_id: String,
 ) -> CmdResult<LaunchProfiles> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library
             .delete_launch_profile(parse_id(&id)?, parse_id(&profile_id)?)
     })
@@ -1366,10 +1497,11 @@ pub async fn order_launch_profiles(
 #[tauri::command]
 pub async fn set_default_launch_profile(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     profile_id: Option<String>,
 ) -> CmdResult<LaunchProfiles> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         let profile = profile_id.as_deref().map(parse_id).transpose()?;
         s.library
             .set_default_launch_profile(parse_id(&id)?, profile)
@@ -1643,23 +1775,32 @@ pub async fn get_script(state: State<'_, Arc<AppState>>, id: String) -> CmdResul
 #[tauri::command]
 pub async fn save_script(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     script: ScriptInput,
 ) -> CmdResult<Script> {
-    blocking(state, move |s| s.library.scripts().save(&script)).await
+    acting(state, caller, move |s| s.library.scripts().save(&script)).await
 }
 
 #[tauri::command]
-pub async fn delete_script(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| s.library.scripts().delete(parse_id(&id)?)).await
+pub async fn delete_script(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
+        s.library.scripts().delete(parse_id(&id)?)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn set_script_enabled(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     enabled: bool,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.scripts().set_enabled(parse_id(&id)?, enabled)
     })
     .await
@@ -1669,10 +1810,11 @@ pub async fn set_script_enabled(
 #[tauri::command]
 pub async fn set_script_order(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     kind: ScriptKind,
     order: Vec<ScriptSlot>,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.scripts().set_global_order(kind, &order)
     })
     .await
@@ -1682,23 +1824,28 @@ pub async fn set_script_order(
 #[tauri::command]
 pub async fn set_own_script_order(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     ids: Vec<String>,
 ) -> CmdResult<()> {
     let ids = ids
         .iter()
         .map(|i| id_arg(i))
         .collect::<CmdResult<Vec<_>>>()?;
-    blocking(state, move |s| s.library.scripts().set_own_order(&ids)).await
+    acting(state, caller, move |s| {
+        s.library.scripts().set_own_order(&ids)
+    })
+    .await
 }
 
 /// Whether global and filtered scripts run for a game.
 #[tauri::command]
 pub async fn set_run_global_scripts(
     state: State<'_, Arc<AppState>>,
+    caller: Caller,
     id: String,
     run: bool,
 ) -> CmdResult<()> {
-    blocking(state, move |s| {
+    acting(state, caller, move |s| {
         s.library.scripts().set_run_global(parse_id(&id)?, run)
     })
     .await
@@ -1772,4 +1919,80 @@ pub async fn stop_script_run(state: State<'_, Arc<AppState>>, run: String) -> Cm
         Ok(s.library.scripts().stop_run(parse_id(&run)?))
     })
     .await
+}
+
+// ----- activity log -----
+
+#[tauri::command]
+pub async fn activity_page(
+    state: State<'_, Arc<AppState>>,
+    query: ActivityQuery,
+) -> CmdResult<ActivityPage> {
+    blocking(state, move |s| {
+        s.library.activity().timeline(s.library.database(), &query)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn activity_details(
+    state: State<'_, Arc<AppState>>,
+    entry_id: i64,
+) -> CmdResult<ActivityDetails> {
+    blocking(state, move |s| s.library.activity().details(entry_id)).await
+}
+
+#[tauri::command]
+pub async fn activity_batch_entries(
+    state: State<'_, Arc<AppState>>,
+    batch_id: i64,
+    before: Option<ActivityCursor>,
+    limit: Option<u32>,
+) -> CmdResult<ActivityPage> {
+    blocking(state, move |s| {
+        s.library
+            .activity()
+            .batch_entries(batch_id, before, limit.unwrap_or(50))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn system_events(
+    state: State<'_, Arc<AppState>>,
+    query: SystemQuery,
+) -> CmdResult<SystemPage> {
+    blocking(state, move |s| s.library.activity().system_events(&query)).await
+}
+
+#[tauri::command]
+pub async fn activity_stats(state: State<'_, Arc<AppState>>) -> CmdResult<ActivityStats> {
+    blocking(state, |s| s.library.activity().stats()).await
+}
+
+#[tauri::command]
+pub async fn clear_activity(state: State<'_, Arc<AppState>>, part: ClearPart) -> CmdResult<()> {
+    blocking(state, move |s| s.library.activity().clear(part)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_caller_comes_from_the_actor_header() {
+        assert_eq!(
+            Caller::from_header(Some("plugin:tidy-up")).0,
+            Actor::plugin("tidy-up")
+        );
+        for other in [
+            None,
+            Some("user"),
+            Some("plugin:"),
+            Some("app"),
+            Some("store:steam"),
+        ] {
+            assert_eq!(Caller::from_header(other).0, Actor::user(), "{other:?}");
+        }
+    }
 }

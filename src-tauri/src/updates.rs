@@ -80,7 +80,10 @@ pub async fn check(app: &AppHandle) -> CmdResult<Option<UpdateInfo>> {
     let info = if let Some(fake) = fake_update() {
         Some(fake)
     } else {
-        find(app).await?.map(|update| UpdateInfo {
+        let found = find(app).await.inspect_err(|err| {
+            tracing::warn!(target: "activity", source = "app", kind = "updateCheckFailed", "{err}");
+        })?;
+        found.map(|update| UpdateInfo {
             version: update.version.clone(),
             notes: update.body.clone().filter(|b| !b.trim().is_empty()),
             date: update
@@ -90,6 +93,22 @@ pub async fn check(app: &AppHandle) -> CmdResult<Option<UpdateInfo>> {
             manual: !crate::install_kind::self_updating(),
         })
     };
+    match &info {
+        Some(info) => tracing::info!(
+            target: "activity",
+            source = "app",
+            kind = "updateCheck",
+            version = %info.version,
+            "Questkeep {} is available",
+            info.version
+        ),
+        None => tracing::info!(
+            target: "activity",
+            source = "app",
+            kind = "updateCheck",
+            "Questkeep is up to date"
+        ),
+    }
     remember(app, info.clone());
     Ok(info)
 }

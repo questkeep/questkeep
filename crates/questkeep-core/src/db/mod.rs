@@ -110,8 +110,11 @@ impl Database {
     /// Waits for this thread's turn to record a change; `None` inside a recorded change (the
     /// turn is held already).
     pub(crate) fn recording_turn(&self) -> Option<MutexGuard<'_, ()>> {
-        (!crate::activity::in_scope())
-            .then(|| self.recording.lock().unwrap_or_else(PoisonError::into_inner))
+        (!crate::activity::in_scope()).then(|| {
+            self.recording
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+        })
     }
 
     pub(crate) fn check_recorded(&self, what: &str) {

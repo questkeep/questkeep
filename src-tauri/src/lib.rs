@@ -1,5 +1,6 @@
 //! Thin Tauri shell: exposes core functionality as commands and forwards core events to the UI.
 
+mod activity_layer;
 mod autostart;
 mod backups;
 mod commands;
@@ -106,8 +107,11 @@ impl AppState {
 }
 
 fn init_logging(paths: &DataPaths) -> Option<WorkerGuard> {
-    let filter = EnvFilter::try_from_env("QUESTKEEP_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info,questkeep=debug,questkeep_core=debug"));
+    // Each log has its own filter: the activity log keeps its events whatever QUESTKEEP_LOG says.
+    let filter = || {
+        EnvFilter::try_from_env("QUESTKEEP_LOG")
+            .unwrap_or_else(|_| EnvFilter::new("info,questkeep=debug,questkeep_core=debug"))
+    };
     let file_appender = tracing_appender::rolling::Builder::new()
         .rotation(tracing_appender::rolling::Rotation::DAILY)
         .filename_prefix("questkeep")
@@ -119,16 +123,21 @@ fn init_logging(paths: &DataPaths) -> Option<WorkerGuard> {
             let (writer, guard) = tracing_appender::non_blocking(appender);
             let layer = tracing_subscriber::fmt::layer()
                 .with_ansi(false)
-                .with_writer(writer);
+                .with_writer(writer)
+                .with_filter(filter());
             (Some(layer), Some(guard))
         }
         Err(_) => (None, None),
     };
-    let stderr_layer = cfg!(debug_assertions).then(tracing_subscriber::fmt::layer);
+    let stderr_layer =
+        cfg!(debug_assertions).then(|| tracing_subscriber::fmt::layer().with_filter(filter()));
+    let activity_layer = activity_layer::ActivityLayer::new(activity_layer::sink()).with_filter(
+        tracing_subscriber::filter::filter_fn(|meta| meta.target() == activity_layer::TARGET),
+    );
     let _ = tracing_subscriber::registry()
-        .with(filter)
         .with(file_layer)
         .with(stderr_layer)
+        .with(activity_layer)
         .try_init();
     guard
 }
@@ -203,6 +212,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     });
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
+    activity_layer::sink().attach(library.activity().clone());
     match library.database().recover_open_sessions() {
         Ok(ids) if !ids.is_empty() => {
             tracing::info!(count = ids.len(), "recovered unfinished play sessions");
@@ -289,7 +299,9 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
         // Games of a store that moved to a plugin: say once which plugin syncs them now.
         state.library.notice_moved_stores();
         if state.library.settings().scan_on_startup {
-            state.library.scan_all();
+            state
+                .library
+                .scan_all_with(questkeep_core::library::SyncTrigger::Startup);
         } else {
             state.library.watch_install_folders();
         }
@@ -309,6 +321,8 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
                 continue;
             }
             library.poll_install_folders();
+            // Retention of the activity log (at most hourly).
+            library.activity().prune_if_due();
             let settings = library.settings();
             // Without a sync at startup, the first automatic one waits a full interval.
             let waited = settings.scan_on_startup
@@ -553,6 +567,12 @@ pub fn run() {
             commands::save_plugin_settings,
             commands::scan_library,
             commands::scan_all_libraries,
+            commands::activity_page,
+            commands::activity_details,
+            commands::activity_batch_entries,
+            commands::system_events,
+            commands::activity_stats,
+            commands::clear_activity,
             commands::launch_game,
             commands::install_game,
             commands::open_launcher_page,

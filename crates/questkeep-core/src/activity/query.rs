@@ -478,11 +478,7 @@ fn page<T>(mut items: Vec<T>, limit: u32, key: impl Fn(&T) -> Cursor) -> (Vec<T>
     let limit = limit as usize;
     let more = items.len() > limit;
     items.truncate(limit);
-    let next = if more {
-        items.last().map(key)
-    } else {
-        None
-    };
+    let next = if more { items.last().map(key) } else { None };
     (items, next)
 }
 
@@ -677,23 +673,20 @@ impl ActivityLog {
         let limit = limit_of(query.limit);
         let fetch = limit + 1;
         // A game's log covers the games combined into it (their history before combining).
-        let game_ids: Option<Vec<Uuid>> = match query.game_id {
-            Some(id) => Some(match db.get_entry(id) {
-                Ok(entry) => {
-                    let mut ids: Vec<Uuid> = entry.copies.iter().map(|c| c.id).collect();
-                    if !ids.contains(&entry.id) {
-                        ids.push(entry.id);
-                    }
-                    if !ids.contains(&id) {
-                        ids.push(id);
-                    }
-                    ids
+        let game_ids: Option<Vec<Uuid>> = query.game_id.map(|id| match db.get_entry(id) {
+            Ok(entry) => {
+                let mut ids: Vec<Uuid> = entry.copies.iter().map(|c| c.id).collect();
+                if !ids.contains(&entry.id) {
+                    ids.push(entry.id);
                 }
-                // A removed game: its own entries still read.
-                Err(_) => vec![id],
-            }),
-            None => None,
-        };
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+                ids
+            }
+            // A removed game: its own entries still read.
+            Err(_) => vec![id],
+        });
         let mut items: Vec<ActivityItem> = self
             .entries(query, game_ids.as_deref(), fetch)?
             .into_iter()

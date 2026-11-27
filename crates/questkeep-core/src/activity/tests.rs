@@ -1047,9 +1047,11 @@ fn app_work_is_recorded_as_questkeep() {
     // Computing all metadata again changes nothing visible: nothing written.
     let before = lib_entries(&lib).len();
     lib.database()
-        .record_batch(&Change::new(Actor::app(), reason::RESOLVE_ALL), None, || {
-            lib.resolver().resolve_all()
-        })
+        .record_batch(
+            &Change::new(Actor::app(), reason::RESOLVE_ALL),
+            None,
+            || lib.resolver().resolve_all(),
+        )
         .unwrap();
     assert_eq!(lib_entries(&lib).len(), before);
 }
