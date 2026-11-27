@@ -4,6 +4,7 @@ import { settingsAppearance } from "../../i18n/settingsAppearance";
 import { settingsBackups } from "../../i18n/settingsBackups";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { settingsKeys } from "../../i18n/settingsKeys";
+import { activity as activityDict } from "../../i18n/activity";
 import type { SearchEntry } from "../../lib/settingsSearch";
 
 const general = translator(settingsGeneral);
@@ -11,6 +12,7 @@ const appearance = translator(settingsAppearance);
 const backups = translator(settingsBackups);
 const keys = translator(settingsKeys);
 const plugins = translator(pluginUpdates);
+const activity = translator(activityDict);
 
 function e(id: string, page: string, label: string, part?: string, keywords?: string): SearchEntry {
   return { id, page, part, label, keywords };
@@ -23,6 +25,11 @@ function e(id: string, page: string, label: string, part?: string, keywords?: st
  */
 export function settingEntries(): SearchEntry[] {
   return [
+    e("activityLibraryMax", "activity", activity("s_libraryLimit"), undefined, "history log"),
+    e("activitySystemDays", "activity", activity("s_systemDays"), undefined, "history log"),
+    e("activityRequests", "activity", activity("s_recordRequests"), undefined, "http network"),
+    e("activityClear", "activity", activity("s_clear"), undefined, "history log"),
+
     e("language", "general", general("language")),
     e("scanOnStartup", "general", general("scanOnStartup")),
     e("autoSync", "general", general("autoSync")),

@@ -10,6 +10,7 @@ import { AccountsSection } from "./AccountsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { ArtworkSection } from "./ArtworkSection";
 import { BackupsSection } from "./BackupsSection";
+import { ActivitySection } from "./ActivitySection";
 import { CategoriesSection } from "./CategoriesSection";
 import { CompletionSection } from "./CompletionSection";
 import { DeveloperSection } from "./DeveloperSection";
@@ -47,6 +48,7 @@ type TitleKey =
   | "plugins"
   | "developer"
   | "backups"
+  | "activity"
   | "updatesAbout"
   | "updates"
   | "about";
@@ -150,6 +152,12 @@ const PAGES: PageDef[] = [
     title: "backups",
     group: "system",
     parts: [{ id: "backups", title: "backups", component: BackupsSection }],
+  },
+  {
+    id: "activity",
+    title: "activity",
+    group: "system",
+    parts: [{ id: "activity", title: "activity", component: ActivitySection }],
   },
   {
     id: "updatesAbout",
