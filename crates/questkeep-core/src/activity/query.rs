@@ -478,7 +478,7 @@ fn page<T>(mut items: Vec<T>, limit: u32, key: impl Fn(&T) -> Cursor) -> (Vec<T>
     let limit = limit as usize;
     let more = items.len() > limit;
     items.truncate(limit);
-    let next = if more || items.len() == limit {
+    let next = if more {
         items.last().map(key)
     } else {
         None
@@ -549,7 +549,11 @@ impl ActivityLog {
     /// Batches matching the query (the global log only).
     fn batches(&self, query: &ActivityQuery, limit: u32) -> Result<Vec<ActivityBatch>> {
         let mut args: Vec<SqlValue> = Vec::new();
-        let mut sql = format!("SELECT {BATCH_COLUMNS} FROM batches b WHERE 1");
+        // A running batch shows once it has an entry.
+        let mut sql = format!(
+            "SELECT {BATCH_COLUMNS} FROM batches b WHERE (b.finished_at IS NOT NULL \
+             OR EXISTS (SELECT 1 FROM entries x WHERE x.batch_id = b.id))"
+        );
         sql.push_str(&actor_sql(&query.actors, "b.", &mut args));
         sql.push_str(&time_sql(
             query.from.map(|t| t.timestamp_millis()),

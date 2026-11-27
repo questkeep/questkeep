@@ -163,7 +163,7 @@ impl Database {
         ids: &[Uuid],
         mutate: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.record_inner(change, Some(ids), mutate, |_| Vec::new())
+        self.record_inner(change, Some(ids), mutate, |_| Vec::new(), true)
             .map(|(value, _)| value)
     }
 
@@ -175,7 +175,7 @@ impl Database {
         mutate: impl FnOnce() -> Result<T>,
         added: impl FnOnce(&T) -> Vec<Uuid>,
     ) -> Result<T> {
-        self.record_inner(change, Some(ids), mutate, added)
+        self.record_inner(change, Some(ids), mutate, added, true)
             .map(|(value, _)| value)
     }
 
@@ -186,7 +186,7 @@ impl Database {
         change: &Change,
         mutate: impl FnOnce() -> Result<T>,
     ) -> Result<(T, Recorded)> {
-        self.record_inner(change, None, mutate, |_| Vec::new())
+        self.record_inner(change, None, mutate, |_| Vec::new(), true)
     }
 
     /// Runs `mutate` as a recorded change whose entries the caller writes itself (scripts,
@@ -197,6 +197,7 @@ impl Database {
         mutate: impl FnOnce() -> Result<T>,
         entries: impl FnOnce(&T) -> Vec<NewEntry>,
     ) -> Result<T> {
+        let _turn = self.recording_turn();
         let _scope = Scope::enter();
         let value = mutate()?;
         if let Some(log) = self.activity() {
@@ -205,13 +206,29 @@ impl Database {
         Ok(value)
     }
 
+    /// [`Self::record`] for a change that waits on the network (a fetch job). It does not take
+    /// the recording turn, so other changes go on meanwhile; one another thread makes to the same
+    /// game in that time shows in this entry too.
+    pub fn record_long<T>(
+        &self,
+        change: &Change,
+        ids: &[Uuid],
+        mutate: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        self.record_inner(change, Some(ids), mutate, |_| Vec::new(), false)
+            .map(|(value, _)| value)
+    }
+
     fn record_inner<T>(
         &self,
         change: &Change,
         ids: Option<&[Uuid]>,
         mutate: impl FnOnce() -> Result<T>,
         added: impl FnOnce(&T) -> Vec<Uuid>,
+        turn: bool,
     ) -> Result<(T, Recorded)> {
+        // Waits while another thread records, so its change never shows in these snapshots.
+        let _turn = if turn { self.recording_turn() } else { None };
         let _scope = Scope::enter();
         let Some(log) = self.activity().cloned() else {
             return mutate().map(|value| (value, Recorded::default()));

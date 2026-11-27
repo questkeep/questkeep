@@ -456,8 +456,6 @@ pub enum ClearPart {
 
 /// How often pruning runs at most (besides after batches).
 const PRUNE_EVERY: Duration = Duration::from_secs(60 * 60);
-/// Entries deleted per pruning round beyond the estimated excess.
-const PRUNE_CHUNK: i64 = 100;
 
 /// The activity database. One connection behind a mutex, like the library's.
 pub struct ActivityLog {
@@ -822,8 +820,8 @@ impl ActivityLog {
             }
             let count: i64 = conn.query_row("SELECT COUNT(*) FROM entries", [], |r| r.get(0))?;
             let excess = (sizes.library - limit) as f64 / sizes.library.max(1) as f64;
-            let chunk =
-                ((count as f64 * excess).ceil() as i64).clamp(1, count.max(1)) + PRUNE_CHUNK;
+            // A little more than the excess, so that rounds are few.
+            let chunk = ((count as f64 * excess * 1.05).ceil() as i64).clamp(1, count.max(1));
             let deleted = conn.execute(
                 "DELETE FROM entries WHERE id IN (SELECT id FROM entries ORDER BY at, id LIMIT ?1)",
                 [chunk],

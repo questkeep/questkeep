@@ -43,6 +43,9 @@ pub struct Database {
     /// The activity log the recorder writes to (see [crate::activity]); unset in tools and in
     /// tests that use the database alone.
     activity: OnceLock<Arc<crate::activity::ActivityLog>>,
+    /// Taken by the outermost recorded change of a thread, so that the snapshots before and after
+    /// a change never include another thread's change (see [crate::activity]).
+    recording: Mutex<()>,
 }
 
 impl Database {
@@ -73,6 +76,7 @@ impl Database {
         Ok(Self {
             conn: Mutex::new(conn),
             activity: OnceLock::new(),
+            recording: Mutex::new(()),
         })
     }
 
@@ -103,6 +107,13 @@ impl Database {
     /// debug builds; release builds skip the check. Functions that only touch internal state
     /// (markers, heartbeats, `state_version`) don't call it.
     #[inline]
+    /// Waits for this thread's turn to record a change; `None` inside a recorded change (the
+    /// turn is held already).
+    pub(crate) fn recording_turn(&self) -> Option<MutexGuard<'_, ()>> {
+        (!crate::activity::in_scope())
+            .then(|| self.recording.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
     pub(crate) fn check_recorded(&self, what: &str) {
         if cfg!(debug_assertions) && self.activity.get().is_some() && !crate::activity::in_scope() {
             if cfg!(test) {

@@ -231,7 +231,7 @@ fn worker(shared: &Shared, receiver: &Mutex<Receiver<CoverJob>>) {
             reason::ARTWORK_FETCH
         };
         let change = shared.runs.change(&shared.db, job.by.clone(), reason);
-        let _ = shared.db.record(&change, &[job.game_id], || {
+        let _ = shared.db.record_long(&change, &[job.game_id], || {
             process(shared, &job);
             Ok(())
         });
@@ -573,7 +573,7 @@ fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
                     reason::METADATA_REFRESH
                 };
                 let change = shared.runs.change(&shared.db, job.by.clone(), reason);
-                let _ = shared.db.record(&change, &[job.game_id], || {
+                let _ = shared.db.record_long(&change, &[job.game_id], || {
                     process_metadata(shared, &job, &mut last_request);
                     Ok(())
                 });
@@ -584,7 +584,7 @@ fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
                     .change(&shared.db, Actor::app(), reason::METADATA_FETCH);
                 let stored = shared
                     .db
-                    .record(&change, &[id], || Ok(fetch_icon(shared, id)))
+                    .record_long(&change, &[id], || Ok(fetch_icon(shared, id)))
                     .unwrap_or(false);
                 if stored {
                     shared
