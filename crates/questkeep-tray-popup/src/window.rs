@@ -39,13 +39,14 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
-    GetCursorPos, GetMessageW, IDC_ARROW, InsertMenuItemW, LoadCursorW, MENUITEMINFOW, MFT_STRING,
-    MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STRING, MSG, PostMessageW, PostQuitMessage,
-    RegisterClassExW, SW_SHOW, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN, TPM_NONOTIFY,
-    TPM_RETURNCMD, TPM_TOPALIGN, TrackPopupMenu, TranslateMessage, WA_INACTIVE, WM_ACTIVATE,
-    WM_APP, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT,
-    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetCursorPos, GetMessageW, IDC_ARROW, InsertMenuItemW, LoadCursorW, MENU_ITEM_STATE,
+    MENUITEMINFOW, MFS_DEFAULT, MFS_DISABLED, MFT_SEPARATOR, MFT_STRING, MIIM_BITMAP, MIIM_FTYPE,
+    MIIM_ID, MIIM_STATE, MIIM_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW,
+    SW_SHOW, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD,
+    TPM_TOPALIGN, TrackPopupMenu, TranslateMessage, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE,
+    WM_CONTEXTMENU, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT,
+    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE,
+    WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{HSTRING, PCSTR, Result, w};
 
@@ -55,10 +56,15 @@ use accesskit::{
 use accesskit_windows::Adapter;
 
 use super::a11y;
-use super::layout::{self, Action, Layout, Nav, ScreenRect, navigate};
+use super::layout::{self, Action, Layout, Nav, Press, Response, ScreenRect, navigate};
+use super::menu::{self, MenuEntry};
 use super::render::{Bitmaps, Frame, Renderer, ViewState, border_colorref};
-use super::{Pixels, PopupData, Prepared, prepare};
+use super::{Pixels, PopupData, PopupHost, PopupProfile, Prepared, prepare};
 use questkeep_imaging::{load_icon_rgba, scale_icon};
+use uuid::Uuid;
+
+/// Asks the app for a game's launch profiles (see [`PopupHost::profiles`]).
+type ProfileSource = std::rc::Rc<dyn Fn(Uuid) -> Vec<PopupProfile>>;
 
 /// `WM_MOUSELEAVE` (declared in a `windows` feature this crate does not otherwise need).
 const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -92,6 +98,7 @@ struct State {
     action: Option<Action>,
     /// Screen-reader support (UI Automation), created right after the window.
     adapter: Option<Adapter>,
+    profiles: ProfileSource,
 }
 
 impl State {
@@ -104,8 +111,9 @@ impl State {
 }
 
 /// Opens the popup next to the tray icon at `anchor` (physical pixels), or closes it when it is
-/// already open. `on_action` runs on the popup thread after the popup closed.
-pub fn show(anchor: ScreenRect, data: PopupData, on_action: impl Fn(Action) + Send + 'static) {
+/// already open. `host` answers the popup's questions and runs the chosen action, on the popup
+/// thread.
+pub fn show(anchor: ScreenRect, data: PopupData, host: impl PopupHost) {
     let open = *OPEN
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -124,7 +132,10 @@ pub fn show(anchor: ScreenRect, data: PopupData, on_action: impl Fn(Action) + Se
     let spawned = std::thread::Builder::new()
         .name("tray-popup".into())
         .spawn(move || {
-            let action = match run_with(anchor, data, true, |_| {}) {
+            let host = std::rc::Rc::new(host);
+            let source = std::rc::Rc::clone(&host);
+            let profiles: ProfileSource = std::rc::Rc::new(move |game| source.profiles(game));
+            let action = match run_with(anchor, data, profiles, true, |_| {}) {
                 Ok(action) => action,
                 Err(err) => {
                     tracing::error!(%err, "tray popup failed");
@@ -138,7 +149,7 @@ pub fn show(anchor: ScreenRect, data: PopupData, on_action: impl Fn(Action) + Se
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Instant::now());
             if let Some(action) = action {
-                on_action(action);
+                host.run(action);
             }
         });
     if let Err(err) = spawned {
@@ -211,6 +222,7 @@ fn monitor_for(anchor: ScreenRect) -> (ScreenRect, f32) {
 fn run_with(
     anchor: ScreenRect,
     data: PopupData,
+    profiles: ProfileSource,
     visible: bool,
     on_created: impl FnOnce(HWND),
 ) -> Result<Option<Action>> {
@@ -257,6 +269,7 @@ fn run_with(
             tracking_leave: false,
             action: None,
             adapter: None,
+            profiles,
         });
     });
 
@@ -375,6 +388,14 @@ enum Effect {
     Close,
     /// Opens the menu of the quick-launch entries behind the "..." tile (layout item index).
     Menu(usize),
+    /// Opens the context menu of an item (layout index) once the current message is handled:
+    /// the context-menu message arrives nested in the default handling of a mouse or key
+    /// message, and the menu's own loop, and closing the popup after it, must not run in there.
+    /// `keyboard`: shown below the item with its first entry selected, else at the cursor.
+    ContextMenu {
+        index: usize,
+        keyboard: bool,
+    },
 }
 
 fn with_state(f: impl FnOnce(&mut State) -> Effect) -> Effect {
@@ -568,6 +589,59 @@ fn sync_a11y() {
     }
 }
 
+/// Posted for [`Effect::ContextMenu`]: `wparam` is the item index, `lparam` 1 when it was opened
+/// from the keyboard.
+const WM_OPEN_CONTEXT_MENU: u32 = WM_APP + 2;
+/// `MK_SHIFT` in the `wparam` of mouse messages.
+const MK_SHIFT: usize = 0x0004;
+
+/// Runs what pressing item `index` does (see [`layout::Item::response`]).
+fn press(state: &mut State, index: usize, press: Press, keyboard: bool) -> Effect {
+    let Some(item) = state.layout.items.get(index) else {
+        return Effect::Redraw;
+    };
+    match (press, item.response(press)) {
+        (Press::Context, Response::Activate | Response::GameMenu(_)) => {
+            Effect::ContextMenu { index, keyboard }
+        }
+        (_, Response::Activate) => activate(state, index),
+        (_, Response::Run(action)) => {
+            state.action = Some(action);
+            Effect::Close
+        }
+        (_, Response::GameMenu(_) | Response::Ignore) => Effect::Redraw,
+    }
+}
+
+/// The item a context-menu message is about: under the mouse, or for the keyboard the focused
+/// one (the hovered one before the keyboard was used).
+fn context_target(hwnd: HWND, state: &mut State, lparam: LPARAM) -> Option<(usize, bool)> {
+    let x = (lparam.0 & 0xffff) as u16 as i16;
+    let y = ((lparam.0 >> 16) & 0xffff) as u16 as i16;
+    if x == -1 && y == -1 {
+        let index = if state.view.show_focus {
+            state.view.focus
+        } else {
+            state.view.hover.or(state.view.focus)
+        }?;
+        state.view.focus = Some(index);
+        state.view.show_focus = true;
+        return Some((index, true));
+    }
+    let mut p = POINT {
+        x: i32::from(x),
+        y: i32::from(y),
+    };
+    // SAFETY: converting a point for our own window.
+    if !unsafe { ScreenToClient(hwnd, &mut p) }.as_bool() {
+        return None;
+    }
+    let index = state
+        .layout
+        .hit(p.x as f32 / state.scale, p.y as f32 / state.scale)?;
+    Some((index, false))
+}
+
 fn activate(state: &mut State, index: usize) -> Effect {
     match state.layout.items.get(index) {
         Some(item) if item.action == Action::More => Effect::Menu(index),
@@ -680,20 +754,63 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             state.view.pressed = None;
             Effect::Redraw
         }),
-        WM_LBUTTONDOWN => with_state(|state| {
+        WM_LBUTTONDOWN | WM_MBUTTONDOWN => with_state(|state| {
             let (x, y) = client_point(lparam, state.scale);
             state.view.pressed = state.layout.hit(x, y);
             Effect::Redraw
         }),
-        WM_LBUTTONUP => with_state(|state| {
+        WM_LBUTTONUP | WM_MBUTTONUP => with_state(|state| {
             let (x, y) = client_point(lparam, state.scale);
             let hit = state.layout.hit(x, y);
             let pressed = state.view.pressed.take();
+            let kind = if msg == WM_MBUTTONUP {
+                Press::Middle
+            } else if wparam.0 & MK_SHIFT != 0 {
+                Press::Context
+            } else {
+                Press::Primary
+            };
             match hit {
-                Some(i) if pressed == Some(i) => activate(state, i),
+                Some(i) if pressed == Some(i) => {
+                    // Shift+click on an item without a menu is a plain click.
+                    let has_menu =
+                        state.layout.items[i].response(Press::Context) != Response::Ignore;
+                    let kind = if kind == Press::Context && !has_menu {
+                        Press::Primary
+                    } else {
+                        kind
+                    };
+                    press(state, i, kind, false)
+                }
                 _ => Effect::Redraw,
             }
         }),
+        // Sent by the default handling of a right click, the context-menu key and Shift+F10.
+        WM_CONTEXTMENU => with_state(|state| match context_target(hwnd, state, lparam) {
+            Some((index, keyboard)) => press(state, index, Press::Context, keyboard),
+            None => Effect::None,
+        }),
+        WM_OPEN_CONTEXT_MENU => {
+            let (index, keyboard) = (wparam.0, lparam.0 == 1);
+            let is_more = STATE.with(|s| {
+                s.try_borrow().ok().and_then(|guard| {
+                    guard
+                        .as_ref()
+                        .and_then(|state| state.layout.items.get(index))
+                        .map(|item| item.action == Action::More)
+                })
+            });
+            let chosen = match is_more {
+                Some(true) => open_more_menu(hwnd, index),
+                Some(false) => open_game_menu(hwnd, index, keyboard),
+                None => false,
+            };
+            if chosen {
+                Effect::Close
+            } else {
+                Effect::Redraw
+            }
+        }
         WM_MOUSEWHEEL => with_state(|state| {
             let delta = f32::from(((wparam.0 >> 16) & 0xffff) as u16 as i16);
             let before = state.scroll;
@@ -753,8 +870,181 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 }
             }
         }
+        Effect::ContextMenu { index, keyboard } => {
+            // SAFETY: posting to our own window; the focus ring may have moved, so it repaints.
+            unsafe {
+                let _ = InvalidateRect(Some(hwnd), None, false);
+                let _ = PostMessageW(
+                    Some(hwnd),
+                    WM_OPEN_CONTEXT_MENU,
+                    WPARAM(index),
+                    LPARAM(isize::from(keyboard)),
+                );
+            }
+            sync_a11y();
+        }
     }
     LRESULT(0)
+}
+
+/// One entry of a native menu.
+struct NativeItem {
+    text: String,
+    bitmap: Option<HBITMAP>,
+    enabled: bool,
+    /// Drawn bold.
+    default: bool,
+}
+
+/// Shows a native menu owned by the popup with its top-left corner at `at` (screen pixels;
+/// Windows flips it when there is no room), in the popup's light or dark look, and waits for the
+/// choice. `None` entries are separators. `keyboard`: the first entry is selected right away, as
+/// menus opened from the keyboard do. Returns the index of the chosen entry.
+fn track_menu(
+    hwnd: HWND,
+    entries: &[Option<NativeItem>],
+    at: POINT,
+    light: bool,
+    keyboard: bool,
+) -> Option<usize> {
+    // SAFETY: creating, showing and destroying a menu owned by this thread's window; every
+    // pointer passed is valid for its call (the menu copies the strings).
+    unsafe {
+        let menu = CreatePopupMenu().ok()?;
+        // The menu would follow the system theme; show it in the popup's.
+        let previous_mode = set_menu_mode(light);
+        for (n, entry) in entries.iter().enumerate() {
+            let mut info = MENUITEMINFOW {
+                cbSize: std::mem::size_of::<MENUITEMINFOW>() as u32,
+                fMask: MIIM_ID | MIIM_FTYPE,
+                fType: MFT_SEPARATOR,
+                wID: n as u32 + 1,
+                ..Default::default()
+            };
+            let text;
+            if let Some(item) = entry {
+                text = HSTRING::from(item.text.as_str());
+                info.fMask |= MIIM_STRING | MIIM_STATE;
+                info.fType = MFT_STRING;
+                info.dwTypeData = windows::core::PWSTR(text.as_ptr().cast_mut());
+                let mut state = MENU_ITEM_STATE(0);
+                if !item.enabled {
+                    state |= MFS_DISABLED;
+                }
+                if item.default {
+                    state |= MFS_DEFAULT;
+                }
+                info.fState = state;
+                if let Some(bitmap) = item.bitmap {
+                    info.fMask |= MIIM_BITMAP;
+                    info.hbmpItem = bitmap;
+                }
+            }
+            let _ = InsertMenuItemW(menu, n as u32, true, &info);
+        }
+        if keyboard {
+            // The menu's loop takes this key press from the queue and selects the first entry.
+            let _ = PostMessageW(
+                Some(hwnd),
+                WM_KEYDOWN,
+                WPARAM(usize::from(VK_DOWN.0)),
+                LPARAM(0),
+            );
+        }
+        let command = TrackPopupMenu(
+            menu,
+            TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+            at.x,
+            at.y,
+            None,
+            hwnd,
+            None,
+        )
+        .0;
+        let _ = DestroyMenu(menu);
+        restore_menu_mode(previous_mode);
+        usize::try_from(command).ok().and_then(|c| c.checked_sub(1))
+    }
+}
+
+/// The bottom-left corner of a layout rectangle in screen pixels.
+fn below(hwnd: HWND, rect: layout::Rect, scale: f32) -> Option<POINT> {
+    let mut at = POINT {
+        x: (rect.x * scale).round() as i32,
+        y: (rect.bottom() * scale).round() as i32,
+    };
+    // SAFETY: converting a point for our own window.
+    unsafe { ClientToScreen(hwnd, &mut at) }
+        .as_bool()
+        .then_some(at)
+}
+
+/// Stores the chosen action, so the popup closes and runs it.
+fn choose(action: Action) {
+    STATE.with(|s| {
+        if let Ok(mut guard) = s.try_borrow_mut()
+            && let Some(state) = guard.as_mut()
+        {
+            state.action = Some(action);
+        }
+    });
+}
+
+/// Shows the menu of the game behind item `index` (see [`menu::game_menu`]): below the item
+/// when opened from the keyboard, else at the cursor. The game's launch profiles are asked for
+/// now. Returns whether an entry was chosen (its action is stored, so the popup closes).
+fn open_game_menu(hwnd: HWND, index: usize, keyboard: bool) -> bool {
+    let Some((game, rect, scale, light, texts, profiles)) = STATE.with(|s| {
+        let guard = s.try_borrow().ok()?;
+        let state = guard.as_ref()?;
+        let item = state.layout.items.get(index)?;
+        Some((
+            item.game()?,
+            item.rect,
+            state.scale,
+            state.data.light,
+            state.data.texts.clone(),
+            std::rc::Rc::clone(&state.profiles),
+        ))
+    }) else {
+        return false;
+    };
+    // Outside the state borrow: the app reads its database here.
+    let entries = menu::game_menu(game, &profiles(game), &texts);
+    let at = if keyboard {
+        below(hwnd, rect, scale)
+    } else {
+        let mut p = POINT::default();
+        // SAFETY: reading the cursor position into an owned struct.
+        unsafe { GetCursorPos(&mut p) }.is_ok().then_some(p)
+    };
+    let Some(at) = at else {
+        return false;
+    };
+    let native: Vec<Option<NativeItem>> = entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Item {
+                text,
+                hint,
+                enabled,
+                default,
+                ..
+            } => Some(NativeItem {
+                text: menu::native_text(text, hint.as_deref()),
+                bitmap: None,
+                enabled: *enabled,
+                default: *default,
+            }),
+            MenuEntry::Separator => None,
+        })
+        .collect();
+    let chosen = track_menu(hwnd, &native, at, light, keyboard).and_then(|n| entries.get(n));
+    let Some(MenuEntry::Item { action, .. }) = chosen else {
+        return false;
+    };
+    choose(action.clone());
+    true
 }
 
 /// Shows the native menu of the quick-launch entries that did not fit, below the "..." tile
@@ -797,75 +1087,39 @@ fn open_more_menu(hwnd: HWND, item: usize) -> bool {
     }) else {
         return false;
     };
-    // SAFETY: creating, showing and destroying a menu owned by this thread's window; every
-    // pointer passed is valid for its call.
-    let chosen = unsafe {
-        let Ok(menu) = CreatePopupMenu() else {
-            return false;
-        };
-        // The menu would follow the system theme; show it in the popup's.
-        let previous_mode = set_menu_mode(light);
-        let side = (16.0 * scale).round().max(16.0) as i32;
-        let mut bitmaps = Vec::new();
-        for (n, (name, _)) in entries.iter().enumerate() {
-            let text = HSTRING::from(name.as_str());
-            let bitmap = icons
-                .get(n)
-                .and_then(|pixels| pixels.as_deref())
-                .and_then(|pixels| menu_bitmap(pixels, side));
-            let mut info = MENUITEMINFOW {
-                cbSize: std::mem::size_of::<MENUITEMINFOW>() as u32,
-                fMask: MIIM_STRING | MIIM_ID | MIIM_FTYPE,
-                fType: MFT_STRING,
-                wID: n as u32 + 1,
-                dwTypeData: windows::core::PWSTR(text.as_ptr().cast_mut()),
-                ..Default::default()
-            };
-            if let Some(bitmap) = bitmap {
-                info.fMask |= MIIM_BITMAP;
-                info.hbmpItem = bitmap;
-                bitmaps.push(bitmap);
-            }
-            let _ = InsertMenuItemW(menu, n as u32, true, &info);
-        }
-        let mut at = POINT {
-            x: (rect.x * scale).round() as i32,
-            y: (rect.bottom() * scale).round() as i32,
-        };
-        let command = if ClientToScreen(hwnd, &mut at).as_bool() {
-            TrackPopupMenu(
-                menu,
-                TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
-                at.x,
-                at.y,
-                None,
-                hwnd,
-                None,
-            )
-            .0
-        } else {
-            0
-        };
-        let _ = DestroyMenu(menu);
-        restore_menu_mode(previous_mode);
-        for bitmap in bitmaps {
+    let Some(at) = below(hwnd, rect, scale) else {
+        return false;
+    };
+    let side = (16.0 * scale).round().max(16.0) as i32;
+    let native: Vec<Option<NativeItem>> = entries
+        .iter()
+        .enumerate()
+        .map(|(n, (name, _))| {
+            Some(NativeItem {
+                text: name.clone(),
+                bitmap: icons
+                    .get(n)
+                    .and_then(|pixels| pixels.as_deref())
+                    .and_then(|pixels| menu_bitmap(pixels, side)),
+                enabled: true,
+                default: false,
+            })
+        })
+        .collect();
+    let chosen = track_menu(hwnd, &native, at, light, false);
+    for bitmap in native.iter().flatten().filter_map(|item| item.bitmap) {
+        // SAFETY: the menu that showed the bitmap is destroyed.
+        unsafe {
             let _ = DeleteObject(bitmap.into());
         }
-        usize::try_from(command).ok().filter(|c| *c > 0)
-    };
+    }
     let Some(action) = chosen
-        .and_then(|c| entries.into_iter().nth(c - 1))
+        .and_then(|c| entries.into_iter().nth(c))
         .map(|(_, a)| a)
     else {
         return false;
     };
-    STATE.with(|s| {
-        if let Ok(mut guard) = s.try_borrow_mut()
-            && let Some(state) = guard.as_mut()
-        {
-            state.action = Some(action);
-        }
-    });
+    choose(action);
     true
 }
 
@@ -964,6 +1218,75 @@ mod tests {
         UIA_ButtonControlTypeId, UIA_InvokePatternId,
     };
 
+    fn no_profiles() -> ProfileSource {
+        std::rc::Rc::new(|_| Vec::new())
+    }
+
+    const ANCHOR: ScreenRect = ScreenRect {
+        x: 100,
+        y: 100,
+        w: 24,
+        h: 24,
+    };
+
+    /// Sends a mouse button's down and up messages at a logical point of a popup that is never
+    /// shown, and returns what the popup chose.
+    fn click(down: u32, up: u32, modifiers: usize, x: f32, y: f32) -> Option<Action> {
+        let data = PopupData {
+            games: PopupGames {
+                recent: vec![PopupGame {
+                    id: Uuid::from_u128(1),
+                    name: "Hades".into(),
+                    icon: None,
+                    cover: None,
+                }],
+                favorites: vec![],
+            },
+            ..PopupData::default()
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let window = std::thread::spawn(move || {
+            run_with(ANCHOR, data, no_profiles(), false, |hwnd| {
+                tx.send(hwnd.0 as isize).unwrap();
+            })
+            .unwrap()
+        });
+        let hwnd = HWND(rx.recv().unwrap() as *mut _);
+        let scale = monitor_for(ANCHOR).1;
+        let (px, py) = ((x * scale) as isize, (y * scale) as isize);
+        let at = LPARAM((py << 16) | px);
+        // SAFETY: posting to a window of the test's other thread.
+        unsafe {
+            PostMessageW(Some(hwnd), down, WPARAM(modifiers), at).unwrap();
+            PostMessageW(Some(hwnd), up, WPARAM(modifiers), at).unwrap();
+            // When nothing was chosen the popup is still open: closed like Escape does. (When
+            // something was, the window may already be gone and this fails.)
+            let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+        window.join().unwrap()
+    }
+
+    /// The middle of the first recent tile, in logical pixels.
+    const TILE: (f32, f32) = (
+        layout::PADDING + 20.0,
+        layout::PADDING + layout::LABEL_HEIGHT + 40.0,
+    );
+
+    #[test]
+    fn left_click_plays_and_middle_click_opens_the_game_page() {
+        let id = Uuid::from_u128(1);
+        assert_eq!(
+            click(WM_LBUTTONDOWN, WM_LBUTTONUP, 0, TILE.0, TILE.1),
+            Some(Action::Launch(id))
+        );
+        assert_eq!(
+            click(WM_MBUTTONDOWN, WM_MBUTTONUP, 0, TILE.0, TILE.1),
+            Some(Action::OpenGame(id))
+        );
+        // Outside any item nothing happens.
+        assert_eq!(click(WM_MBUTTONDOWN, WM_MBUTTONUP, 0, 2.0, 2.0), None);
+    }
+
     /// The popup as a screen reader sees it, through the real UI Automation client API, on a
     /// window that is never shown: every item is a named button, and invoking one runs it.
     #[test]
@@ -988,15 +1311,9 @@ mod tests {
             update: None,
             texts: PopupTexts::default(),
         };
-        let anchor = ScreenRect {
-            x: 100,
-            y: 100,
-            w: 24,
-            h: 24,
-        };
         let (tx, rx) = std::sync::mpsc::channel();
         let window = std::thread::spawn(move || {
-            run_with(anchor, data, false, |hwnd| {
+            run_with(ANCHOR, data, no_profiles(), false, |hwnd| {
                 tx.send(hwnd.0 as isize).unwrap();
             })
             .unwrap()

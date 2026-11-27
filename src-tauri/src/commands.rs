@@ -826,6 +826,13 @@ pub fn take_update_request(updates: State<'_, Updates>) -> bool {
     updates.take_show_request()
 }
 
+/// The game whose page the tray asked the window to show (middle click or "Open game page" in
+/// the tray popup), once.
+#[tauri::command]
+pub fn take_game_page_request() -> Option<String> {
+    crate::tray::take_game_page_request().map(|id| id.to_string())
+}
+
 /// What the window showed before an update restarted the app (JSON from the UI), once.
 #[tauri::command]
 pub fn take_resume_state(state: State<'_, Arc<AppState>>) -> Option<String> {

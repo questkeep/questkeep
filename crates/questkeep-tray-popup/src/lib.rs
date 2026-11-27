@@ -3,7 +3,8 @@
 //! actions. Drawn with Direct2D/DirectWrite on its own thread, created when opened and destroyed
 //! when it closes, so it costs nothing while the app waits in the tray. Other platforms keep the
 //! native tray menu (`src-tauri/src/tray.rs`). The app hands over what to show ([`PopupData`])
-//! and gets the chosen [`Action`] back; the popup knows nothing else about the app.
+//! and gets the chosen [`Action`] back; the popup knows nothing else about the app. A game's
+//! launch profiles are asked for only when its menu opens ([`PopupHost::profiles`]).
 //!
 //! `layout` is pure and tested; `render` draws a layout onto any Direct2D target (the window, or a
 //! bitmap for the preview test); `window` owns the Win32 window and input.
@@ -12,6 +13,7 @@
 
 mod a11y;
 pub mod layout;
+pub mod menu;
 mod render;
 #[cfg(test)]
 mod test_icons;
@@ -25,10 +27,19 @@ use questkeep_imaging::{IconRgba, load_icon_rgba, load_image_filled, scale_icon}
 
 pub use layout::{Action, PopupTexts, ScreenRect};
 use layout::{Content, Item, ItemKind, Layout, MAX_TILES};
+pub use menu::PopupProfile;
 
 use uuid::Uuid;
 
 pub use window::show;
+
+/// The app's side of an open popup. Both calls run on the popup's thread.
+pub trait PopupHost: Send + 'static {
+    /// The launch profiles of a game, in the user's order; asked when the game's menu opens.
+    fn profiles(&self, game: Uuid) -> Vec<PopupProfile>;
+    /// Runs the chosen action, after the popup closed.
+    fn run(&self, action: Action);
+}
 
 /// A game in the popup.
 #[derive(Debug, Clone, PartialEq, Eq)]

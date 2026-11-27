@@ -1359,6 +1359,17 @@ function createAppStore() {
     }
   }
 
+  /** Opens the game page the tray asked for (middle click or "Open game page" in its popup). */
+  async function showGamePageRequest() {
+    try {
+      const id = await api.takeGamePageRequest();
+      if (typeof id !== "string") return;
+      openGamePage(await api.getGame(id));
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
   /** Loads initial data and subscribes to core events. Returns a cleanup function. */
   async function init(): Promise<() => void> {
     const unlisteners: (() => void)[] = [];
@@ -1372,6 +1383,7 @@ function createAppStore() {
       listen("app-notice", () => void showNotices()).then(keep),
       listen<api.UpdateInfo>("update-available", (e) => setUpdate(e.payload)).then(keep),
       listen("show-update", () => void showUpdateRequest()).then(keep),
+      listen("show-game", () => void showGamePageRequest()).then(keep),
       listen<api.UpdateProgress>("update-progress", (e) => setUpdateProgress(e.payload)).then(keep),
     ]);
     const loads = Promise.allSettled([
@@ -1425,6 +1437,7 @@ function createAppStore() {
     window.addEventListener("beforeunload", flushUi);
     void showNotices();
     void showUpdateRequest();
+    void showGamePageRequest();
     // A system notification that arrived before the window listened (or while it was hidden).
     void checkOpenNotifications();
     const onVisible = () => {
@@ -1743,6 +1756,7 @@ function createAppStore() {
     launchers,
     loadLaunchers,
     openGamePage,
+    showGamePageRequest,
     libraryRevision,
     refresh,
     scheduleRefresh,

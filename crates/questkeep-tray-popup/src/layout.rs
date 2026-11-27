@@ -58,6 +58,14 @@ pub struct PopupTexts {
     pub play: String,
     /// The tile that opens the menu with the quick-launch entries that did not fit.
     pub more: String,
+    /// The game menu's entry that opens the game's page in the window.
+    pub open_game: String,
+    /// The hint next to it: the mouse shortcut that does the same.
+    pub middle_click: String,
+    /// A launch profile in the game menu; `{name}` is replaced.
+    pub play_with: String,
+    /// The hint next to the profile Play starts.
+    pub default_profile: String,
 }
 
 impl Default for PopupTexts {
@@ -74,6 +82,10 @@ impl Default for PopupTexts {
             open_launcher: "Open {name}".into(),
             play: "Play".into(),
             more: "More".into(),
+            open_game: "Open game page".into(),
+            middle_click: "Middle click".into(),
+            play_with: "Play with {name}".into(),
+            default_profile: "Default".into(),
         }
     }
 }
@@ -87,6 +99,11 @@ impl PopupTexts {
     /// Screen-reader label of a launcher tile.
     pub fn open_launcher_label(&self, name: &str) -> String {
         self.open_launcher.replace("{name}", name)
+    }
+
+    /// A launch profile's entry in the game menu.
+    pub fn play_with_label(&self, name: &str) -> String {
+        self.play_with.replace("{name}", name)
     }
 }
 
@@ -125,7 +142,15 @@ impl Rect {
 /// What activating an item does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Plays a game with its default launch profile.
     Launch(Uuid),
+    /// Plays a game with one of its launch profiles.
+    LaunchProfile {
+        game: Uuid,
+        profile: Uuid,
+    },
+    /// Shows the game's page in the window.
+    OpenGame(Uuid),
     /// Opens a store's launcher (provider id).
     OpenLauncher(String),
     /// Opens the menu with the quick-launch entries that did not fit. Handled by the popup
@@ -159,6 +184,51 @@ pub struct Item {
     pub action: Action,
     /// Where the item is drawn, with the favorites scroll applied.
     pub rect: Rect,
+}
+
+/// How an item was pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Press {
+    /// Left click, Enter or Space.
+    Primary,
+    Middle,
+    /// Right click, Shift+click, the context-menu key or Shift+F10.
+    Context,
+}
+
+/// What pressing an item does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Response {
+    /// Runs the item's own action.
+    Activate,
+    /// Runs another action.
+    Run(Action),
+    /// Opens the menu of a game: its page and its launch profiles.
+    GameMenu(Uuid),
+    Ignore,
+}
+
+impl Item {
+    /// The game the item plays (recent tiles, favorites, games in the quick-launch strip).
+    pub fn game(&self) -> Option<Uuid> {
+        match self.action {
+            Action::Launch(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// What pressing the item does: games open their page on a middle click and their menu on
+    /// a context press; the "..." tile opens its menu either way; other items only react to
+    /// the primary press.
+    pub fn response(&self, press: Press) -> Response {
+        match (press, self.game()) {
+            (Press::Primary, _) => Response::Activate,
+            (Press::Middle, Some(game)) => Response::Run(Action::OpenGame(game)),
+            (Press::Context, Some(game)) => Response::GameMenu(game),
+            (Press::Context, None) if self.action == Action::More => Response::Activate,
+            _ => Response::Ignore,
+        }
+    }
 }
 
 /// What the popup lists.
@@ -720,6 +790,50 @@ mod tests {
         assert_eq!(layout(&c, 0.0, measure).overflow_from, Some(3));
         c.launcher_rows = 9;
         assert_eq!(layout(&c, 0.0, measure).overflow_from, None);
+    }
+
+    #[test]
+    fn games_open_their_page_on_middle_click_and_their_menu_on_context_press() {
+        let mut c = content(1, 1, 0);
+        c.launchers = vec![
+            Action::Launch(Uuid::from_u128(9)),
+            Action::OpenLauncher("steam".into()),
+        ];
+        let l = layout(&c, 0.0, measure);
+        let item = |kind| l.items.iter().find(|i| i.kind == kind).unwrap();
+        let tile = item(ItemKind::Tile(0));
+        let game = Uuid::from_u128(1);
+        assert_eq!(tile.response(Press::Primary), Response::Activate);
+        assert_eq!(
+            tile.response(Press::Middle),
+            Response::Run(Action::OpenGame(game))
+        );
+        assert_eq!(tile.response(Press::Context), Response::GameMenu(game));
+        assert_eq!(
+            item(ItemKind::Row(0)).response(Press::Context),
+            Response::GameMenu(game)
+        );
+        // A game in the quick-launch strip is a game too; a store launcher is not.
+        assert_eq!(
+            item(ItemKind::Launcher(0)).response(Press::Middle),
+            Response::Run(Action::OpenGame(Uuid::from_u128(9)))
+        );
+        let store = item(ItemKind::Launcher(1));
+        assert_eq!(store.game(), None);
+        assert_eq!(store.response(Press::Primary), Response::Activate);
+        assert_eq!(store.response(Press::Middle), Response::Ignore);
+        assert_eq!(store.response(Press::Context), Response::Ignore);
+        let exit = item(ItemKind::ExitButton);
+        assert_eq!(exit.response(Press::Middle), Response::Ignore);
+        assert_eq!(exit.response(Press::Context), Response::Ignore);
+    }
+
+    #[test]
+    fn the_more_tile_opens_its_menu_on_a_context_press() {
+        let l = layout(&content(0, 0, 13), 0.0, measure);
+        let more = l.items.iter().find(|i| i.kind == ItemKind::More).unwrap();
+        assert_eq!(more.response(Press::Context), Response::Activate);
+        assert_eq!(more.response(Press::Middle), Response::Ignore);
     }
 
     #[test]

@@ -585,6 +585,7 @@ pub fn run() {
             commands::check_update,
             commands::available_update,
             commands::take_update_request,
+            commands::take_game_page_request,
             commands::install_update,
             commands::take_resume_state,
             commands::account_status,

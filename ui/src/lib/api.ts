@@ -335,6 +335,8 @@ export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
 export const availableUpdate = () => invoke<UpdateInfo | null>("available_update");
 /** Whether the tray asked to show the update dialog before the window listened. */
 export const takeUpdateRequest = () => invoke<boolean>("take_update_request");
+/** The game whose page the tray asked to show (`show-game` event), once. */
+export const takeGamePageRequest = () => invoke<string | null>("take_game_page_request");
 /** Download progress of an installing update (`update-progress` event). */
 export interface UpdateProgress {
   downloaded: number;

@@ -175,6 +175,45 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Mais",
         ),
     };
+    // The game menu (right click on a game).
+    let (open_game, middle_click, play_with, default_profile) = match lang {
+        Lang::En => (
+            "Open game page",
+            "Middle click",
+            "Play with {name}",
+            "Default",
+        ),
+        Lang::De => (
+            "Spielseite öffnen",
+            "Mittelklick",
+            "Mit {name} spielen",
+            "Standard",
+        ),
+        Lang::Fr => (
+            "Ouvrir la page du jeu",
+            "Clic du milieu",
+            "Jouer avec {name}",
+            "Par défaut",
+        ),
+        Lang::It => (
+            "Apri la pagina del gioco",
+            "Clic centrale",
+            "Gioca con {name}",
+            "Predefinito",
+        ),
+        Lang::Es => (
+            "Abrir la página del juego",
+            "Clic central",
+            "Jugar con {name}",
+            "Predeterminado",
+        ),
+        Lang::Pt => (
+            "Abrir a página do jogo",
+            "Clique do meio",
+            "Jogar com {name}",
+            "Padrão",
+        ),
+    };
     questkeep_tray_popup::PopupTexts {
         recent: recent.into(),
         favorites: menu.favorites.into(),
@@ -187,6 +226,10 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
         open_launcher: open_launcher.into(),
         play: play.into(),
         more: more.into(),
+        open_game: open_game.into(),
+        middle_click: middle_click.into(),
+        play_with: play_with.into(),
+        default_profile: default_profile.into(),
     }
 }
 
@@ -319,6 +362,7 @@ mod tests {
             let texts = popup_texts(lang);
             assert!(texts.update.contains("{version}"), "{lang:?}");
             assert!(texts.open_launcher.contains("{name}"), "{lang:?}");
+            assert!(texts.play_with.contains("{name}"), "{lang:?}");
             assert!(menu_texts(lang).update.contains("{version}"), "{lang:?}");
         }
     }

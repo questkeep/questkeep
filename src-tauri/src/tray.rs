@@ -1,7 +1,8 @@
 //! System tray icon and what it opens: on Windows a custom popup with cover tiles (the
 //! `questkeep-tray-popup` crate), elsewhere a native menu. Both list recently played and favorite
 //! games and the quick-launch strip (store launchers and apps the user picked); their content is refreshed (debounced, off the UI thread) when
-//! the library changes.
+//! the library changes. In the popup a game's menu offers its page and its launch profiles,
+//! which are read only when that menu opens.
 //!
 //! The selection logic is in `questkeep_core::tray` and the providers' launchers; this module
 //! only turns it into Tauri menu items, so it has no unit tests of its own (creating a tray icon
@@ -423,22 +424,84 @@ fn popup_anchor(rect: &tauri::Rect) -> questkeep_tray_popup::ScreenRect {
 /// Right button released: opens the popup (or closes it when it is open).
 #[cfg(windows)]
 fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
-    questkeep_tray_popup::show(popup_anchor(rect), popup_data(app), popup_action(app));
+    questkeep_tray_popup::show(
+        popup_anchor(rect),
+        popup_data(app),
+        PopupHost { app: app.clone() },
+    );
+}
+
+/// The app's side of the open popup.
+#[cfg(windows)]
+struct PopupHost {
+    app: AppHandle,
 }
 
 #[cfg(windows)]
-fn popup_action(app: &AppHandle) -> impl Fn(questkeep_tray_popup::Action) + Send + 'static {
-    use questkeep_tray_popup::Action;
-    let app = app.clone();
-    move |action| match action {
-        Action::Launch(id) => launch(&app, id),
-        Action::OpenLauncher(id) => open_launcher(&app, id),
-        // The popup opens that menu itself and hands over the chosen entry instead.
-        Action::More => {}
-        Action::OpenWindow => window::show_main_window(&app),
-        Action::ShowUpdate => crate::updates::show(&app),
-        Action::Exit => exit(&app),
+impl questkeep_tray_popup::PopupHost for PopupHost {
+    /// The game's launch profiles as its page lists them, read when its menu opens.
+    fn profiles(&self, game: Uuid) -> Vec<questkeep_tray_popup::PopupProfile> {
+        let Some(state) = self.app.try_state::<Arc<AppState>>() else {
+            return Vec::new();
+        };
+        match state.library.launch_profiles(game) {
+            Ok(list) => list
+                .profiles
+                .into_iter()
+                .map(|p| questkeep_tray_popup::PopupProfile {
+                    default: list.play_id == Some(p.id),
+                    available: p.installed,
+                    id: p.id,
+                    name: p.name,
+                })
+                .collect(),
+            Err(err) => {
+                tracing::warn!(%err, %game, "could not read the launch profiles for the tray");
+                Vec::new()
+            }
+        }
     }
+
+    fn run(&self, action: questkeep_tray_popup::Action) {
+        use questkeep_tray_popup::Action;
+        let app = &self.app;
+        match action {
+            Action::Launch(id) => launch(app, id, None),
+            Action::LaunchProfile { game, profile } => launch(app, game, Some(profile)),
+            Action::OpenGame(id) => open_game_page(app, id),
+            Action::OpenLauncher(id) => open_launcher(app, id),
+            // The popup opens that menu itself and hands over the chosen entry instead.
+            Action::More => {}
+            Action::OpenWindow => window::show_main_window(app),
+            Action::ShowUpdate => crate::updates::show(app),
+            Action::Exit => exit(app),
+        }
+    }
+}
+
+/// A game page the tray asked the window to show, kept until the window takes it (a window
+/// that waited in the tray is built first and asks once it has loaded).
+static GAME_PAGE: Mutex<Option<Uuid>> = Mutex::new(None);
+/// Tells a loaded window that [`GAME_PAGE`] has a game for it.
+#[cfg(windows)]
+const SHOW_GAME_EVENT: &str = "show-game";
+
+/// The game page the tray asked for since the last call, if any.
+pub fn take_game_page_request() -> Option<Uuid> {
+    GAME_PAGE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+}
+
+/// Brings the window to the front on the game's page.
+#[cfg(windows)]
+fn open_game_page(app: &AppHandle, id: Uuid) {
+    use tauri::Emitter;
+    *GAME_PAGE.lock().unwrap_or_else(PoisonError::into_inner) = Some(id);
+    window::show_main_window(app);
+    // A window that is already loaded hears the event; a new one asks when it has loaded.
+    let _ = app.emit(SHOW_GAME_EVENT, ());
 }
 
 #[cfg(windows)]
@@ -520,7 +583,7 @@ fn on_menu_event(app: &AppHandle, id: &str) {
                 .strip_prefix(GAME_PREFIX)
                 .and_then(|id| Uuid::parse_str(id).ok())
             {
-                launch(app, game);
+                launch(app, game, None);
             } else if let Some(id) = other.strip_prefix(LAUNCHER_PREFIX) {
                 open_launcher(app, id.to_string());
             }
@@ -528,9 +591,9 @@ fn on_menu_event(app: &AppHandle, id: &str) {
     }
 }
 
-/// Launches a game like the `launch_game` command; a failure is logged and, if the window is
-/// open, shown there as an error toast.
-fn launch(app: &AppHandle, id: Uuid) {
+/// Launches a game like the `launch_game` command, with a launch profile or its default; a
+/// failure is logged and, if the window is open, shown there as an error toast.
+fn launch(app: &AppHandle, id: Uuid, profile: Option<Uuid>) {
     let Some(state) = app.try_state::<Arc<AppState>>() else {
         return;
     };
@@ -538,7 +601,7 @@ fn launch(app: &AppHandle, id: Uuid) {
     std::thread::spawn(move || {
         let result = state
             .library
-            .launch_target(id, None)
+            .launch_target(id, profile)
             .and_then(|game| state.launcher.launch(&game));
         if let Err(err) = result {
             tracing::warn!(%err, %id, "launching from the tray failed");

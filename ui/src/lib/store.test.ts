@@ -130,6 +130,25 @@ describe("store", () => {
     expect(store.selectedGame()?.id).toBe("h");
   });
 
+  it("opens the game page the tray asked for, once", async () => {
+    vi.mocked(api.listViews).mockResolvedValue(testSections());
+    await store.loadViews();
+    store.showSettings();
+    vi.mocked(api.takeGamePageRequest).mockResolvedValueOnce("g").mockResolvedValueOnce(null);
+    vi.mocked(api.getGame).mockResolvedValue(makeGame({ id: "g" }));
+    await store.showGamePageRequest();
+    expect(api.getGame).toHaveBeenCalledWith("g");
+    expect(store.page()).toBe("library");
+    expect(store.selectedId()).toBe("g");
+    expect(store.detailsOpen()).toBe(true);
+
+    // Already taken (the event and the window's start both ask): nothing happens.
+    store.closeDetails();
+    await store.showGamePageRequest();
+    expect(store.detailsOpen()).toBe(false);
+    expect(api.getGame).toHaveBeenCalledTimes(1);
+  });
+
   it("reloads plugins, stores and the game list on pluginsChanged", async () => {
     vi.mocked(api.listPlugins).mockResolvedValue([makePlugin({ id: "p" })]);
     vi.mocked(api.listProviders).mockResolvedValue([makeProvider({ id: "p" })]);
