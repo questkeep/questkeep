@@ -189,7 +189,7 @@ export function createApi(plugin: ApiPlugin, settings: SettingsController): Ques
         return track(id, () => observer.disconnect());
       },
     },
-    invoke: (command, args) => app.invokeCommand(command, args),
+    invoke: (command, args) => app.invokeCommand(command, args, id),
     log: { debug: log("debug"), info: log("info"), warn: log("warn"), error: log("error") },
   };
 }

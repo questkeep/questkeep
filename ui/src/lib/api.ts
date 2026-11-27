@@ -217,9 +217,17 @@ export const getPluginSettings = (id: string) =>
 /** Replaces an extension plugin's settings with this object. */
 export const savePluginSettings = (id: string, settings: Record<string, unknown>) =>
   invoke<void>("save_plugin_settings", { id, settings });
-/** Any app command by name, for extensions (`api.invoke`). */
-export const invokeCommand = <T = unknown>(command: string, args?: Record<string, unknown>) =>
-  invoke<T>(command, args);
+/** The IPC header that tells the activity log which plugin made a change. */
+export const ACTOR_HEADER = "Questkeep-Actor";
+/**
+ * Any app command by name, for extensions (`api.invoke`). The activity log names the plugin
+ * `pluginId` as the one who made the change.
+ */
+export const invokeCommand = <T = unknown>(
+  command: string,
+  args: Record<string, unknown> | undefined,
+  pluginId: string,
+) => invoke<T>(command, args, { headers: { [ACTOR_HEADER]: `plugin:${pluginId}` } });
 
 let pluginBase: string | undefined;
 /**

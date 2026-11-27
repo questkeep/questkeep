@@ -345,6 +345,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
     startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     movedStoreNotices: [],
+    activity: { libraryMaxMb: 50, systemDays: 30, recordPluginRequests: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,

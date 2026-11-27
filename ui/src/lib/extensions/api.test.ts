@@ -262,7 +262,8 @@ describe("api.games, events, theme, invoke", () => {
     vi.mocked(app.pluginFileUrl).mockReturnValue("qk://ext/a.png");
     const api = makeApi();
     expect(await api.invoke("count_games", { queries: [] })).toBe(3);
-    expect(app.invokeCommand).toHaveBeenCalledWith("count_games", { queries: [] });
+    // The activity log names the plugin as the caller.
+    expect(app.invokeCommand).toHaveBeenCalledWith("count_games", { queries: [] }, "ext");
     expect(api.plugin.url("a.png")).toBe("qk://ext/a.png");
     expect(app.pluginFileUrl).toHaveBeenCalledWith("ext", "a.png");
     // With the plugin's load counter, so a reloaded plugin gets its new files.
