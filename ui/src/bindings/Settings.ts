@@ -158,4 +158,9 @@ tray: TraySettings,
 /**
  * What the start page shows.
  */
-startPage: StartPageSettings, };
+startPage: StartPageSettings, 
+/**
+ * Built-in stores that moved to a plugin whose "now a plugin" notice was already posted
+ * (store ids), so it shows once.
+ */
+movedStoreNotices: Array<string>, };
