@@ -115,6 +115,7 @@ popup's More menu, and hidden games in Explore.
 - Price comparison sites show their favicons in the Add game menu and Settings (refetched monthly, Refresh icons button).
 - Import a backup from anywhere on disk (Settings > Backups) or restore one from the first-run setup; the current library is backed up first.
 - Styled dropdowns everywhere instead of the native ones.
+- Activity log: every change to the library with who did it, why and what changed (game page card and drawer, an Activity page with Library and System parts, Ctrl+Shift+A), play sessions in the timeline, size-based retention, included in backups.
 - Prism Launcher moved out into the Prism Launcher plugin (questkeep/plugin-prism); a bell entry points users with Prism games to it.
 - Playtime is called running time, "played" labels say "started" (Last started, Times started, …), and apps say Start instead of Play in more places.
 
