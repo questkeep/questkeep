@@ -177,8 +177,8 @@ A store that found a game in `/instances/My Instance/Beat Saber.exe` returns tha
 Questkeep translates a path that starts with the guest path of a `read` or `folders` mount to
 the real path on this PC (`D:\BSManager\BSInstances\My Instance\Beat Saber.exe`) in
 `install_dir`, in play actions (`target` of a `file` action, `working_dir`, `tracking_path` when
-the tracking mode is `directory`; also install, uninstall, launcher-page and launch-with-args
-actions and the store launcher) and in image candidates (`file`). Rules:
+the tracking mode is `directory` or `commandLine`; also install, uninstall, launcher-page and
+launch-with-args actions and the store launcher) and in image candidates (`file`). Rules:
 
 - Only whole path parts match, case-sensitively, like the sandbox itself: `/instances/a` and
   `/instances` translate, `/instancesx` and `/Instances` do not. The longest matching mount wins.

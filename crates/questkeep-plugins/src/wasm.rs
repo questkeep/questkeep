@@ -264,7 +264,10 @@ impl Sandbox {
             action.target = self.translate(&action.target);
         }
         action.working_dir = action.working_dir.map(|dir| self.translate(&dir));
-        if action.tracking == TrackingMode::Directory {
+        if matches!(
+            action.tracking,
+            TrackingMode::Directory | TrackingMode::CommandLine
+        ) {
             action.tracking_path = action.tracking_path.map(|dir| self.translate(&dir));
         }
         action
@@ -1560,6 +1563,15 @@ mod tests {
         uri.tracking = TrackingMode::Name;
         uri.tracking_path = Some("/instances/x".into());
         assert_eq!(sandbox.translate_action(uri.clone()), uri);
+        // A folder named on the command line is a path, also for a URI launch.
+        uri.tracking = TrackingMode::CommandLine;
+        assert_eq!(
+            sandbox
+                .translate_action(uri)
+                .tracking_path
+                .map(PathBuf::from),
+            Some(PathBuf::from("/games/instances/x"))
+        );
 
         let mut game = ImportedGame::installed("1", "G");
         game.install_dir = Some("/instances/Game".into());

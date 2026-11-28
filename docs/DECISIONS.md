@@ -79,6 +79,13 @@ Short log of choices made while building. Newest at the bottom of each section.
   stay unambiguous and exits show through the handle. Measured steady tick: ~40 µs. A game shows
   as playing at once; a run under 60 s is dropped when it ends (no playtime, play count or last
   played). Folders like drive roots, home and Program Files are never matched.
+- **The watcher also matches a process's working directory on Windows**, read once per new
+  process from its process parameters (`NtQueryInformationProcess` + `ReadProcessMemory`, 32-bit
+  processes through their WOW64 PEB; ~19 µs per process, the same results as sysinfo). Games run by
+  a shared program from elsewhere (Minecraft in a launcher's `javaw.exe`) run in their own folder,
+  so they are noticed like on Linux (`/proc/<pid>/cwd`). Arguments are not read there: the working
+  directory is enough, and command lines of every process would cost more. A shell left open in a
+  game folder counts as the game, as it already did on Linux.
 - **Sessions are persisted** with a heartbeat every poll (2 s). App exit saves elapsed time; a
   crash is recovered on next start up to the last heartbeat (sleep gaps inside a crashed session
   are not subtracted, a deliberate simplification).
@@ -90,6 +97,11 @@ Short log of choices made while building. Newest at the bottom of each section.
   timer measures how long the process runs (also for apps, or a game idling in the background),
   not play. "Runtime" is avoided because scripts already have a Runtime setting. Code, JSON, DB
   columns and script variables keep the `playtime`/`played` names.
+- **`commandLine` tracking matches the working directory first, the arguments second.** Minecraft
+  launchers run every instance with one `javaw.exe` (and run it briefly for their own Java checks),
+  so a name can't tell instances apart; each starts the game in its instance folder, and Sodium
+  rewrites the command line on Windows (seen with Prism), so `--gameDir` alone isn't enough.
+  Command lines are read only while such a game is tracked: on Windows that opens each new process.
 
 ## Steam and covers
 

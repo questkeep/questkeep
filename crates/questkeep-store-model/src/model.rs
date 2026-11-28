@@ -131,6 +131,11 @@ pub enum TrackingMode {
     Directory,
     /// Any process whose executable file name equals `tracking_path`.
     Name,
+    /// Any process that names the folder `tracking_path` (or the install dir) in one of its
+    /// command-line arguments or as its working directory, e.g. Minecraft started by a launcher
+    /// with `--gameDir <instance folder>`. Tells apart processes that share one executable
+    /// (`javaw.exe`) by what they were started for.
+    CommandLine,
 }
 
 /// The single play action of a game. Stored as JSON so it can grow into a list later.

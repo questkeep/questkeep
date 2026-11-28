@@ -11,7 +11,7 @@ use std::sync::{Mutex, PoisonError};
 use sysinfo::{ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System, UpdateKind};
 
 /// Minimal information about one running process.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProcInfo {
     pub pid: u32,
     pub parent: Option<u32>,
@@ -23,11 +23,23 @@ pub struct ProcInfo {
     /// arguments). Filled on Linux only, where Proton games run as `wine64-preloader` from the
     /// Proton folder and only their working directory/arguments point into the game folder.
     pub hint_paths: Vec<String>,
+    /// Command-line arguments, the program first. Read on Linux always, elsewhere only for
+    /// [`ProcessProbe::snapshot_with_commands`] (empty when the OS doesn't allow it).
+    pub cmd: Vec<String>,
+    /// Working directory, read like [`cmd`](Self::cmd).
+    pub cwd: Option<String>,
 }
 
 /// Source of process snapshots. Abstracted so tracking logic is testable without real processes.
 pub trait ProcessProbe: Send + Sync {
     fn snapshot(&self) -> Vec<ProcInfo>;
+
+    /// A snapshot with every process's command line and working directory, for
+    /// [`Matcher::CommandLine`]. Costs more than [`snapshot`](Self::snapshot) on Windows (each new
+    /// process is opened once), so it is only asked for while such a game is tracked.
+    fn snapshot_with_commands(&self) -> Vec<ProcInfo> {
+        self.snapshot()
+    }
 }
 
 /// Real probe backed by `sysinfo` (Windows and Linux).
@@ -52,6 +64,17 @@ impl Default for SystemProbe {
 
 impl ProcessProbe for SystemProbe {
     fn snapshot(&self) -> Vec<ProcInfo> {
+        self.read(false)
+    }
+
+    fn snapshot_with_commands(&self) -> Vec<ProcInfo> {
+        self.read(true)
+    }
+}
+
+impl SystemProbe {
+    /// `commands`: also read command lines and working directories (always on Linux).
+    fn read(&self, commands: bool) -> Vec<ProcInfo> {
         let mut guard = self.system.lock().unwrap_or_else(PoisonError::into_inner);
         if guard.is_none() {
             match System::new() {
@@ -65,11 +88,14 @@ impl ProcessProbe for SystemProbe {
         let Some(system) = guard.as_mut() else {
             return Vec::new();
         };
-        let kind = ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet);
-        #[cfg(target_os = "linux")]
-        let kind = kind
-            .with_cwd(UpdateKind::OnlyIfNotSet)
-            .with_cmd(UpdateKind::OnlyIfNotSet);
+        let commands = commands || cfg!(target_os = "linux");
+        let mut kind = ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet);
+        if commands {
+            // A process's command line and working directory don't change: read them once.
+            kind = kind
+                .with_cwd(UpdateKind::OnlyIfNotSet)
+                .with_cmd(UpdateKind::OnlyIfNotSet);
+        }
         system.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
         system
             .processes()
@@ -81,6 +107,19 @@ impl ProcessProbe for SystemProbe {
                 exe: p.exe().map(|e| e.display().to_string()),
                 name: p.name().to_string_lossy().into_owned(),
                 hint_paths: hint_paths(p),
+                cmd: if commands {
+                    p.cmd()
+                        .iter()
+                        .map(|a| a.to_string_lossy().into_owned())
+                        .collect()
+                } else {
+                    Vec::new()
+                },
+                cwd: if commands {
+                    p.cwd().map(|c| c.display().to_string())
+                } else {
+                    None
+                },
             })
             .collect()
     }
@@ -143,6 +182,9 @@ pub enum Matcher {
     Directory { dir: String },
     /// Any process with this executable file name (case-insensitive).
     Name { name: String },
+    /// Any process that runs in this folder (normalized, without a trailing separator) or below,
+    /// names it in a command-line argument, or runs a program from inside it.
+    CommandLine { dir: String },
 }
 
 impl Matcher {
@@ -167,6 +209,17 @@ impl Matcher {
         Self::Name {
             name: file.to_lowercase(),
         }
+    }
+
+    pub fn command_line(dir: &str) -> Self {
+        Self::CommandLine {
+            dir: normalize_path(dir.trim()).trim_end_matches('/').to_string(),
+        }
+    }
+
+    /// Whether this matcher needs command lines ([`ProcessProbe::snapshot_with_commands`]).
+    pub fn needs_commands(&self) -> bool {
+        matches!(self, Self::CommandLine { .. })
     }
 
     /// Updates internal state from a snapshot and reports whether the game is running.
@@ -212,6 +265,7 @@ impl Matcher {
             Self::Original { pid } => snapshot.iter().any(|p| p.pid == *pid),
             Self::Directory { .. } => false,
             Self::Name { name } => snapshot.iter().any(|p| p.name.to_lowercase() == *name),
+            Self::CommandLine { dir } => snapshot.iter().any(|p| mentions_dir(p, dir)),
         };
         if running {
             Presence::Game
@@ -229,6 +283,37 @@ pub enum Presence {
     /// coming, but it is not being played.
     Helpers,
     Game,
+}
+
+/// Whether a process belongs to the folder `dir` (normalized, no trailing separator): it runs in
+/// it or below (working directory: Minecraft launchers start the game in the instance folder,
+/// which survives mods that rewrite the command line, such as Sodium on Windows), runs a program
+/// from it, or names it in an argument (`--gameDir <dir>`, `-Dpath=<dir>/natives`, a classpath).
+/// A mention must end at a separator, so `/x/Pack` doesn't match `/x/Pack 2`.
+fn mentions_dir(p: &ProcInfo, dir: &str) -> bool {
+    if dir.is_empty() {
+        return false;
+    }
+    let under = |path: &str| {
+        let path = normalize_path(path);
+        let path = path.trim_end_matches('/');
+        path == dir
+            || path
+                .strip_prefix(dir)
+                .is_some_and(|rest| rest.starts_with('/'))
+    };
+    if p.cwd.as_deref().is_some_and(under) || p.exe.as_deref().is_some_and(under) {
+        return true;
+    }
+    p.cmd.iter().any(|arg| {
+        let arg = normalize_path(arg);
+        arg.match_indices(dir).any(|(at, _)| {
+            let before = arg[..at].chars().next_back();
+            let after = arg[at + dir.len()..].chars().next();
+            before.is_none_or(|c| matches!(c, '=' | '"' | '\'' | ';' | ':' | ',' | ' '))
+                && after.is_none_or(|c| matches!(c, '/' | '"' | '\'' | ';' | ':' | ','))
+        })
+    })
 }
 
 fn directory_presence(snapshot: &[ProcInfo], dir: &str, ignored: &IgnoredPrograms) -> Presence {
@@ -373,8 +458,84 @@ mod tests {
                 .unwrap()
                 .to_string_lossy()
                 .into_owned(),
-            hint_paths: Vec::new(),
+            ..ProcInfo::default()
         }
+    }
+
+    fn java(pid: u32, cwd: Option<&str>, cmd: &[&str]) -> ProcInfo {
+        ProcInfo {
+            cwd: cwd.map(str::to_string),
+            cmd: cmd.iter().map(|a| a.to_string()).collect(),
+            ..proc(pid, Some(1), "/opt/java/bin/javaw.exe")
+        }
+    }
+
+    #[test]
+    fn command_line_tells_minecraft_instances_apart() {
+        let mut m = Matcher::command_line(r"C:\MC\profiles\Cobblemon [Fabric]\");
+        assert!(m.needs_commands());
+        // The launcher's Java check: same program, nothing about the instance.
+        let check = java(
+            2,
+            Some(r"C:\MC"),
+            &[
+                "javaw.exe",
+                "-cp",
+                "theseus.jar",
+                "com.modrinth.theseus.JavaInfo",
+            ],
+        );
+        assert!(!m.is_running(std::slice::from_ref(&check)));
+        // The game, by its argument (Modrinth, CurseForge).
+        let by_arg = java(
+            3,
+            None,
+            &[
+                "javaw.exe",
+                r"-Djava.library.path=C:\MC\profiles\Cobblemon [Fabric]\natives",
+                "--gameDir",
+                r"C:\MC\profiles\Cobblemon [Fabric]",
+            ],
+        );
+        assert!(m.is_running(&[check.clone(), by_arg]));
+        // The game by its working directory, its command line rewritten (Prism with Sodium).
+        let by_cwd = java(
+            4,
+            Some(r"C:\MC\profiles\Cobblemon [Fabric]\minecraft\"),
+            &[
+                "net.caffeinemc.sodium",
+                "/",
+                "net.minecraft.client.main.Main",
+                "/",
+            ],
+        );
+        assert!(m.is_running(&[by_cwd]));
+        // Another instance whose name starts the same.
+        let other = java(
+            5,
+            Some(r"C:\MC\profiles\Cobblemon [Fabric] 2"),
+            &[
+                "javaw.exe",
+                "--gameDir",
+                r"C:\MC\profiles\Cobblemon [Fabric] 2",
+            ],
+        );
+        assert!(!m.is_running(&[other]));
+        // A program inside the folder.
+        assert!(m.is_running(&[proc(6, None, r"C:\MC\profiles\Cobblemon [Fabric]\tool.exe")]));
+        assert!(!Matcher::command_line("  ").is_running(&[check]));
+    }
+
+    #[test]
+    fn command_line_mentions_need_a_boundary_before_too() {
+        let mut m = Matcher::command_line("/games/Pack");
+        assert!(m.is_running(&[java(
+            1,
+            None,
+            &["java", "-cp", "/lib/a.jar:/games/Pack/b.jar"]
+        )]));
+        assert!(!m.is_running(&[java(1, None, &["java", "/other/games/Pack/x"])]));
+        assert!(!Matcher::tree(1).needs_commands());
     }
 
     #[test]

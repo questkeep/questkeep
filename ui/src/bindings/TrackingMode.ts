@@ -3,4 +3,4 @@
 /**
  * How the launcher decides that a game is still running.
  */
-export type TrackingMode = "default" | "process" | "originalProcess" | "directory" | "name";
+export type TrackingMode = "default" | "process" | "originalProcess" | "directory" | "name" | "commandLine";

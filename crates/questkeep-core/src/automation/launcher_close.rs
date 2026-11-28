@@ -221,7 +221,7 @@ mod tests {
             parent: None,
             exe: None,
             name: name.into(),
-            hint_paths: Vec::new(),
+            ..ProcInfo::default()
         }
     }
 

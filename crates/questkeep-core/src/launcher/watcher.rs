@@ -3,8 +3,10 @@
 //!
 //! Built to cost next to nothing while it runs in the background: one thread wakes every few
 //! seconds and lists process ids (no per-process work or allocation for processes it already
-//! knows). Only a process it hasn't seen yet has its executable path looked up, once, and matched
-//! against the install folders by walking up its parent folders in a hash map. When the setting
+//! knows). Only a process it hasn't seen yet has its paths looked up, once (the executable and the
+//! working directory, so Minecraft in a shared `javaw.exe` is found by its instance folder; on
+//! Linux also path arguments), and matched against the install folders by walking up their parent
+//! folders in a hash map. When the setting
 //! is off the thread blocks without a timeout, and without installed games it skips listing.
 //!
 //! A game is playing as soon as one of its programs that isn't ignored (crash handlers, known

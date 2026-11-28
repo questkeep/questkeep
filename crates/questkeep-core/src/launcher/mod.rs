@@ -515,6 +515,7 @@ fn start_game(game: &Game) -> Result<(Option<Matcher>, Option<Child>)> {
                 TrackingMode::Name => Some(Matcher::name(
                     action.tracking_path.as_deref().unwrap_or(target),
                 )),
+                TrackingMode::CommandLine => dir.as_deref().map(Matcher::command_line),
             };
             Ok((matcher, Some(child)))
         }
@@ -523,6 +524,7 @@ fn start_game(game: &Game) -> Result<(Option<Matcher>, Option<Child>)> {
                 .map_err(|e| CoreError::Launch(format!("Could not open '{target}': {e}")))?;
             let matcher = match action.tracking {
                 TrackingMode::Name => action.tracking_path.as_deref().map(Matcher::name),
+                TrackingMode::CommandLine => tracking_dir.as_deref().map(Matcher::command_line),
                 // No process of our own to follow; the install dir is the best signal.
                 _ => tracking_dir.as_deref().map(Matcher::directory),
             };
@@ -578,9 +580,13 @@ impl Tracker {
         {
             self.child = None;
         }
-        let snapshot = self.probe.snapshot();
         let Some(matcher) = self.matcher.as_mut() else {
             return Presence::None;
+        };
+        let snapshot = if matcher.needs_commands() {
+            self.probe.snapshot_with_commands()
+        } else {
+            self.probe.snapshot()
         };
         matcher.presence(&snapshot, &self.ignored)
     }
@@ -768,7 +774,7 @@ mod tests {
                     parent: None,
                     exe: Some("/games/fake/fake.exe".into()),
                     name: "fake.exe".into(),
-                    hint_paths: Vec::new(),
+                    ..ProcInfo::default()
                 }]
             } else {
                 Vec::new()

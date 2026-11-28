@@ -301,7 +301,7 @@ fn finds_the_processes_a_script_started() {
         parent,
         exe: None,
         name: String::new(),
-        hint_paths: Vec::new(),
+        ..Default::default()
     };
     let all = [
         proc(1, None),

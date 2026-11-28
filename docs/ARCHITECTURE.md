@@ -166,8 +166,10 @@ schema_version(version INTEGER)
 ```
 
 `PlayAction` (JSON): `{ kind: "file" | "uri", target, args, working_dir, tracking: "default" |
-"process" | "directory" | "name", tracking_path }`. `default` means: process tree for `file`
-actions, install directory for `uri` actions.
+"process" | "originalProcess" | "directory" | "name" | "commandLine", tracking_path }`. `default`
+means: process tree for `file` actions, install directory for `uri` actions. `commandLine` matches
+a process by the folder it runs in or names in its arguments (Minecraft launchers: one
+`javaw.exe` for every instance, each started in its instance folder).
 
 Re-scan semantics: `upsert_imported(source, games)` matches on `(source, source_game_id)`,
 updates store-owned fields (install dir, action, installed flag; name only if the user has not
