@@ -9002,3 +9002,44 @@ label[for="quick-launch-add"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.random__from {
+  margin: 0 0 var(--qk-space-4);
+}
+.random__pick {
+  display: grid;
+  grid-template-columns: var(--qk-random-cover-width) minmax(0, 1fr);
+  gap: var(--qk-space-4);
+  align-items: start;
+}
+.random__cover {
+  overflow: hidden;
+  aspect-ratio: var(--qk-tile-aspect-ratio);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface-raised);
+}
+.random__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  min-width: 0;
+}
+.random__info p {
+  margin: 0;
+}
+.random__name {
+  margin: 0 0 var(--qk-space-1);
+  font-size: var(--qk-font-size-xl);
+  overflow-wrap: anywhere;
+}
+.random__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.random__empty {
+  margin: 0;
+  padding: var(--qk-space-4) 0;
+}
+.random__installed {
+  margin: var(--qk-space-4) 0 0 calc(-1 * var(--qk-space-2));
+}

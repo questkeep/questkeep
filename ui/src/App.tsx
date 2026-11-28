@@ -13,6 +13,7 @@ import { syncPluginThemes } from "./lib/pluginThemes";
 import { findPage, isPluginPage, pluginOfPage } from "./lib/extensions/registry";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
+import { RandomGameDialog } from "./components/RandomGameDialog";
 import { GroupMergeDialog } from "./components/GroupMergeDialog";
 import { GroupMergesDialog } from "./components/GroupMergesDialog";
 import { ExtensionDialogs } from "./components/ExtensionDialogs";
@@ -331,6 +332,9 @@ export function App() {
       </Show>
       <Show when={store.quitDuringBackup()}>
         <QuitDuringBackupDialog />
+      </Show>
+      <Show when={store.randomOpen()}>
+        <RandomGameDialog onClose={() => store.setRandomOpen(false)} />
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />

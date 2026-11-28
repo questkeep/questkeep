@@ -231,6 +231,8 @@ function createAppStore() {
   /** The script whose dialog is open outside Settings (the bell's "Edit script"). */
   const [scriptEditorId, setScriptEditorId] = createSignal<string | null>(null);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
+  /** The random game dialog (it picks from the open view's games). */
+  const [randomOpen, setRandomOpen] = createSignal(false);
   /**
    * The Combine groups dialog: the grouping field, the groups to start with and the merge being
    * edited, if any.
@@ -1666,6 +1668,8 @@ function createAppStore() {
     toasts,
     duplicatesOpen,
     setDuplicatesOpen,
+    randomOpen,
+    setRandomOpen,
     mergeDialog,
     setMergeDialog,
     mergeManager,

@@ -123,6 +123,7 @@ popup's More menu, and hidden games in Explore.
 - IGDB: the automatic match prefers the PC game over phone and console versions; the link search shows platforms and developer; games from a store can be linked to the right IGDB game (Edit > Metadata).
 - Removing a store game can keep it out of later syncs ("Don't import again when syncing" in the Remove confirmation, ticked by default); Settings > Stores and accounts lists the excluded games with Import again. Removing a combined game removes all of its store copies.
 - Ctrl+K runs commands too: under the games, up to three matching commands (go to a page, view, plugin page or settings page, everything in the Questkeep menu such as Sync all or Sync › Steam, notifications, the selected game's action scripts).
+- Random game: the dice in the toolbar (or "Pick a random game" in Ctrl+K) picks a game from what the open view shows, only installed ones unless unticked, with Play, Open page and Pick another (every game once before repeats).
 
 ## Next
 
@@ -135,8 +136,7 @@ popup's More menu, and hidden games in Explore.
 - **Categories follow-ups**: Heroic categories; map a single store category onto an existing
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
-- **Small gaps**: a random game picker that respects the current filter, region, version and manual
-  (path or URL) fields.
+- **Small gaps**: region, version and manual (path or URL) fields.
 - **URI protocol, CLI start and desktop shortcuts**: `questkeep://` start/show game/search,
   `--start <id>`; enables Stream Deck, Steam shortcuts and launcher integrations.
 - **Multiple play actions per game**: file, URL, script and emulator actions, play and non-play

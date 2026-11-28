@@ -37,7 +37,7 @@ export function ExcludedGames() {
   }
 
   return (
-    <section class="exclusions" aria-labelledby="excluded-games-heading">
+    <section class="settings-section exclusions" aria-labelledby="excluded-games-heading">
       <h3 id="excluded-games-heading" class="settings-part__title">
         {tr("title")}
       </h3>

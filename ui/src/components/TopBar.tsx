@@ -1,5 +1,6 @@
 import ArrowDownWideNarrow from "lucide-solid/icons/arrow-down-wide-narrow";
 import ArrowUpNarrowWide from "lucide-solid/icons/arrow-up-narrow-wide";
+import Dices from "lucide-solid/icons/dices";
 import BookmarkPlus from "lucide-solid/icons/bookmark-plus";
 import Funnel from "lucide-solid/icons/funnel";
 import Group from "lucide-solid/icons/group";
@@ -16,6 +17,7 @@ import { translator } from "../i18n";
 import { libraryGroupMerge } from "../i18n/libraryGroupMerge";
 import { libraryCommon } from "../i18n/libraryCommon";
 import { libraryTopBar } from "../i18n/libraryTopBar";
+import { randomGame } from "../i18n/randomGame";
 import { store } from "../lib/store";
 import {
   GAME_GROUPS,
@@ -41,6 +43,7 @@ import { SearchPicker } from "./SearchPicker";
 const tr = translator(libraryTopBar);
 const trMerge = translator(libraryGroupMerge);
 const trCommon = translator(libraryCommon);
+const trRandom = translator(randomGame);
 
 const LAYOUTS: {
   id: ViewMode;
@@ -68,8 +71,17 @@ const groupEntry = (group: { id: GroupBy; label: string }): MenuEntry => ({
 type Open = "filters" | "sort" | "group" | "jump" | "save" | "more" | null;
 
 /** Toolbar items that give way on a narrow window, in the order they do. */
-type Item = "count" | "layout" | "save" | "jump" | "group" | "sort" | "filters";
-const GIVE_WAY: readonly Item[] = ["count", "layout", "save", "jump", "group", "sort", "filters"];
+type Item = "count" | "random" | "layout" | "save" | "jump" | "group" | "sort" | "filters";
+const GIVE_WAY: readonly Item[] = [
+  "count",
+  "random",
+  "layout",
+  "save",
+  "jump",
+  "group",
+  "sort",
+  "filters",
+];
 /** The item a popup belongs to (it opens from the More button while the item is in the menu). */
 const ITEM_OF: Record<Exclude<Open, null | "more">, Item> = {
   filters: "filters",
@@ -282,6 +294,15 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         { label: tr("saveAsNew"), onSelect: () => setSaving(true) },
       ]);
     }
+    if (hidden().has("random")) {
+      groups.push([
+        {
+          label: trRandom("pick"),
+          icon: () => <Dices class="icon" aria-hidden="true" />,
+          onSelect: () => store.setRandomOpen(true),
+        },
+      ]);
+    }
     if (hidden().has("layout")) {
       groups.push([
         { kind: "heading", label: tr("layout") },
@@ -455,6 +476,18 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           <strong>{count().shown}</strong> {tr("ofTotal", { total: count().total ?? 0 })}
         </Show>
       </span>
+      <Show when={shows("random")}>
+        <button
+          ref={(el) => (items.random = el)}
+          type="button"
+          class="tool-btn"
+          aria-label={trRandom("pick")}
+          data-tooltip={trRandom("pick")}
+          onClick={() => store.setRandomOpen(true)}
+        >
+          <Dices class="icon" aria-hidden="true" />
+        </button>
+      </Show>
       <Show when={hidden().size > (hidden().has("count") ? 1 : 0)}>
         <button
           ref={(el) => (buttons.more = el)}

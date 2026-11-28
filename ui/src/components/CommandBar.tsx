@@ -1,6 +1,7 @@
 import Bell from "lucide-solid/icons/bell";
 import ChartColumn from "lucide-solid/icons/chart-column";
 import Compass from "lucide-solid/icons/compass";
+import Dices from "lucide-solid/icons/dices";
 import Download from "lucide-solid/icons/download";
 import House from "lucide-solid/icons/house";
 import Play from "lucide-solid/icons/play";
@@ -12,6 +13,7 @@ import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js"
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
 import { librarySidebar } from "../i18n/librarySidebar";
+import { randomGame } from "../i18n/randomGame";
 import { shellCommandBar } from "../i18n/shellCommandBar";
 import { shellTitleBar } from "../i18n/shellTitleBar";
 import { scriptsText } from "../i18n/scripts";
@@ -43,6 +45,7 @@ const trNotes = translator(shellNotifications);
 const trScripts = translator(scriptsText);
 const trSidebar = translator(librarySidebar);
 const trTitleBar = translator(shellTitleBar);
+const trRandom = translator(randomGame);
 
 const lucide = (Icon: typeof House) => () => <Icon class="icon" aria-hidden="true" />;
 
@@ -133,6 +136,13 @@ export function CommandBar(props: {
     const game = store.selectedGame();
     return [
       ...navigationCommands(),
+      {
+        id: "random",
+        label: trRandom("pick"),
+        keywords: "dice surprise shuffle",
+        icon: lucide(Dices),
+        run: () => store.setRandomOpen(true),
+      },
       ...flattenMenu(props.appMenu?.() ?? []),
       {
         id: "notifications",
