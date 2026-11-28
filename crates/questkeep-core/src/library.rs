@@ -24,10 +24,11 @@ use crate::metadata::MetadataResolver;
 use crate::model::{
     Achievements, ActionKind, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings,
     Game, GameActivity, GameNews, GameQuery, GameSession, GameUpdate, GroupBy, GroupMerge,
-    GroupMergeMember, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, KindFilter,
-    LibraryView, ListField, MANUAL_SOURCE, METADATA_LINK_KEY, MetadataLink, NewManualGame, NewView,
-    PlayAction, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount,
-    ViewSection, ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
+    GroupMergeMember, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportExclusion, ImportedGame,
+    KindFilter, LibraryView, ListField, MANUAL_SOURCE, METADATA_LINK_KEY, MetadataLink,
+    NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SetupState, StartPage,
+    SyncTimes, TriState, ValueCount, ViewSection, ViewUiState, ViewUpdate, display_name_from_path,
+    set_ignored_prefixes,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -1418,32 +1419,57 @@ impl Library {
         Ok(())
     }
 
-    /// Removes several entries at once, all or nothing.
-    pub fn remove_games(&self, ids: &[Uuid]) -> Result<()> {
-        self.db.record_group(
-            &Change::by_caller(reason::REMOVE).kind(EntryKind::Removed),
-            ids,
-            || self.db.delete_games(ids),
-        )?;
-        for id in ids {
+    /// Removes several entries with all their copies, all or nothing. With `exclude`, their store
+    /// copies are put on the import exclusion list so syncs do not bring them back.
+    pub fn remove_games(&self, ids: &[Uuid], exclude: bool) -> Result<()> {
+        let mut change = Change::by_caller(reason::REMOVE).kind(EntryKind::Removed);
+        if exclude {
+            change = change.args(serde_json::json!({ "excluded": true }));
+        }
+        let copies = self.db.record_group(&change, ids, || {
+            self.db.delete_games(ids, exclude, Utc::now())
+        })?;
+        for id in ids.iter().chain(&copies) {
             if let Err(err) = self.images.remove_all(*id) {
                 tracing::warn!(%err, %id, "could not delete cached images");
             }
+        }
+        for id in ids {
             self.events.publish(CoreEvent::GameRemoved { id: *id });
         }
         Ok(())
     }
 
-    pub fn remove_game(&self, id: Uuid) -> Result<()> {
-        self.db.record(
-            &Change::by_caller(reason::REMOVE).kind(EntryKind::Removed),
-            &[id],
-            || self.db.delete_game(id),
+    pub fn remove_game(&self, id: Uuid, exclude: bool) -> Result<()> {
+        self.remove_games(&[id], exclude)
+    }
+
+    /// The store games that syncs skip because the user removed them.
+    pub fn import_exclusions(&self) -> Result<Vec<ImportExclusion>> {
+        self.db.list_import_exclusions()
+    }
+
+    /// Takes a game off the import exclusion list; the next sync of its store imports it again.
+    pub fn remove_import_exclusion(&self, source: &str, source_game_id: &str) -> Result<()> {
+        let removed = self.db.record_explicit(
+            &Change::by_caller(reason::IMPORT_AGAIN),
+            || self.db.remove_import_exclusion(source, source_game_id),
+            |removed| {
+                removed
+                    .iter()
+                    .map(|e| NewEntry {
+                        game_id: None,
+                        game_name: e.name.clone(),
+                        kind: EntryKind::Other,
+                        changes: Vec::new(),
+                        args: Some(serde_json::json!({ "source": e.source, "name": e.name })),
+                    })
+                    .collect()
+            },
         )?;
-        if let Err(err) = self.images.remove_all(id) {
-            tracing::warn!(%err, %id, "could not delete cached images");
+        if removed.is_none() {
+            tracing::debug!(source, source_game_id, "no import exclusion to remove");
         }
-        self.events.publish(CoreEvent::GameRemoved { id });
         Ok(())
     }
 
@@ -4423,7 +4449,7 @@ mod tests {
                 .is_some()
         );
         assert!(lib.set_cover(game.id, None).unwrap().cover_path.is_none());
-        lib.remove_game(game.id).unwrap();
+        lib.remove_game(game.id, false).unwrap();
         assert!(matches!(
             lib.get_game(game.id),
             Err(CoreError::GameNotFound(_))

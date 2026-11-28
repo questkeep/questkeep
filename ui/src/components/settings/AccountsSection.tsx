@@ -19,6 +19,7 @@ import { store } from "../../lib/store";
 import { isProviderSyncing } from "../../lib/syncStatus";
 import { SourceIcon } from "../SourceIcon";
 import { CredentialsForm } from "./CredentialsForm";
+import { ExcludedGames } from "./ExcludedGames";
 import { openLink } from "./openLink";
 import { StoreOptions } from "./StoreOptions";
 import type { SettingsModel } from "./useSettings";
@@ -611,6 +612,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
           <Show when={drop() === stores().length && dragged() !== null}>{dropLine()}</Show>
         </div>
       </Show>
+      <ExcludedGames />
     </div>
   );
 }

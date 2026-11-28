@@ -134,6 +134,12 @@ describe("entry summaries", () => {
     expect(entryAction(why("preferCopy"), names)).toBe("Chose the copy to start first");
     expect(entryAction(why("bulkChange"), names)).toBe("Changed several games at once");
     expect(entryAction(why("remove"), names)).toBe("Removed from the library");
+    expect(entryAction(why("remove", "removed", { excluded: true }), names)).toBe(
+      "Removed from the library, not imported again",
+    );
+    expect(entryAction(why("importAgain", "other", { name: "Hollow Crown" }), names)).toBe(
+      "Let syncs import “Hollow Crown” again",
+    );
     expect(entryAction(why("addManual"), names)).toBe("Added to the library");
     expect(entryAction(why("metadataLink"), names)).toBe("Changed the metadata link");
     expect(entryAction(why("sessionEdit"), names)).toBe("Changed a play session");

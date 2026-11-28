@@ -198,7 +198,9 @@ export function entryAction(entry: Why, names: ActivityNames): string {
     case "bulkChange":
       return tr("r_bulkChange");
     case "remove":
-      return tr("r_remove");
+      return tr(a.excluded === true ? "r_removeExcluded" : "r_remove");
+    case "importAgain":
+      return tr("r_importAgain", { name });
     case "addManual":
       return tr("r_addManual");
     case "metadataLink":

@@ -49,9 +49,12 @@ export async function refreshAll(games: readonly Game[]): Promise<void> {
   else store.pushToast("info", tr("refreshing", { count: games.length }));
 }
 
-export async function removeAll(games: readonly Game[]): Promise<void> {
+export async function removeAll(games: readonly Game[], exclude = false): Promise<void> {
   try {
-    await api.removeGames(games.map((g) => g.id));
+    await api.removeGames(
+      games.map((g) => g.id),
+      exclude,
+    );
     store.clearSelection();
     store.pushToast("info", tr("removedGames", { count: games.length }));
   } catch (error) {

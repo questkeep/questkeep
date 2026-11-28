@@ -758,6 +758,15 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Settings show one page at a time, grouped in the nav:** one long scrolling page with a scroll-spy nav had grown past what a user can scan (15+ sections, General alone had ten groups). Pages (`PAGES` in `SettingsPage.tsx`) hold one or more parts; a part keeps its old section id, so `showSettingsSection("metadata")` still lands in the right place by switching the page and scrolling to the part. Content stays 720 px wide and left-aligned: wider rows put the label too far from the control, and empty space beside a settings page is normal.
 - **Derived game data is migrated per game in the background (`state_version`), not in SQL migrations:** a schema migration runs for every row at open and would block the start (a cover tile needs a decode and resize, 50+ ms per game). `games.state_version` says how far a game is; `game_state::migrate` runs the missing steps for games below `CURRENT_VERSION` on a thread after start, and a failed game is retried at the next start. New files are written where the data changes (cover import/store) so only old libraries are caught up.
 
+## Removing games
+
+- **Import exclusions are their own table** (`import_exclusions`, keyed by store and store id),
+  not a "removed" flag on `games`: Remove really deletes, so no query on `games` needs a new
+  filter, and Hide already covers keeping a game's data while not showing it. "Import again"
+  therefore brings a game back as a new entry.
+- **Removing a combined entry removes all its copies**: deleting only the primary row let
+  `merged_into ... ON DELETE SET NULL` turn the other copies into separate games again.
+
 ## Activity log
 
 - **Its own database, `activity.sqlite`:** the log grows with every sync and fetch; kept apart, it can be trimmed, vacuumed (`auto_vacuum=INCREMENTAL`) or cleared without touching the library, a broken log is set aside and replaced by an empty one instead of stopping the app, and its own append-only migrations never block a library migration.

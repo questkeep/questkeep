@@ -15,9 +15,9 @@ use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
 use questkeep_core::model::{
     Achievements, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings, Game,
     GameActivity, GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge,
-    ImageOption, ImageSlot, ImageSource, LaunchProfiles, LibraryView, ListField, MetadataLink,
-    NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder, SetupState, StartPage,
-    SyncTimes, ValueCount, ViewSection, ViewUiState, ViewUpdate,
+    ImageOption, ImageSlot, ImageSource, ImportExclusion, LaunchProfiles, LibraryView, ListField,
+    MetadataLink, NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder, SetupState,
+    StartPage, SyncTimes, ValueCount, ViewSection, ViewUiState, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -158,9 +158,11 @@ pub async fn remove_game(
     state: State<'_, Arc<AppState>>,
     caller: Caller,
     id: String,
+    exclude: Option<bool>,
 ) -> CmdResult<()> {
     acting(state, caller, move |s| {
-        s.library.remove_game(parse_id(&id)?)
+        s.library
+            .remove_game(parse_id(&id)?, exclude.unwrap_or(false))
     })
     .await
 }
@@ -196,9 +198,31 @@ pub async fn remove_games(
     state: State<'_, Arc<AppState>>,
     caller: Caller,
     ids: Vec<String>,
+    exclude: Option<bool>,
 ) -> CmdResult<()> {
     acting(state, caller, move |s| {
-        s.library.remove_games(&parse_ids(&ids)?)
+        s.library
+            .remove_games(&parse_ids(&ids)?, exclude.unwrap_or(false))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_import_exclusions(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<ImportExclusion>> {
+    blocking(state, |s| s.library.import_exclusions()).await
+}
+
+#[tauri::command]
+pub async fn remove_import_exclusion(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    source: String,
+    source_game_id: String,
+) -> CmdResult<()> {
+    acting(state, caller, move |s| {
+        s.library.remove_import_exclusion(&source, &source_game_id)
     })
     .await
 }

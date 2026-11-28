@@ -641,6 +641,8 @@ pub fn run() {
             commands::set_view_ui_state,
             commands::bulk_change,
             commands::remove_games,
+            commands::list_import_exclusions,
+            commands::remove_import_exclusion,
             commands::combine_with_plan,
             commands::list_categories,
             commands::create_category,

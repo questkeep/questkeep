@@ -448,6 +448,17 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE games ADD COLUMN state_version INTEGER NOT NULL DEFAULT 0;
     "#,
+    // 20: store games the user removed and asked not to import again; syncs skip them.
+    // `name` is the game's name at removal, for the list in Settings.
+    r#"
+    CREATE TABLE import_exclusions (
+        source         TEXT NOT NULL,
+        source_game_id TEXT NOT NULL,
+        name           TEXT NOT NULL,
+        excluded_at    TEXT NOT NULL,
+        PRIMARY KEY (source, source_game_id)
+    );
+    "#,
 ];
 
 /// Latest schema version this build knows.

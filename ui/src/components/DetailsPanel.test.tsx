@@ -327,8 +327,23 @@ describe("DetailsPanel", () => {
     await chooseMore("Remove from library…");
     expect(api.removeGame).not.toHaveBeenCalled();
     const dialog = screen.getByRole("dialog", { name: "Remove game" });
+    // A manual game has nothing a sync could bring back.
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
     await fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(api.removeGame).toHaveBeenCalledWith("g1"));
+    await waitFor(() => expect(api.removeGame).toHaveBeenCalledWith("g1", false));
+  });
+
+  it("offers to keep a removed store game out of later syncs", async () => {
+    vi.mocked(api.removeGame).mockResolvedValue(undefined);
+    const game = makeGame({ source: "steam", sourceGameId: "10" });
+    render(() => <DetailsPanel game={game} onClose={vi.fn<() => void>()} />);
+    await chooseMore("Remove from library…");
+    const dialog = screen.getByRole("dialog", { name: "Remove game" });
+    expect(
+      within(dialog).getByRole("checkbox", { name: "Don't import again when syncing" }),
+    ).toBeChecked();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(api.removeGame).toHaveBeenCalledWith("g1", true));
   });
 
   it("keeps an open confirmation when the list refreshes the same game", async () => {

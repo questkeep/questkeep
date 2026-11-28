@@ -42,20 +42,6 @@ impl Database {
         tx.commit()?;
         Ok(())
     }
-
-    /// Deletes several entries; nothing is deleted when one of them is unknown.
-    pub fn delete_games(&self, ids: &[Uuid]) -> Result<()> {
-        self.check_recorded("delete_games");
-        let mut conn = self.conn();
-        let tx = conn.transaction()?;
-        for id in ids {
-            if tx.execute("DELETE FROM games WHERE id = ?1", [id.to_string()])? == 0 {
-                return Err(CoreError::GameNotFound(*id));
-            }
-        }
-        tx.commit()?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -135,10 +121,10 @@ mod tests {
         };
         assert!(db.bulk_change(&with_missing, &hide).is_err());
         assert!(games(&db).iter().all(|g| !g.2));
-        assert!(db.delete_games(&with_missing).is_err());
+        assert!(db.delete_games(&with_missing, false, Utc::now()).is_err());
         assert_eq!(games(&db).len(), 2);
 
-        db.delete_games(&ids).unwrap();
+        db.delete_games(&ids, false, Utc::now()).unwrap();
         assert!(games(&db).is_empty());
     }
 }

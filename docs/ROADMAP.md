@@ -121,6 +121,7 @@ popup's More menu, and hidden games in Explore.
 - Add game menu in submenus (Add, Compare on, Buy from, Activate on) with your own quick-access entries on top (Settings > Window and tray > Title bar); "Activate on <store>" opens where the store redeems product keys; Steam and Epic open their store in the launcher unless set to the browser.
 - Store plugins can track a game by the folder its process runs in or names on its command line (`commandLine`): Minecraft launcher plugins (Prism, Modrinth, CurseForge) record the right instance instead of any Java program. On Windows the watcher for games started outside Questkeep also matches a process's working directory, so these instances count when started from their launcher.
 - IGDB: the automatic match prefers the PC game over phone and console versions; the link search shows platforms and developer; games from a store can be linked to the right IGDB game (Edit > Metadata).
+- Removing a store game can keep it out of later syncs ("Don't import again when syncing" in the Remove confirmation, ticked by default); Settings > Stores and accounts lists the excluded games with Import again. Removing a combined game removes all of its store copies.
 
 ## Next
 
@@ -133,8 +134,7 @@ popup's More menu, and hidden games in Explore.
 - **Categories follow-ups**: Heroic categories; map a single store category onto an existing
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
-- **Small gaps**: an import exclusion list (a removed store game comes back on the next sync
-  today), a random game picker that respects the current filter, region, version and manual
+- **Small gaps**: a random game picker that respects the current filter, region, version and manual
   (path or URL) fields.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games; also the home for the random picker and plugin commands.
@@ -146,8 +146,8 @@ popup's More menu, and hidden games in Explore.
   the media Playnite themes rely on most (Extra Metadata Loader), later a launch splash screen.
 - **Discord Rich Presence and per-game HDR, display and audio**; HDR state is already read in
   `questkeep-system`.
-- **Plugin gallery**: browse, install and update plugins from within the app, with signature
-  checks.
+- **Plugin signatures**: signature checks for plugins installed from the registry (the
+  in-app plugin browser exists since v0.7).
 - **Metadata provider plugins**, fitted into source priority; then PCGamingWiki and ProtonDB as
   the first providers.
 - **New stores**: itch.io, Humble, Rockstar, PlayStation (as store crates or WASM plugins).

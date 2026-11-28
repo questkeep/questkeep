@@ -27,6 +27,8 @@ import {
   updateGame,
 } from "../lib/actions";
 import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+import { hasStoreCopy } from "../lib/removal";
 import { shellMenus } from "../i18n/shellMenus";
 import { launchProfiles } from "../lib/api";
 import { scriptsText } from "../i18n/scripts";
@@ -46,6 +48,7 @@ import { ScriptIcon } from "./ScriptIcon";
 import { SourceIcon, sourceName } from "./SourceIcon";
 
 const tr = translator(shellMenus);
+const trCommon = translator(shellCommon);
 const trScripts = translator(scriptsText);
 const trSessions = translator(gameSessions);
 const trActivity = translator(activity);
@@ -327,7 +330,8 @@ export function GameContextMenu(props: {
           title={tr("removeTitle")}
           message={tr("removeMessage", { name: game().name })}
           confirmLabel={tr("remove")}
-          onConfirm={() => void report(removeGame(game().id))}
+          option={hasStoreCopy([game()]) ? trCommon("dontImportAgain") : undefined}
+          onConfirm={(exclude) => void report(removeGame(game().id, exclude))}
           onClose={() => props.onDone(true)}
         />
       </Show>

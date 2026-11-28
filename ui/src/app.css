@@ -2317,6 +2317,9 @@ ul {
 .confirm__message {
   margin-bottom: var(--qk-space-5);
 }
+.confirm__option {
+  margin: calc(-1 * var(--qk-space-3)) 0 var(--qk-space-5) calc(-1 * var(--qk-space-2));
+}
 .group-merge__groups {
   min-width: 0;
   margin: 0;
@@ -8952,4 +8955,42 @@ label[for="quick-launch-add"] {
 }
 .settings-group .alog-storage .field__hint {
   padding: 0;
+}
+.exclusions {
+  margin-top: var(--qk-space-6);
+}
+.exclusions__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.exclusions__card p {
+  margin: 0;
+}
+.exclusions__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.exclusions__item {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.exclusions__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.exclusions__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

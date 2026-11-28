@@ -11,6 +11,8 @@ import Trash from "lucide-solid/icons/trash";
 import { createSignal, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+import { hasStoreCopy } from "../lib/removal";
 import { shellMenus } from "../i18n/shellMenus";
 import { changeAll, installAll, refreshAll, removeAll } from "../lib/bulkActions";
 import { categoryCoverage, common } from "../lib/selection";
@@ -21,6 +23,7 @@ import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 
 const tr = translator(shellMenus);
+const trCommon = translator(shellCommon);
 
 const iconOf = (Icon: typeof Star) => () => <Icon class="icon" aria-hidden="true" />;
 const NO_CATEGORIES = { addCategories: [], removeCategories: [] };
@@ -150,7 +153,8 @@ export function MultiContextMenu(props: {
           title={tr("removeGamesTitle")}
           message={tr("removeGamesMessage", { count: count() })}
           confirmLabel={tr("remove")}
-          onConfirm={() => void removeAll(props.games)}
+          option={hasStoreCopy(props.games) ? trCommon("dontImportAgain") : undefined}
+          onConfirm={(exclude) => void removeAll(props.games, exclude)}
           onClose={() => props.onDone(true)}
         />
       </Show>

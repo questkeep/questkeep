@@ -889,7 +889,8 @@ impl Database {
     /// - unknown games are inserted;
     /// - known games get store-owned fields refreshed (install dir, action, installed flag, and
     ///   the name unless the user renamed it); user data (playtime, favorite, ...) is untouched;
-    /// - known games missing from the scan are marked as not installed, never deleted.
+    /// - known games missing from the scan are marked as not installed, never deleted;
+    /// - unknown games on the import exclusion list (removed by the user) are skipped.
     pub fn upsert_imported(
         &self,
         source: &str,
@@ -950,10 +951,16 @@ impl Database {
             }
         }
 
+        let excluded = super::exclusions::excluded_ids(&tx, source)?;
         let mut seen: HashSet<&str> = HashSet::new();
         for game in games {
             if !seen.insert(game.source_game_id.as_str()) {
                 continue; // duplicate within one scan: first one wins (installed before owned)
+            }
+            if excluded.contains(&game.source_game_id)
+                && !existing.contains_key(&game.source_game_id)
+            {
+                continue; // removed by the user, who asked not to import it again
             }
             let action = action_json(game.play_action.as_ref())?;
             let store_playtime =

@@ -2,6 +2,7 @@ import { translator } from "../../i18n";
 import { pluginUpdates } from "../../i18n/pluginUpdates";
 import { settingsAppearance } from "../../i18n/settingsAppearance";
 import { settingsBackups } from "../../i18n/settingsBackups";
+import { settingsExclusions } from "../../i18n/settingsExclusions";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { settingsKeys } from "../../i18n/settingsKeys";
 import { activity as activityDict } from "../../i18n/activity";
@@ -10,6 +11,7 @@ import type { SearchEntry } from "../../lib/settingsSearch";
 const general = translator(settingsGeneral);
 const appearance = translator(settingsAppearance);
 const backups = translator(settingsBackups);
+const exclusions = translator(settingsExclusions);
 const keys = translator(settingsKeys);
 const plugins = translator(pluginUpdates);
 const activity = translator(activityDict);
@@ -29,6 +31,8 @@ export function settingEntries(): SearchEntry[] {
     e("activitySystemDays", "activity", activity("s_systemDays"), undefined, "history log"),
     e("activityRequests", "activity", activity("s_recordRequests"), undefined, "http network"),
     e("activityClear", "activity", activity("s_clear"), undefined, "history log"),
+
+    e("excludedGames", "stores", exclusions("title"), undefined, "removed ignored import sync"),
 
     e("language", "general", general("language")),
     e("scanOnStartup", "general", general("scanOnStartup")),

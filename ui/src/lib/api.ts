@@ -37,6 +37,7 @@ import type { GameEdits } from "../bindings/GameEdits";
 import type { ImageOption } from "../bindings/ImageOption";
 import type { ImageSlot } from "../bindings/ImageSlot";
 import type { ImageSource } from "../bindings/ImageSource";
+import type { ImportExclusion } from "../bindings/ImportExclusion";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { ProfileInput } from "../bindings/ProfileInput";
 import type { ProfilesDraft } from "../bindings/ProfilesDraft";
@@ -173,9 +174,14 @@ export const updateGame = (id: string, update: GameUpdate) =>
   invoke<Game>("update_game", { id, update });
 export const setCover = (id: string, imagePath: string | null) =>
   invoke<Game>("set_cover", { id, imagePath });
-export const removeGame = (id: string) => invoke<void>("remove_game", { id });
+export const removeGame = (id: string, exclude = false) =>
+  invoke<void>("remove_game", { id, exclude });
 /** Removes several entries at once (all or nothing). */
-export const removeGames = (ids: string[]) => invoke<void>("remove_games", { ids });
+export const removeGames = (ids: string[], exclude = false) =>
+  invoke<void>("remove_games", { ids, exclude });
+export const listImportExclusions = () => invoke<ImportExclusion[]>("list_import_exclusions");
+export const removeImportExclusion = (source: string, sourceGameId: string) =>
+  invoke<void>("remove_import_exclusion", { source, sourceGameId });
 /** Combines several entries keeping what the combine screen chose. */
 export const combineWithPlan = (plan: CombinePlan) => invoke<Game>("combine_with_plan", { plan });
 /** Changes several entries at once (all or nothing). */

@@ -259,6 +259,8 @@ pub mod reason {
     pub const RESOLVE_ALL: &str = "resolveAll";
     /// `args.createdAt`: when the restored backup was made.
     pub const RESTORE_BACKUP: &str = "restoreBackup";
+    /// A game taken off the import exclusion list (`args.source`, `args.name`).
+    pub const IMPORT_AGAIN: &str = "importAgain";
 }
 
 /// The context of a recorded change: who, why, and the batch it belongs to.

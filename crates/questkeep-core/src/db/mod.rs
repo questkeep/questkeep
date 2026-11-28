@@ -5,6 +5,7 @@ mod backup;
 mod bulk;
 mod categories;
 mod combine;
+mod exclusions;
 mod games;
 mod metadata;
 pub mod migrations;

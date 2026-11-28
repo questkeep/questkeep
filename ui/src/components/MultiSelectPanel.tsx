@@ -5,6 +5,8 @@ import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+import { hasStoreCopy } from "../lib/removal";
 import { shellMulti } from "../i18n/shellMulti";
 import { changeAll, installAll, refreshAll, removeAll } from "../lib/bulkActions";
 import { formatPlaytime, formatSize } from "../lib/format";
@@ -18,6 +20,7 @@ import { Select } from "./Select";
 import { sourceName } from "./SourceIcon";
 
 const tr = translator(shellMulti);
+const trCommon = translator(shellCommon);
 
 /** Fallbacks for `--qk-stack-cover-width` and `--qk-stack-min-step` (theme.css). */
 const COVER = 120;
@@ -281,7 +284,8 @@ export function MultiSelectPanel(props: {
           title={tr("removeGamesTitle")}
           message={tr("removeGamesMessage", { count: count() })}
           confirmLabel={tr("remove")}
-          onConfirm={() => void removeAll(props.games)}
+          option={hasStoreCopy(props.games) ? trCommon("dontImportAgain") : undefined}
+          onConfirm={(exclude) => void removeAll(props.games, exclude)}
           onClose={() => setRemoving(false)}
         />
       </Show>

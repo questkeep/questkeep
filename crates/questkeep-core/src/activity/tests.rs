@@ -713,7 +713,7 @@ fn user_commands_record_entries_by_the_caller() {
     lib.rename_category(&category.id, "Rogue-lites").unwrap();
     lib.add_game_session(id, Utc::now() - Duration::days(1), 3600)
         .unwrap();
-    lib.remove_game(id).unwrap();
+    lib.remove_game(id, false).unwrap();
 
     let list = lib_entries(&lib);
     let reasons: Vec<&str> = list.iter().rev().map(|e| e.reason.as_str()).collect();

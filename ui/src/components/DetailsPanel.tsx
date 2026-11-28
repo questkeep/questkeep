@@ -63,6 +63,8 @@ import {
   launchProfiles,
 } from "../lib/api";
 import { intlLocale, translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+import { hasStoreCopy } from "../lib/removal";
 import { gamePage } from "../i18n/gamePage";
 import { gameSections } from "../i18n/gameSections";
 import { shellMenus } from "../i18n/shellMenus";
@@ -97,6 +99,7 @@ import { openLink } from "./settings/openLink";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
 
 const tr = translator(gamePage);
+const trCommon = translator(shellCommon);
 const trSessions = translator(gameSessions);
 const trSections = translator(gameSections);
 const trMenus = translator(shellMenus);
@@ -1010,7 +1013,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
           title={tr("removeTitle")}
           message={tr("removeMessage", { name: props.game.name })}
           confirmLabel={tr("removeLabel")}
-          onConfirm={() => void run(() => removeGame(props.game.id))}
+          option={hasStoreCopy([props.game]) ? trCommon("dontImportAgain") : undefined}
+          onConfirm={(exclude) => void run(() => removeGame(props.game.id, exclude))}
           onClose={() => setConfirming(null)}
         />
       </Show>

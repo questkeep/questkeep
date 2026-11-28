@@ -130,9 +130,10 @@ export function openInstallFolder(id: string): Promise<string | null> {
   return attempt(() => api.openInstallFolder(id));
 }
 
-export function removeGame(id: string): Promise<string | null> {
+/** Removes the entry; with `exclude`, syncs do not import its store copies again. */
+export function removeGame(id: string, exclude = false): Promise<string | null> {
   return attempt(async () => {
-    await api.removeGame(id);
+    await api.removeGame(id, exclude);
     store.handleCoreEvent({ type: "gameRemoved", id });
   });
 }
