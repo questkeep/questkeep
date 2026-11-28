@@ -91,6 +91,10 @@ without the private key. Only the signed release build adds `--config
 src-tauri/tauri.updater.conf.json`, which turns updater artifacts on. Dev builds (`pnpm dev`) are
 not affected. The update commands return "no update" in debug builds.
 
+Dev builds (`pnpm dev`, `scripts/dev-hidden.ps1`) present the version the pending changesets will
+release (`node scripts/release/changeset.mjs dev-version`) instead of the released one, so plugins
+that need the next version install and load. Set `QUESTKEEP_APP_VERSION` yourself to override it.
+
 ## Update commands (for the UI)
 
 - `check_update() -> Option<UpdateInfo>` where

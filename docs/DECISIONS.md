@@ -175,6 +175,11 @@ Short log of choices made while building. Newest at the bottom of each section.
   the tag and release creation and does not fit the tag-from-changesets flow). The update check is
   disabled in debug builds. Updater artifacts are opt-in (`tauri.updater.conf.json`, release only)
   because `createUpdaterArtifacts` needs the private key; plain builds and CI work without it.
+- **Dev builds present the next version.** Plugins can require the unreleased version (`min_app`).
+  `pnpm dev` and `scripts/dev-hidden.ps1` set `QUESTKEEP_APP_VERSION` to the version the pending
+  changesets will release (`changeset.mjs dev-version`); debug builds read it in
+  `questkeep_core::app_version()`, release builds ignore it. A runtime variable instead of editing
+  version files means nothing to roll back and no recompile when a changeset is added.
 
 ## Linux stores
 

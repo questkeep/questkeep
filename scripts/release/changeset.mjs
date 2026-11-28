@@ -3,6 +3,7 @@
 //
 //   node scripts/release/changeset.mjs add <major|minor|patch> "<summary>"
 //   node scripts/release/changeset.mjs status
+//   node scripts/release/changeset.mjs dev-version
 //   node scripts/release/changeset.mjs plan --out-dir <dir> [--github-output]
 //   node scripts/release/changeset.mjs version --write <X.Y.Z>
 //   node scripts/release/changeset.mjs notes --out <file>
@@ -127,6 +128,11 @@ switch (command) {
   case "status":
     printStatus();
     break;
+  case "dev-version": {
+    // For the dev launchers: the version the pending changesets will release, else the current one.
+    console.log(nextVersion(currentVersion(), pendingChangesets()) ?? currentVersion());
+    break;
+  }
   case "plan": {
     // Used by the release workflow: decides whether there is a release and records what it contains.
     const outDir = option(args, "out-dir") ?? fail("plan needs --out-dir <dir>");
@@ -173,5 +179,5 @@ switch (command) {
     break;
   }
   default:
-    fail("usage: changeset.mjs <add|status|plan|version|notes|consume> ...");
+    fail("usage: changeset.mjs <add|status|dev-version|plan|version|notes|consume> ...");
 }

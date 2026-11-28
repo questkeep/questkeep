@@ -147,7 +147,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     paths.ensure_dirs().map_err(|e| e.to_string())?;
     let guard = init_logging(&paths);
     tracing::info!(
-        version = questkeep_core::VERSION,
+        version = questkeep_core::app_version(),
         data_dir = %paths.root().display(),
         portable = paths.is_portable(),
         "starting Questkeep"
@@ -268,7 +268,7 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
         questkeep_plugins::spawn_scheduler(
             state.plugins.clone(),
             state.library.notifications().clone(),
-            || questkeep_plugins::RegistryConfig::new(env!("CARGO_PKG_VERSION")),
+            || questkeep_plugins::RegistryConfig::new(&questkeep_core::app_version()),
             move || settings_state.library.settings().check_plugin_updates,
         );
     }
@@ -292,7 +292,7 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
         // The bell entry for plugin updates, from the cached index (no network, no waiting for
         // the check): created when updates are pending and the user has not dismissed them.
         state.plugins.sync_update_notice(
-            &questkeep_plugins::RegistryConfig::new(env!("CARGO_PKG_VERSION")),
+            &questkeep_plugins::RegistryConfig::new(&questkeep_core::app_version()),
             state.library.notifications(),
             state.library.settings().check_plugin_updates,
         );

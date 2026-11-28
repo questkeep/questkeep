@@ -354,7 +354,7 @@ impl Library {
 
     pub fn app_info(&self) -> AppInfo {
         AppInfo {
-            version: crate::VERSION.to_string(),
+            version: crate::app_version(),
             data_dir: self.paths.root().display().to_string(),
             logs_dir: self.paths.logs_dir().display().to_string(),
             portable: self.paths.is_portable(),

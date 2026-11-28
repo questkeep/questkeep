@@ -245,7 +245,7 @@ pub async fn install_plugin(
 
 /// The registry of this build, judged by this app's version.
 fn registry_config() -> RegistryConfig {
-    RegistryConfig::new(env!("CARGO_PKG_VERSION"))
+    RegistryConfig::new(&questkeep_core::app_version())
 }
 
 /// The plugin registry for the plugin browser: every plugin with its compatible versions, what is

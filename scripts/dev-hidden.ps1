@@ -43,6 +43,11 @@ if ($Portable) {
 
 Push-Location $root
 try {
+  # Present the version the pending changesets will release (see scripts/dev.mjs).
+  if (-not $env:QUESTKEEP_APP_VERSION) {
+    $env:QUESTKEEP_APP_VERSION = (node scripts/release/changeset.mjs dev-version).Trim()
+  }
+  Write-Host "Dev build presents version $env:QUESTKEEP_APP_VERSION"
   pnpm tauri dev
 } finally {
   Pop-Location

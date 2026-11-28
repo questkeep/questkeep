@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
+    "dev": "node scripts/dev.mjs",
     "build": "tauri build",
     "check": "node scripts/check.mjs",
     "fix": "node scripts/check.mjs --fix",
