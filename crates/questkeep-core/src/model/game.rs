@@ -150,6 +150,11 @@ pub struct MetadataLink {
     pub id: String,
     /// Its name there, for showing the link.
     pub name: String,
+    /// Its release year there, to tell same-named games apart when searching artwork before the
+    /// game's own release date is known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub year: Option<i32>,
 }
 
 impl Game {
@@ -170,12 +175,14 @@ impl Game {
             .unwrap_or_else(|| split_year(&self.name).0.to_string())
     }
 
-    /// The release year for searches: the known release date's, else a "(2010)" in the name.
+    /// The release year for searches: the known release date's, else the linked game's, else a
+    /// "(2010)" in the name.
     pub fn lookup_year(&self) -> Option<i32> {
         self.release_date
             .as_deref()
             .and_then(|d| d.get(..4))
             .and_then(|y| y.parse().ok())
+            .or_else(|| self.metadata_link().and_then(|l| l.year))
             .or_else(|| split_year(&self.name).1)
     }
 

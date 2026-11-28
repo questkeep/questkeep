@@ -120,6 +120,7 @@ popup's More menu, and hidden games in Explore.
 - Playtime is called running time, "played" labels say "started" (Last started, Times started, …), and apps say Start instead of Play in more places.
 - Add game menu in submenus (Add, Compare on, Buy from, Activate on) with your own quick-access entries on top (Settings > Window and tray > Title bar); "Activate on <store>" opens where the store redeems product keys; Steam and Epic open their store in the launcher unless set to the browser.
 - Store plugins can track a game by the folder its process runs in or names on its command line (`commandLine`): Minecraft launcher plugins (Prism, Modrinth, CurseForge) record the right instance instead of any Java program. On Windows the watcher for games started outside Questkeep also matches a process's working directory, so these instances count when started from their launcher.
+- IGDB: the automatic match prefers the PC game over phone and console versions; the link search shows platforms and developer; games from a store can be linked to the right IGDB game (Edit > Metadata).
 
 ## Next
 

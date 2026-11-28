@@ -16,4 +16,9 @@ id: string,
 /**
  * Its name there, for showing the link.
  */
-name: string, };
+name: string, 
+/**
+ * Its release year there, to tell same-named games apart when searching artwork before the
+ * game's own release date is known.
+ */
+year?: number, };

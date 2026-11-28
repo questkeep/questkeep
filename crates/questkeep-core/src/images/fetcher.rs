@@ -363,6 +363,7 @@ fn steamgriddb_lookup(
         name: &name,
         source: &game.source,
         source_game_id: game.source_game_id.as_deref(),
+        year: game.lookup_year(),
     };
     match artwork.fetch_image(http, &lookup, kind) {
         Ok(Some(image)) => Some(image),

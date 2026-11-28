@@ -18,11 +18,14 @@ export function MetadataLinkPicker(props: {
   query: string;
   link: MetadataLink | null;
   pending?: boolean;
+  /** Only IGDB can be searched (games from a store keep their store's own data). */
+  igdbOnly?: boolean;
   onChange: (link: MetadataLink | null) => void;
 }) {
   const [sources] = createResource(() =>
     Promise.resolve()
       .then(() => api.metadataSearchSources())
+      .then((all) => (props.igdbOnly ? all.filter((s) => s.id === "igdb") : all))
       .catch(() => []),
   );
   const [source, setSource] = createSignal<string | null>(null);
@@ -78,7 +81,7 @@ export function MetadataLinkPicker(props: {
         when={(sources() ?? []).length > 0}
         fallback={
           <Show when={sources() !== undefined}>
-            <p class="field__hint">{tr("noSources")}</p>
+            <p class="field__hint">{tr(props.igdbOnly ? "noIgdb" : "noSources")}</p>
           </Show>
         }
       >
@@ -141,7 +144,12 @@ export function MetadataLinkPicker(props: {
                         onClick={() => {
                           const from = chosenSource();
                           if (from !== null) {
-                            props.onChange({ source: from, id: hit.id, name: hit.name });
+                            props.onChange({
+                              source: from,
+                              id: hit.id,
+                              name: hit.name,
+                              year: hit.releaseYear ?? undefined,
+                            });
                           }
                         }}
                       >
@@ -160,8 +168,8 @@ export function MetadataLinkPicker(props: {
                         <span class="link-picker__name">
                           <span>{hit.name}</span>
                           <small class="muted">
-                            {[hit.releaseYear, isChosen(hit) ? tr("chosen") : null]
-                              .filter((part) => part !== null)
+                            {[hit.releaseYear, hit.detail, isChosen(hit) ? tr("chosen") : null]
+                              .filter((part) => part !== null && part !== undefined)
                               .join(" · ")}
                           </small>
                         </span>

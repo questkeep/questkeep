@@ -76,6 +76,7 @@ const trScripts = translator(scriptsText);
 
 export type Section =
   | "setup"
+  | "metadata"
   | "general"
   | "details"
   | "links"
@@ -89,11 +90,12 @@ const KINDS: readonly (readonly [GameKind, "kindGame" | "kindApp"])[] = [
   ["app", "kindApp"],
 ];
 
-/** The sections in order; Setup only for games added by hand. */
+/** The sections in order; Setup only for games added by hand, Metadata only for the others. */
 export const SECTIONS: {
   id: Section;
   label:
     | "secSetup"
+    | "secMetadata"
     | "secGeneral"
     | "secDetails"
     | "secLinks"
@@ -103,6 +105,7 @@ export const SECTIONS: {
     | "secImages";
 }[] = [
   { id: "setup", label: "secSetup" },
+  { id: "metadata", label: "secMetadata" },
   { id: "general", label: "secGeneral" },
   { id: "details", label: "secDetails" },
   { id: "links", label: "secLinks" },
@@ -274,11 +277,15 @@ export function EditGameDialog(props: {
   const game = () => props.game;
   const id = props.game.id;
   const [section, setSection] = createSignal<Section>(props.section ?? "general");
-  // Setup only for games added by hand; scripts belong to a game that exists in the library.
+  // Setup only for games added by hand (their metadata link is part of it), Metadata for the
+  // other games (they can only pick their IGDB game); scripts belong to a game that exists in
+  // the library.
   const sections = () =>
     SECTIONS.filter(
       (entry) =>
-        (entry.id !== "setup" || game().source === "manual") && (entry.id !== "scripts" || !isNew),
+        (entry.id !== "setup" || game().source === "manual") &&
+        (entry.id !== "metadata" || game().source !== "manual") &&
+        (entry.id !== "scripts" || !isNew),
     );
   // Asked again when the shown metadata changes (e.g. a linked game's details arrive).
   const [loadedInfo] = createResource(
@@ -906,6 +913,19 @@ export function EditGameDialog(props: {
                       setMetadataLink(next);
                       if (next !== null) proposeName(next.name);
                     }}
+                  />
+                </div>
+              </Match>
+              <Match when={section() === "metadata"}>
+                <div class="edit-section">
+                  <h3 class="edit-section__title">{trSetup("metadataTitle")}</h3>
+                  <p class="field__hint">{trSetup("metadataStoreHint")}</p>
+                  <MetadataLinkPicker
+                    igdbOnly
+                    query={name()}
+                    link={currentLink()}
+                    pending={linkChanged()}
+                    onChange={setMetadataLink}
                   />
                 </div>
               </Match>

@@ -345,6 +345,7 @@ impl Library {
                         source_game_id: copy.map_or(game.source_game_id.as_deref(), |c| {
                             c.source_game_id.as_deref()
                         }),
+                        year,
                     },
                     kind,
                 )

@@ -348,6 +348,7 @@ pub fn parse_catalog_search(body: &str) -> Result<Vec<CatalogHit>, ProviderError
                 name: text(product, "title")?,
                 release_year: text(product, "releaseDate")
                     .and_then(|d| d.get(..4).and_then(|y| y.parse().ok())),
+                detail: None,
                 image: text(product, "coverVertical")
                     .or_else(|| text(product, "coverHorizontal"))
                     .filter(|u| u.starts_with("https://")),

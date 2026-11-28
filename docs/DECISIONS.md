@@ -259,12 +259,22 @@ Short log of choices made while building. Newest at the bottom of each section.
   asked. Manual games are enqueued only when IGDB is configured. Verified live 2026-10-25 with
   the maintainer's credentials (a manual "Minecraft" got description and genres).
 - **Exact normalized name match only** (lowercase alphanumerics, `&` = "and", leading "the"
-  dropped; release year breaks ties): a wrong description is worse than none. Misses are remembered
+  dropped; among equal names a PC release beats consoles, phones come last, a port ranks behind its
+  original, then the release year, then IGDB's order): a wrong description is worse than none. Misses are remembered
   in `games.extra.igdbCheckedAt` (cleared by a metadata refresh); network and credential errors
   are not.
 - **One global limiter, ≥ 300 ms between IGDB requests** (IGDB allows 4/s), separate from the
   1.5 s store interval so a store miss followed by IGDB doesn't wait twice. Not verified against
   the live API (no credentials during development).
+- **Same-named IGDB games are told apart by platform, not just year** (2026-11): store games often
+  have no year, and IGDB lists ports first sometimes (a 2005 phone port of Need for Speed: Most
+  Wanted beat the 2012 PC game). The link picker shows platforms and developer (`CatalogHit.detail`,
+  `game_type` 11 = "<platform> port", as Playnite's IGDB search does), and store games can be linked to an
+  IGDB game too (store links stay manual-only: a store game already has its own store data).
+- **SteamGridDB name searches use the release year too** (2026-11): its search lists same-named games
+  (Need for Speed: Most Wanted 2005 and 2012) and the first one won, so both got the same cover.
+  `MetadataLink.year` (from the picked hit) gives the year before the game's release date is known,
+  and linking a game added by hand drops its downloaded artwork so it is searched again.
 
 ## Store account sign-in (GOG, Epic)
 

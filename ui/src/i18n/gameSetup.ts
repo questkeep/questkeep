@@ -25,6 +25,9 @@ const en = {
     "No source can be searched yet. Add IGDB credentials in Settings → Metadata, or turn on the Steam or GOG store.",
   executableProfile: "Executable",
   exeRequired: "Choose an executable first.",
+  metadataStoreHint:
+    "If the details on the game page are from the wrong game, pick the right one on IGDB. Questkeep then takes the details IGDB provides from there; what the store provides stays as it is.",
+  noIgdb: "IGDB can't be searched yet. Add IGDB credentials in Settings → Metadata.",
 };
 
 /** Add game: the Setup section, installed programs and the metadata search. */
@@ -55,6 +58,10 @@ export const gameSetup: Translations<typeof en> = {
       "Noch keine Quelle durchsuchbar. Trage IGDB-Zugangsdaten unter Einstellungen → Metadaten ein oder aktiviere den Steam- oder GOG-Store.",
     executableProfile: "Ausführbare Datei",
     exeRequired: "Wähle zuerst eine ausführbare Datei.",
+    metadataStoreHint:
+      "Stammen die Details auf der Spieleseite vom falschen Spiel, wähle das richtige bei IGDB. Questkeep übernimmt dann die Details, die IGDB liefert, von dort; was der Store liefert, bleibt unverändert.",
+    noIgdb:
+      "IGDB ist noch nicht durchsuchbar. Trage IGDB-Zugangsdaten unter Einstellungen → Metadaten ein.",
   },
   fr: {
     installedPrograms: "Choisir parmi les programmes installés…",
@@ -81,6 +88,10 @@ export const gameSetup: Translations<typeof en> = {
       "Aucune source consultable. Ajoutez des identifiants IGDB dans Paramètres → Métadonnées ou activez la boutique Steam ou GOG.",
     executableProfile: "Exécutable",
     exeRequired: "Choisissez d'abord un exécutable.",
+    metadataStoreHint:
+      "Si les détails de la page du jeu viennent du mauvais jeu, choisissez le bon sur IGDB. Questkeep reprend alors de là les détails fournis par IGDB ; ce que fournit la boutique reste inchangé.",
+    noIgdb:
+      "IGDB n'est pas encore consultable. Ajoutez les identifiants IGDB dans Paramètres → Métadonnées.",
   },
   it: {
     installedPrograms: "Scegli tra i programmi installati…",
@@ -107,6 +118,10 @@ export const gameSetup: Translations<typeof en> = {
       "Ancora nessuna fonte consultabile. Aggiungi le credenziali IGDB in Impostazioni → Metadati o attiva lo store Steam o GOG.",
     executableProfile: "Eseguibile",
     exeRequired: "Scegli prima un eseguibile.",
+    metadataStoreHint:
+      "Se i dettagli nella pagina del gioco sono del gioco sbagliato, scegli quello giusto su IGDB. Questkeep prende da lì i dettagli forniti da IGDB; ciò che fornisce lo store resta invariato.",
+    noIgdb:
+      "IGDB non è ancora consultabile. Aggiungi le credenziali IGDB in Impostazioni → Metadati.",
   },
   es: {
     installedPrograms: "Elegir entre programas instalados…",
@@ -133,6 +148,10 @@ export const gameSetup: Translations<typeof en> = {
       "Aún no se puede buscar en ninguna fuente. Añade credenciales de IGDB en Ajustes → Metadatos o activa la tienda Steam o GOG.",
     executableProfile: "Ejecutable",
     exeRequired: "Elige primero un ejecutable.",
+    metadataStoreHint:
+      "Si los detalles de la página del juego son de otro juego, elige el correcto en IGDB. Questkeep toma entonces de allí los detalles que ofrece IGDB; lo que ofrece la tienda no cambia.",
+    noIgdb:
+      "Todavía no se puede buscar en IGDB. Añade las credenciales de IGDB en Ajustes → Metadatos.",
   },
   pt: {
     installedPrograms: "Escolher entre programas instalados…",
@@ -159,5 +178,9 @@ export const gameSetup: Translations<typeof en> = {
       "Ainda não há fonte pesquisável. Adicione credenciais do IGDB em Configurações → Metadados ou ative a loja Steam ou GOG.",
     executableProfile: "Executável",
     exeRequired: "Escolha um executável primeiro.",
+    metadataStoreHint:
+      "Se os detalhes na página do jogo forem de outro jogo, escolha o certo no IGDB. O Questkeep passa a usar de lá os detalhes que o IGDB oferece; o que a loja oferece não muda.",
+    noIgdb:
+      "Ainda não é possível pesquisar no IGDB. Adicione as credenciais do IGDB em Configurações → Metadados.",
   },
 };

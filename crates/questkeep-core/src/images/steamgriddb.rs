@@ -59,6 +59,8 @@ pub struct Lookup<'a> {
     /// Provider id (`steam`, `epic`, ...).
     pub source: &'a str,
     pub source_game_id: Option<&'a str>,
+    /// Release year, to tell same-named games apart (Need for Speed: Most Wanted 2005 and 2012).
+    pub year: Option<i32>,
 }
 
 /// Shared handle to the SteamGridDB API. Cheap to clone.
@@ -194,7 +196,7 @@ impl SteamGridDb {
         let Some(body) = self.get(&format!("/search/autocomplete/{}", encode(lookup.name)))? else {
             return Ok(None);
         };
-        Ok(best_match(&parse_search(&body)?, lookup.name))
+        Ok(best_match(&parse_search(&body)?, lookup.name, lookup.year))
     }
 
     /// Download URLs for a game's artwork, best first.
@@ -313,6 +315,9 @@ struct Envelope<T> {
 pub(crate) struct SearchHit {
     pub id: u64,
     pub name: String,
+    /// Unix seconds; only searches say it.
+    #[serde(default)]
+    pub release_date: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -361,13 +366,28 @@ pub(crate) fn parse_images(body: &str) -> Result<Vec<Image>> {
     Ok(parse_envelope::<Vec<Image>>(body)?.unwrap_or_default())
 }
 
-/// Exact case-insensitive name match first, else the first result.
-pub(crate) fn best_match(hits: &[SearchHit], name: &str) -> Option<u64> {
+/// An exact case-insensitive name match first (among several, the one released in the wanted
+/// year, else the first), else the first result.
+pub(crate) fn best_match(hits: &[SearchHit], name: &str, year: Option<i32>) -> Option<u64> {
     let wanted = name.trim().to_lowercase();
-    hits.iter()
-        .find(|h| h.name.trim().to_lowercase() == wanted)
-        .or_else(|| hits.first())
-        .map(|h| h.id)
+    let mut exact = hits
+        .iter()
+        .filter(|h| h.name.trim().to_lowercase() == wanted);
+    let first = exact.next();
+    let in_year = year.and_then(|year| {
+        first
+            .into_iter()
+            .chain(exact)
+            .find(|h| released_in(h, year))
+    });
+    in_year.or(first).or_else(|| hits.first()).map(|h| h.id)
+}
+
+fn released_in(hit: &SearchHit, year: i32) -> bool {
+    use chrono::Datelike;
+    hit.release_date
+        .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+        .is_some_and(|d| d.year() == year)
 }
 
 /// Drops unsafe or wrongly sized images and orders the rest by net votes, then score. The sort
@@ -405,9 +425,41 @@ mod tests {
     fn parses_search_and_picks_exact_name_first() {
         let hits = parse_search(SEARCH).unwrap();
         assert_eq!(hits.len(), 2);
-        assert_eq!(best_match(&hits, "Half-Life 2"), Some(9));
-        assert_eq!(best_match(&hits, "Half"), Some(5), "first result otherwise");
-        assert_eq!(best_match(&[], "x"), None);
+        assert_eq!(best_match(&hits, "Half-Life 2", None), Some(9));
+        assert_eq!(
+            best_match(&hits, "Half", None),
+            Some(5),
+            "first result otherwise"
+        );
+        assert_eq!(best_match(&[], "x", None), None);
+    }
+
+    #[test]
+    fn same_named_games_are_told_apart_by_release_year() {
+        let hits = parse_search(
+            r#"{"success":true,"data":[
+            {"id":1,"name":"Need for Speed: Most Wanted","release_date":1351000000},
+            {"id":2,"name":"Need for Speed: Most Wanted","release_date":1130000000},
+            {"id":3,"name":"Need for Speed: Most Wanted"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            best_match(&hits, "Need for Speed: Most Wanted", None),
+            Some(1)
+        );
+        assert_eq!(
+            best_match(&hits, "Need for Speed: Most Wanted", Some(2005)),
+            Some(2)
+        );
+        assert_eq!(
+            best_match(&hits, "Need for Speed: Most Wanted", Some(2012)),
+            Some(1)
+        );
+        assert_eq!(
+            best_match(&hits, "Need for Speed: Most Wanted", Some(1999)),
+            Some(1),
+            "a year nobody has: the first exact name"
+        );
     }
 
     #[test]
@@ -474,7 +526,8 @@ mod tests {
             api.resolve_game(&Lookup {
                 name: "x",
                 source: "manual",
-                source_game_id: None
+                source_game_id: None,
+                year: None,
             }),
             Err(CoreError::Invalid(_))
         ));

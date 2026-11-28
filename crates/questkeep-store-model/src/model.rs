@@ -851,6 +851,11 @@ pub struct CatalogHit {
     pub id: String,
     pub name: String,
     pub release_year: Option<i32>,
+    /// A short line that tells same-named games apart (platforms, developer), shown after the
+    /// year. Optional for stores that have nothing to say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub detail: Option<String>,
     /// A small picture to tell similar names apart (a capsule, cover or logo URL).
     pub image: Option<String>,
 }

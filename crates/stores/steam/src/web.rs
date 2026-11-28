@@ -114,6 +114,7 @@ pub(crate) fn parse_store_search(body: &str) -> Result<Vec<CatalogHit>, Provider
                 id: id.to_string(),
                 name: name.to_string(),
                 release_year: None,
+                detail: None,
                 // The portrait library art (the answer only has a wide capsule); a few apps lack
                 // it, the picker then shows no image.
                 image: Some(format!(
@@ -849,6 +850,7 @@ mod tests {
                     id: "620".into(),
                     name: "Portal 2".into(),
                     release_year: None,
+                    detail: None,
                     image: Some(
                         "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/620/library_600x900.jpg"
                             .into(),
@@ -858,6 +860,7 @@ mod tests {
                     id: "400".into(),
                     name: "Portal".into(),
                     release_year: None,
+                    detail: None,
                     image: Some(
                         "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/400/library_600x900.jpg"
                             .into(),

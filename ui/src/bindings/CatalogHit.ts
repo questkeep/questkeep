@@ -10,6 +10,11 @@ export type CatalogHit = {
  */
 id: string, name: string, releaseYear: number | null, 
 /**
+ * A short line that tells same-named games apart (platforms, developer), shown after the
+ * year. Optional for stores that have nothing to say.
+ */
+detail?: string, 
+/**
  * A small picture to tell similar names apart (a capsule, cover or logo URL).
  */
 image: string | null, };

@@ -119,6 +119,7 @@ describe("AddGameDialog", () => {
         source: "steam",
         id: "1145360",
         name: "Hades",
+        year: 2020,
       }),
     );
   });

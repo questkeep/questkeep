@@ -2141,9 +2141,9 @@ impl Library {
         link: Option<MetadataLink>,
     ) -> Result<(Vec<MetadataJob>, Option<CoverJob>)> {
         let game = self.db.get_game(id)?;
-        if game.source != MANUAL_SOURCE || self.db.entry_of(id)? != id {
+        if self.db.entry_of(id)? != id {
             return Err(CoreError::Invalid(
-                "Only games added by hand can be linked to a store or IGDB game.".into(),
+                "Only a game's library entry can be linked to a store or IGDB game.".into(),
             ));
         }
         let link = link
@@ -2151,8 +2151,16 @@ impl Library {
                 source: l.source.trim().to_string(),
                 id: l.id.trim().to_string(),
                 name: l.name.trim().to_string(),
+                year: l.year,
             })
             .filter(|l| !l.source.is_empty() && !l.id.is_empty());
+        // A game from a store has its store's data already; it can only be pointed at the right
+        // IGDB game, for the details its store lacks.
+        if game.source != MANUAL_SOURCE && link.as_ref().is_some_and(|l| l.source != IGDB_SOURCE) {
+            return Err(CoreError::Invalid(
+                "A game from a store can only be linked to an IGDB game.".into(),
+            ));
+        }
         if let Some(link) = &link {
             let known = link.source == IGDB_SOURCE
                 || self
@@ -2170,18 +2178,19 @@ impl Library {
         if old == link {
             return Ok((Vec::new(), None));
         }
-        let store_link = link.as_ref().is_some_and(|l| l.source != IGDB_SOURCE);
+        // Artwork found by name before the link (for the wrong game, maybe) is looked for again.
+        let redo_images = game.source == MANUAL_SOURCE && link.is_some();
         self.db.record(
             &Change::by_caller(reason::METADATA_LINK).kind(EntryKind::Edit),
             &[id],
-            || self.relink(id, &game, old.as_ref(), link.as_ref(), store_link),
+            || self.relink(id, &game, old.as_ref(), link.as_ref(), redo_images),
         )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         let game = self.db.get_game(id)?;
         let jobs = self.entry_jobs(&game);
         let (source, source_game_id) = self.store_target(id, game.source.clone(), None);
-        let cover = (store_link && game.cover_path.is_none()).then_some(CoverJob {
+        let cover = (redo_images && game.cover_path.is_none()).then_some(CoverJob {
             game_id: id,
             source,
             source_game_id,
@@ -2198,7 +2207,7 @@ impl Library {
         game: &Game,
         old: Option<&MetadataLink>,
         link: Option<&MetadataLink>,
-        store_link: bool,
+        redo_images: bool,
     ) -> Result<()> {
         if let Some(old) = old {
             self.db.delete_source_metadata(id, &old.source)?;
@@ -2208,7 +2217,7 @@ impl Library {
         self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
         let value = link.map(serde_json::to_value).transpose()?;
         self.db.set_extra_value(id, METADATA_LINK_KEY, value)?;
-        if store_link {
+        if redo_images {
             for kind in [ImageKind::Cover, ImageKind::Background] {
                 if crate::images::is_user_image(game, kind) {
                     continue;
@@ -4131,6 +4140,7 @@ mod tests {
                 id: "42".into(),
                 name: format!("{query} (found)"),
                 release_year: Some(2020),
+                detail: None,
                 image: None,
             }])
         }
@@ -4170,6 +4180,7 @@ mod tests {
             source: "cat".into(),
             id: " 42 ".into(),
             name: "Hades".into(),
+            year: None,
         };
         let (jobs, cover) = lib.set_metadata_link(game.id, Some(link)).unwrap();
         assert_eq!(jobs.len(), 1);
@@ -4217,8 +4228,57 @@ mod tests {
             source: "nowhere".into(),
             id: "1".into(),
             name: String::new(),
+            year: None,
         };
         assert!(lib.set_metadata_link(game.id, Some(unknown)).is_err());
+    }
+
+    #[test]
+    fn store_games_can_be_pointed_at_an_igdb_game_but_not_at_a_store_game() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(FakeStore(vec![ImportedGame {
+            play_action: Some(PlayAction::uri("fake://1")),
+            ..ImportedGame::installed("1", "Fake Game")
+        }])));
+        providers.register(Arc::new(Catalog));
+        let (lib, _) = library(tmp.path(), providers);
+        let _setup = crate::activity::Scope::enter();
+        lib.scan("fake").unwrap();
+        let id = lib.list_games(&GameQuery::default()).unwrap()[0].id;
+
+        let store = MetadataLink {
+            source: "cat".into(),
+            id: "42".into(),
+            name: "Other".into(),
+            year: None,
+        };
+        assert!(lib.set_metadata_link(id, Some(store)).is_err());
+
+        let igdb = MetadataLink {
+            source: IGDB_SOURCE.into(),
+            id: "1942".into(),
+            name: "Fake Game".into(),
+            year: Some(2012),
+        };
+        let (jobs, cover) = lib.set_metadata_link(id, Some(igdb)).unwrap();
+        assert!(cover.is_none(), "the store's own cover stays");
+        assert_eq!(jobs[0].source, "fake");
+        assert!(jobs[0].igdb);
+        assert_eq!(
+            lib.game_edit_info(id).unwrap().metadata_link.unwrap().id,
+            "1942"
+        );
+        let linked = lib.db.get_game(id).unwrap();
+        assert_eq!(linked.linked_igdb_id(), Some(1942));
+        assert_eq!(
+            linked.lookup_year(),
+            Some(2012),
+            "artwork searches know the year"
+        );
+
+        lib.set_metadata_link(id, None).unwrap();
+        assert!(lib.game_edit_info(id).unwrap().metadata_link.is_none());
     }
 
     #[test]

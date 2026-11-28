@@ -31,7 +31,7 @@ const TOKEN_MARGIN: Duration = Duration::from_secs(60);
 const FIELDS: &str = "name,summary,first_release_date,genres.name,\
     involved_companies.developer,involved_companies.publisher,involved_companies.company.name,\
     game_modes.name,themes.name,player_perspectives.name,franchises.name,collections.name,\
-    platforms.name,age_ratings.organization.name,age_ratings.rating_category.rating,\
+    platforms.name,game_type,age_ratings.organization.name,age_ratings.rating_category.rating,\
     aggregated_rating,rating,websites.url";
 
 const REJECTED: &str = "The IGDB (Twitch) Client ID or Client Secret was rejected.";
@@ -362,16 +362,21 @@ impl Igdb {
         Ok(best_match(&hits, lookup).cloned())
     }
 
-    /// Games whose name matches `query`, best first, for linking a game added by hand.
+    /// Games whose name matches `query`, best first, for linking a game. Each hit says on which
+    /// platforms the game came out and who made it, so same-named games can be told apart.
     pub fn search(&self, query: &str) -> Result<Vec<CatalogHit>> {
         let text = search_text(query);
         if text.is_empty() {
             return Ok(Vec::new());
         }
-        let body =
-            format!("search \"{text}\"; fields name,first_release_date,cover.image_id; limit 20;");
+        let body = format!(
+            "search \"{text}\"; fields name,first_release_date,cover.image_id,platforms.name,\
+             game_type,involved_companies.developer,involved_companies.supporting,\
+             involved_companies.porting,involved_companies.company.name; limit 20;"
+        );
         Ok(parse_search_hits(
             &self.query(&self.inner.games_url, &body)?,
+            query,
         ))
     }
 
@@ -461,6 +466,9 @@ pub(crate) struct Game {
     pub collections: Vec<Named>,
     #[serde(default)]
     pub platforms: Vec<Named>,
+    /// IGDB's kind of game (0 main game, 11 port, ...), a number when not expanded.
+    #[serde(default, deserialize_with = "game_type_id")]
+    pub game_type: Option<u64>,
     #[serde(default)]
     pub age_ratings: Vec<AgeRating>,
     /// Critics, 0-100.
@@ -596,12 +604,33 @@ pub(crate) struct Named {
     pub name: String,
 }
 
+/// IGDB's `game_type` is a number, or an object with an `id` when expanded.
+fn game_type_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<u64>, D::Error> {
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|v| match v {
+        serde_json::Value::Number(n) => n.as_u64(),
+        serde_json::Value::Object(o) => o.get("id").and_then(serde_json::Value::as_u64),
+        _ => None,
+    }))
+}
+
+/// IGDB's `game_type` of a port of a game to another platform.
+const GAME_TYPE_PORT: u64 = 11;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub(crate) struct InvolvedCompany {
     #[serde(default)]
     pub developer: bool,
     #[serde(default)]
     pub publisher: bool,
+    /// Helped with the game without being its developer.
+    #[serde(default)]
+    pub supporting: bool,
+    /// Made the port, not the original.
+    #[serde(default)]
+    pub porting: bool,
     #[serde(default)]
     pub company: Option<Named>,
 }
@@ -679,11 +708,111 @@ struct SearchHit {
     first_release_date: Option<i64>,
     #[serde(default)]
     cover: Option<IgdbImage>,
+    #[serde(default)]
+    platforms: Vec<Named>,
+    #[serde(default, deserialize_with = "game_type_id")]
+    game_type: Option<u64>,
+    #[serde(default)]
+    involved_companies: Vec<InvolvedCompany>,
 }
 
-/// The hits of a name search (id, name, year and a small cover).
-fn parse_search_hits(body: &str) -> Vec<CatalogHit> {
-    let hits: Vec<SearchHit> = serde_json::from_str(body).unwrap_or_default();
+/// How well a game fits a Windows PC library, lower is better: 0 on Windows, 1 on Linux, Mac,
+/// in a browser or with no platform known, 2 on consoles and other systems, 3 only on phones.
+fn platform_rank(platforms: &[Named]) -> u8 {
+    const MOBILE: &[&str] = &[
+        "android",
+        "ios",
+        "mobile",
+        "phone",
+        "blackberry",
+        "palm",
+        "symbian",
+        "j2me",
+        "n-gage",
+    ];
+    if platforms.is_empty() {
+        return 1;
+    }
+    platforms
+        .iter()
+        .map(|p| {
+            let name = p.name.to_lowercase();
+            if name.contains("windows") && !name.contains("phone") && !name.contains("mobile") {
+                0
+            } else if name == "linux" || name == "mac" || name.contains("web browser") {
+                1
+            } else if MOBILE.iter().any(|m| name.contains(m)) {
+                3
+            } else {
+                2
+            }
+        })
+        .min()
+        .unwrap_or(1)
+}
+
+/// "PC (Microsoft Windows)" is "PC" in a short list.
+fn short_platform(name: &str) -> String {
+    let name = name.trim();
+    if name.starts_with("PC (") {
+        "PC".into()
+    } else {
+        name.to_string()
+    }
+}
+
+/// What tells a game apart from same-named ones: where it came out ("PC, Xbox 360", or "Game Boy
+/// Advance port" for a port), then who developed it. `None` when IGDB knows neither.
+fn search_detail(hit: &SearchHit) -> Option<String> {
+    let mut platforms: Vec<String> = Vec::new();
+    for platform in &hit.platforms {
+        let name = short_platform(&platform.name);
+        if !name.is_empty() && !platforms.contains(&name) {
+            platforms.push(name);
+        }
+    }
+    let first = platforms.first().cloned();
+    let where_ = if hit.game_type == Some(GAME_TYPE_PORT) {
+        first.map(|p| format!("{p} port")).or(Some("Port".into()))
+    } else if platforms.len() > 3 {
+        Some(format!(
+            "{} +{}",
+            platforms[..3].join(", "),
+            platforms.len() - 3
+        ))
+    } else if platforms.is_empty() {
+        None
+    } else {
+        Some(platforms.join(", "))
+    };
+    let mut developers: Vec<String> = Vec::new();
+    for company in hit
+        .involved_companies
+        .iter()
+        .filter(|c| c.developer && !c.supporting && !c.porting)
+    {
+        let name = company.company.as_ref().map(|c| c.name.trim().to_string());
+        if let Some(name) = name.filter(|n| !n.is_empty())
+            && !developers.contains(&name)
+        {
+            developers.push(name);
+        }
+    }
+    developers.truncate(2);
+    let parts: Vec<String> = where_
+        .into_iter()
+        .chain((!developers.is_empty()).then(|| developers.join(", ")))
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+/// The hits of a name search (id, name, year, platforms and developer, a small cover). Games
+/// named like `query` come first, and among those the ones for a PC before consoles and phones;
+/// IGDB's order is kept otherwise.
+fn parse_search_hits(body: &str, query: &str) -> Vec<CatalogHit> {
+    let mut hits: Vec<SearchHit> = serde_json::from_str(body).unwrap_or_default();
+    let wanted = match_key(query);
+    hits.sort_by_key(|h| (match_key(&h.name) != wanted, platform_rank(&h.platforms)));
     hits.into_iter()
         .filter_map(|hit| {
             let name = hit.name.trim();
@@ -697,6 +826,7 @@ fn parse_search_hits(body: &str) -> Vec<CatalogHit> {
                     .first_release_date
                     .and_then(|t| DateTime::from_timestamp(t, 0))
                     .map(|d| d.year()),
+                detail: search_detail(&hit),
                 image: hit
                     .cover
                     .filter(|c| {
@@ -731,23 +861,25 @@ fn year_of(game: &Game) -> Option<i32> {
     DateTime::from_timestamp(game.first_release_date?, 0).map(|d| d.year())
 }
 
-/// The search hit with the same normalized name; among several, the one released in the wanted
-/// year, else the first (IGDB lists by relevance). No equal name means no match: a loosely
-/// similar game would put wrong data on the page.
+/// The search hit with the same normalized name. Among several, the one for a PC rather than a
+/// console or phone (and a game rather than a port), then the one released in the wanted year,
+/// then the first (IGDB lists by relevance). No equal name means no match: a loosely similar
+/// game would put wrong data on the page.
 pub(crate) fn best_match<'a>(hits: &'a [Game], lookup: &IgdbLookup<'_>) -> Option<&'a Game> {
     let wanted = match_key(lookup.name);
     if wanted.is_empty() {
         return None;
     }
-    let mut exact = hits.iter().filter(|g| match_key(&g.name) == wanted);
-    let first = exact.next()?;
-    let Some(year) = lookup.year else {
-        return Some(first);
-    };
-    std::iter::once(first)
-        .chain(exact)
-        .find(|g| year_of(g) == Some(year))
-        .or(Some(first))
+    // `min_by_key` keeps the first of equal keys, which is IGDB's order.
+    hits.iter()
+        .filter(|g| match_key(&g.name) == wanted)
+        .min_by_key(|g| {
+            (
+                platform_rank(&g.platforms),
+                g.game_type == Some(GAME_TYPE_PORT),
+                lookup.year.is_some_and(|year| year_of(g) != Some(year)),
+            )
+        })
 }
 
 /// `None` when IGDB knows the game but has nothing to show for it.
@@ -1117,6 +1249,131 @@ mod tests {
         assert!(best_match(&hits, &lookup("!!")).is_none());
     }
 
+    fn on(name: &str, platforms: &[&str], game_type: Option<u64>, year_ts: Option<i64>) -> Game {
+        Game {
+            platforms: platforms
+                .iter()
+                .map(|p| Named { name: (*p).into() })
+                .collect(),
+            game_type,
+            ..game(name, year_ts)
+        }
+    }
+
+    #[test]
+    fn prefers_the_pc_game_over_phones_consoles_and_ports() {
+        // IGDB lists the 2005 phone port first, as it did for Need for Speed: Most Wanted.
+        let hits = vec![
+            on(
+                "Need for Speed: Most Wanted",
+                &["Legacy Mobile Device"],
+                Some(11),
+                Some(1_135_000_000), // 2005
+            ),
+            on(
+                "Need for Speed: Most Wanted",
+                &["Game Boy Advance"],
+                Some(11),
+                Some(1_135_000_000),
+            ),
+            on(
+                "Need for Speed: Most Wanted",
+                &["PC (Microsoft Windows)", "PlayStation 3"],
+                Some(0),
+                Some(1_351_000_000), // 2012
+            ),
+            on(
+                "Need for Speed: Most Wanted",
+                &["PC (Microsoft Windows)", "Xbox"],
+                Some(0),
+                Some(1_130_000_000), // 2005
+            ),
+        ];
+        // Without a year: the first PC entry.
+        assert_eq!(
+            best_match(&hits, &lookup("Need for Speed: Most Wanted"))
+                .unwrap()
+                .first_release_date,
+            Some(1_351_000_000)
+        );
+        // With a year: the PC entry from then, not the phone port that shares it.
+        let from_2005 = IgdbLookup {
+            name: "Need for Speed Most Wanted",
+            year: Some(2005),
+            id: None,
+        };
+        assert_eq!(
+            best_match(&hits, &from_2005).unwrap().first_release_date,
+            Some(1_130_000_000)
+        );
+        // Only a phone version known: it is still better than nothing.
+        assert!(best_match(&hits[..1], &lookup("Need for Speed: Most Wanted")).is_some());
+    }
+
+    #[test]
+    fn ranks_platforms() {
+        let rank = |names: &[&str]| {
+            platform_rank(
+                &names
+                    .iter()
+                    .map(|n| Named { name: (*n).into() })
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(rank(&["PC (Microsoft Windows)"]), 0);
+        assert_eq!(rank(&["iOS", "PC (Microsoft Windows)"]), 0);
+        assert_eq!(rank(&[]), 1);
+        assert_eq!(rank(&["Linux"]), 1);
+        assert_eq!(rank(&["PlayStation 2", "Xbox"]), 2);
+        assert_eq!(rank(&["Legacy Mobile Device"]), 3);
+        assert_eq!(rank(&["Android", "iOS"]), 3);
+        assert_eq!(rank(&["Windows Phone"]), 3);
+    }
+
+    #[test]
+    fn search_hits_say_where_and_by_whom_a_game_came_out() {
+        let body = r#"[
+          {"id":1,"name":"Need for Speed: Most Wanted","first_release_date":1135000000,
+           "game_type":11,"platforms":[{"name":"Game Boy Advance"}],
+           "involved_companies":[{"developer":true,"company":{"name":"Pocket Studios"}}]},
+          {"id":2,"name":"Need for Speed: Most Wanted - Black Edition","platforms":[{"name":"Xbox"}]},
+          {"id":3,"name":"Need for Speed: Most Wanted","first_release_date":1351000000,
+           "game_type":0,
+           "platforms":[{"name":"PC (Microsoft Windows)"},{"name":"PlayStation 3"},
+                        {"name":"Xbox 360"},{"name":"Wii U"},{"name":"PlayStation Vita"}],
+           "involved_companies":[
+             {"developer":true,"company":{"name":"Criterion Games"}},
+             {"developer":true,"porting":true,"company":{"name":"Porter"}},
+             {"developer":true,"supporting":true,"company":{"name":"Helper"}},
+             {"developer":false,"publisher":true,"company":{"name":"Electronic Arts"}},
+             {"developer":true,"company":{"name":"Criterion Games"}}]}
+        ]"#;
+        let hits = parse_search_hits(body, "Need for Speed Most Wanted");
+        let ids: Vec<&str> = hits.iter().map(|h| h.id.as_str()).collect();
+        // Same names first and the PC game before the port; the similar name last.
+        assert_eq!(ids, ["3", "1", "2"]);
+        assert_eq!(
+            hits[0].detail.as_deref(),
+            Some("PC, PlayStation 3, Xbox 360 +2 · Criterion Games")
+        );
+        assert_eq!(
+            hits[1].detail.as_deref(),
+            Some("Game Boy Advance port · Pocket Studios")
+        );
+        assert_eq!(hits[2].detail.as_deref(), Some("Xbox"));
+        let bare = parse_search_hits(r#"[{"id":9,"name":"X"}]"#, "x");
+        assert_eq!(bare[0].detail, None);
+    }
+
+    #[test]
+    fn reads_the_game_type_as_a_number_or_an_object() {
+        let games =
+            parse_games(r#"[{"id":1,"game_type":11},{"id":2,"game_type":{"id":0}},{"id":3}]"#)
+                .unwrap();
+        let types: Vec<Option<u64>> = games.iter().map(|g| g.game_type).collect();
+        assert_eq!(types, [Some(11), Some(0), None]);
+    }
+
     #[test]
     fn credential_handling_and_debug_do_not_leak() {
         let igdb = Igdb::new(Some("id".into()), Some("  ".into()));
@@ -1246,6 +1503,7 @@ mod tests {
         assert!(meta.is_some());
         let requests = server.requests.lock().unwrap();
         assert!(requests[1].body.starts_with("search \"witcher 3\";"));
+        assert!(requests[1].body.contains("platforms.name"));
         assert!(requests[2].body.ends_with("where id = 1942;"));
     }
 
