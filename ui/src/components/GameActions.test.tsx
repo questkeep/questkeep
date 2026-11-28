@@ -148,3 +148,40 @@ describe("Run: … in the command bar", () => {
     await waitFor(() => expect(api.runScript).toHaveBeenCalledWith("a2", "g1"));
   });
 });
+
+describe("app commands in the command bar", () => {
+  it("runs an entry of the Questkeep menu, with its submenu in the label", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([]);
+    const synced: string[] = [];
+    const menu = () => [
+      {
+        kind: "submenu" as const,
+        label: "Sync",
+        entries: () => [{ label: "Steam", onSelect: () => synced.push("steam") }],
+      },
+    ];
+    render(() => <CommandBar appMenu={menu} />);
+    const box = screen.getByRole("combobox", { name: "Find a game" });
+    await fireEvent.focus(box);
+    await fireEvent.input(box, { target: { value: "steam" } });
+    const option = await screen.findByRole("option", { name: "Sync › Steam" });
+    await fireEvent.click(option);
+    expect(synced).toEqual(["steam"]);
+  });
+
+  it("shows games first and goes to a page with Enter", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([makeGame({ id: "g2", name: "Statistica" })]);
+    render(() => <CommandBar />);
+    const box = screen.getByRole("combobox", { name: "Find a game" });
+    await fireEvent.focus(box);
+    await fireEvent.input(box, { target: { value: "statis" } });
+    const command = await screen.findByRole("option", { name: "Go to Statistics" });
+    const options = screen.getAllByRole("option");
+    expect(options.indexOf(command)).toBeGreaterThan(0);
+    expect(screen.getAllByRole("listbox")).toHaveLength(2);
+    // Down to the command (games come first), then Enter.
+    await fireEvent.keyDown(box, { key: "ArrowDown" });
+    await fireEvent.keyDown(box, { key: "Enter" });
+    expect(store.page()).toBe("statistics");
+  });
+});

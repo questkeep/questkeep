@@ -406,7 +406,10 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         </span>
       </div>
       <div class="titlebar__center" data-tauri-drag-region ref={(el) => (center = el)}>
-        <Show when={compact()} fallback={<CommandBar ref={(handle) => (bar = handle)} />}>
+        <Show
+          when={compact()}
+          fallback={<CommandBar ref={(handle) => (bar = handle)} appMenu={appEntries} />}
+        >
           <button
             ref={(el) => (searchButton = el)}
             type="button"
@@ -427,6 +430,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             <div class="titlebar__command-popup">
               <CommandBar
                 autoFocus
+                appMenu={appEntries}
                 onDismiss={() => {
                   setFloating(false);
                   searchButton?.focus();

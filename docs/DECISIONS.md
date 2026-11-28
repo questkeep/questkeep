@@ -168,6 +168,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   one run; then one toast sums it up.
 - **Dropdowns are our own `Select`** (a select-only combobox whose list is a menu-styled Popover) instead of native `<select>`, so they match the menus and themes. Focus stays on the button (`aria-activedescendant`), and while it is closed no key changes the value.
 - **Every action on a game page card is also in the page's "…" menu** (categories, news, per-copy Separate and Play this store first): people look for actions in the menu first; the cards keep theirs.
+- **Command bar commands come from the Questkeep menu**: it is flattened into commands ("Sync › Steam"), so menu entries, plugin "app" menu items included, are commands without a second list; only pages, views and settings pages are added on top. Games stay first and commands are capped at three, so the box still reads as "Find a game".
 
 ## Releases
 

@@ -1,25 +1,104 @@
+import Bell from "lucide-solid/icons/bell";
+import ChartColumn from "lucide-solid/icons/chart-column";
+import Compass from "lucide-solid/icons/compass";
 import Download from "lucide-solid/icons/download";
+import House from "lucide-solid/icons/house";
 import Play from "lucide-solid/icons/play";
+import Puzzle from "lucide-solid/icons/puzzle";
+import ScrollText from "lucide-solid/icons/scroll-text";
 import Search from "lucide-solid/icons/search";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import SettingsIcon from "lucide-solid/icons/settings";
+import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
+import { librarySidebar } from "../i18n/librarySidebar";
 import { shellCommandBar } from "../i18n/shellCommandBar";
+import { shellTitleBar } from "../i18n/shellTitleBar";
 import { scriptsText } from "../i18n/scripts";
 import { shellNotifications } from "../i18n/shellNotifications";
 import { installWithToast, launchWithToast } from "../lib/actions";
 import { createGameActions, runAction } from "../lib/gameActions";
 import * as api from "../lib/api";
-import { matchCommands, rankMatches, splitMatch, type AppCommand } from "../lib/commandBar";
+import {
+  flattenMenu,
+  matchCommands,
+  PATH_SEPARATOR,
+  rankMatches,
+  splitMatch,
+  type AppCommand,
+} from "../lib/commandBar";
+import { pages } from "../lib/extensions/registry";
 import { primaryAction } from "../lib/primaryAction";
 import { defaultQuery } from "../lib/query";
 import { store } from "../lib/store";
+import { shownName } from "../lib/views";
 import { GameIcon } from "./GameIcon";
+import type { MenuEntry } from "./Menu";
+import { settingsDestinations } from "./settings/SettingsPage";
 import { sourceName, SourceIcon } from "./SourceIcon";
+import { ViewIcon } from "./ViewIcon";
 
 const tr = translator(shellCommandBar);
 const trNotes = translator(shellNotifications);
 const trScripts = translator(scriptsText);
+const trSidebar = translator(librarySidebar);
+const trTitleBar = translator(shellTitleBar);
+
+const lucide = (Icon: typeof House) => () => <Icon class="icon" aria-hidden="true" />;
+
+/** A command that opens a page ("Go to Statistics"). */
+const goTo = (id: string, name: string, run: () => void, icon?: () => JSX.Element) => ({
+  id,
+  label: tr("goTo", { name }),
+  icon,
+  run,
+});
+
+/** Pages, saved views and plugin pages to go to, and the settings pages. */
+function navigationCommands(): AppCommand[] {
+  const settings = trTitleBar("settings");
+  return [
+    ...(store.showStartPage()
+      ? [goTo("home", trSidebar("home"), () => store.showHome(), lucide(House))]
+      : []),
+    ...(store.showStatisticsPage()
+      ? [
+          goTo(
+            "statistics",
+            trSidebar("statistics"),
+            () => store.showStatistics(),
+            lucide(ChartColumn),
+          ),
+        ]
+      : []),
+    goTo("explore", trSidebar("explore"), () => store.openExplore(), lucide(Compass)),
+    ...store.sections().flatMap((section) =>
+      section.views.map((view) => {
+        const icon = view.icon;
+        return goTo(
+          `view.${view.id}`,
+          shownName(view),
+          () => store.selectView(view.id),
+          () => <ViewIcon name={icon} />,
+        );
+      }),
+    ),
+    ...pages().map((entry) =>
+      goTo(
+        `page.${entry.key}`,
+        entry.page.title,
+        () => store.showPluginPage(entry.key),
+        lucide(Puzzle),
+      ),
+    ),
+    ...settingsDestinations().map((destination) => ({
+      id: `settings.${destination.id}`,
+      label: [settings, ...destination.path].join(PATH_SEPARATOR),
+      icon: lucide(SettingsIcon),
+      run: () => store.showSettingsSection(destination.id),
+    })),
+  ];
+}
 
 const DEBOUNCE_MS = 80;
 const RECENT_COUNT = 5;
@@ -41,6 +120,8 @@ export function CommandBar(props: {
   autoFocus?: boolean;
   /** The bar was closed (Escape, a pick or a click elsewhere). */
   onDismiss?: () => void;
+  /** The Questkeep menu, whose entries are commands too ("Sync › Steam"). */
+  appMenu?: () => MenuEntry[];
 }) {
   const [open, setOpen] = createSignal(false);
   const [text, setText] = createSignal("");
@@ -51,13 +132,21 @@ export function CommandBar(props: {
   const allCommands = (): AppCommand[] => {
     const game = store.selectedGame();
     return [
-      { id: "notifications", label: trNotes("showNotifications") },
+      ...navigationCommands(),
+      ...flattenMenu(props.appMenu?.() ?? []),
+      {
+        id: "notifications",
+        label: trNotes("showNotifications"),
+        hint: "Ctrl+Shift+N",
+        icon: lucide(Bell),
+        run: () => store.showNotifications(),
+      },
       ...(game
         ? actions().map((script): AppCommand => ({
-            id: "script",
+            id: `script.${script.id}`,
             label: trScripts("runAction", { name: script.name }),
-            scriptId: script.id,
-            gameId: game.id,
+            icon: lucide(ScrollText),
+            run: () => void runAction(script, game.id),
           }))
         : []),
     ];
@@ -111,6 +200,8 @@ export function CommandBar(props: {
     if (open()) return;
     setOpen(true);
     void load(text());
+    // The Open launcher entries of the Questkeep menu.
+    void store.loadLaunchers();
   }
 
   function close() {
@@ -150,11 +241,7 @@ export function CommandBar(props: {
 
   function runCommand(command: AppCommand) {
     close();
-    if (command.id === "notifications") store.showNotifications();
-    else {
-      const script = actions().find((s) => s.id === command.scriptId);
-      if (script) void runAction(script, command.gameId);
-    }
+    command.run();
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -298,7 +385,15 @@ export function CommandBar(props: {
                       onPointerDown={(event) => event.preventDefault()}
                       onClick={() => runCommand(command)}
                     >
-                      <span class="command__name">{command.label}</span>
+                      <span class="command__icon">{command.icon?.()}</span>
+                      <span class="command__name">
+                        {splitMatch(command.label, text()).before}
+                        <mark>{splitMatch(command.label, text()).match}</mark>
+                        {splitMatch(command.label, text()).after}
+                      </span>
+                      <Show when={command.hint}>
+                        <span class="command__meta">{command.hint}</span>
+                      </Show>
                     </li>
                   );
                 }}

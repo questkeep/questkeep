@@ -3120,6 +3120,14 @@ ul {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.command__icon {
+  display: inline-flex;
+  width: var(--qk-game-icon-size);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--qk-color-text-muted);
+}
 .command__name mark {
   background: none;
   color: var(--qk-color-accent);

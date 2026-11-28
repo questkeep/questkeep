@@ -122,6 +122,7 @@ popup's More menu, and hidden games in Explore.
 - Store plugins can track a game by the folder its process runs in or names on its command line (`commandLine`): Minecraft launcher plugins (Prism, Modrinth, CurseForge) record the right instance instead of any Java program. On Windows the watcher for games started outside Questkeep also matches a process's working directory, so these instances count when started from their launcher.
 - IGDB: the automatic match prefers the PC game over phone and console versions; the link search shows platforms and developer; games from a store can be linked to the right IGDB game (Edit > Metadata).
 - Removing a store game can keep it out of later syncs ("Don't import again when syncing" in the Remove confirmation, ticked by default); Settings > Stores and accounts lists the excluded games with Import again. Removing a combined game removes all of its store copies.
+- Ctrl+K runs commands too: under the games, up to three matching commands (go to a page, view, plugin page or settings page, everything in the Questkeep menu such as Sync all or Sync › Steam, notifications, the selected game's action scripts).
 
 ## Next
 
@@ -136,8 +137,6 @@ popup's More menu, and hidden games in Explore.
   install.
 - **Small gaps**: a random game picker that respects the current filter, region, version and manual
   (path or URL) fields.
-- **Command bar commands**: run app actions (sync a store, open settings, switch views) from
-  Ctrl+K, not only games; also the home for the random picker and plugin commands.
 - **URI protocol, CLI start and desktop shortcuts**: `questkeep://` start/show game/search,
   `--start <id>`; enables Stream Deck, Steam shortcuts and launcher integrations.
 - **Multiple play actions per game**: file, URL, script and emulator actions, play and non-play

@@ -216,6 +216,21 @@ function highlight(label: string) {
   control?.focus({ preventScroll: true });
 }
 
+/**
+ * Where the command bar can open the settings: every page, and the parts of a page with several
+ * ("Organizing › Categories"); `id` goes to `store.showSettingsSection`.
+ */
+export function settingsDestinations(): { id: string; path: string[] }[] {
+  const out: { id: string; path: string[] }[] = [];
+  for (const page of visiblePages()) {
+    const title = pageTitle(page);
+    out.push({ id: page.id, path: [title] });
+    if (page.parts.length < 2) continue;
+    for (const part of page.parts) out.push({ id: part.id, path: [title, tr(part.title)] });
+  }
+  return out;
+}
+
 const pageName = (id: string) => {
   const page = visiblePages().find((p) => p.id === id);
   return page ? pageTitle(page) : "";
