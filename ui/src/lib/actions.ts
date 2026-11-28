@@ -130,6 +130,11 @@ export function openInstallFolder(id: string): Promise<string | null> {
   return attempt(() => api.openInstallFolder(id));
 }
 
+/** Opens the game's manual; a failure (no file, no handler) comes back as its message. */
+export function openManual(id: string): Promise<string | null> {
+  return attempt(() => api.openManual(id));
+}
+
 /** Removes the entry; with `exclude`, syncs do not import its store copies again. */
 export function removeGame(id: string, exclude = false): Promise<string | null> {
   return attempt(async () => {

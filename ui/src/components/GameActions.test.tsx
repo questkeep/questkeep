@@ -106,6 +106,64 @@ describe("action buttons on the game page", () => {
     expect(api.runScript).toHaveBeenCalledWith("a1", "g1");
   });
 
+  it("puts tools first and starts them", async () => {
+    give(saves, backup);
+    vi.mocked(api.gameTools).mockResolvedValue([
+      {
+        id: "t1",
+        name: "Config tool",
+        icon: null,
+        action: {
+          kind: "file",
+          target: "config.exe",
+          args: null,
+          workingDir: null,
+          tracking: "default",
+          trackingPath: null,
+        },
+      },
+    ]);
+    vi.mocked(api.runGameTool).mockResolvedValue(undefined);
+    render(() => <GameActionButtons game={game} />);
+    const group = await screen.findByRole("group", { name: "Actions" });
+    const config = await within(group).findByRole("button", { name: "Config tool" });
+    expect(within(group).getByRole("button", { name: "Open save folder" })).toBeInTheDocument();
+    // Two buttons: the second script moves under More.
+    expect(within(group).queryByRole("button", { name: "Back up saves" })).toBeNull();
+    await fireEvent.click(config);
+    expect(api.runGameTool).toHaveBeenCalledWith("g1", "t1");
+  });
+
+  it("draws tools with their pictures, as icons with tooltips when the page says so", async () => {
+    give(saves);
+    vi.mocked(api.gameTools).mockResolvedValue([
+      {
+        id: "t1",
+        name: "Wiki",
+        icon: null,
+        action: {
+          kind: "uri",
+          target: "https://example.com/wiki",
+          args: null,
+          workingDir: null,
+          tracking: "default",
+          trackingPath: null,
+        },
+      },
+    ]);
+    vi.mocked(api.toolIcons).mockResolvedValue([{ toolId: "t1", path: "C:/data/fav.png" }]);
+    render(() => <GameActionButtons game={game} labels={false} shown={1} />);
+    const group = await screen.findByRole("group", { name: "Actions" });
+    const wiki = await within(group).findByRole("button", { name: "Wiki" });
+    expect(wiki).toHaveAttribute("data-tooltip", "Wiki");
+    await waitFor(() =>
+      expect(wiki.querySelector("img")?.getAttribute("src")).toContain("fav.png"),
+    );
+    // The script beyond the first button is under "…".
+    expect(within(group).queryByRole("button", { name: "Open save folder" })).toBeNull();
+    expect(within(group).getByRole("button", { name: "More scripts" })).toBeInTheDocument();
+  });
+
   it("shows a failure to start as an error toast", async () => {
     give(saves);
     vi.mocked(api.runScript).mockRejectedValue("no such program");

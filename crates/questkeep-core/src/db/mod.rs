@@ -15,9 +15,11 @@ mod profiles;
 mod scripts;
 mod sessions;
 mod setup;
+mod shortcuts;
 mod start;
 mod statistics;
 pub mod text_match;
+mod tools;
 mod views;
 
 use std::path::Path;
@@ -33,6 +35,7 @@ pub use games::{DetectionDir, GameMissingMetadata, InstallTarget, NewGameRecord,
 pub use playtime::{StatSession, StoreDay};
 pub use profiles::ProfileRow;
 pub use sessions::OpenSession;
+pub use shortcuts::ShortcutRecord;
 pub use start::{SessionSpan, playtime_by_day, playtime_by_week};
 pub use statistics::{StatCopy, StatEntry};
 

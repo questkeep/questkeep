@@ -1,5 +1,6 @@
 import Combine from "lucide-solid/icons/combine";
 import Download from "lucide-solid/icons/download";
+import Link from "lucide-solid/icons/link";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
@@ -13,7 +14,11 @@ import { formatPlaytime, formatSize } from "../lib/format";
 import { readCssPx } from "../lib/layoutMode";
 import { categoryCoverage, common, coverFan, storeCounts } from "../lib/selection";
 import { store } from "../lib/store";
+import { shortcutsText } from "../i18n/shortcuts";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Menu } from "./Menu";
+import type { PopoverAnchor } from "./Popover";
+import { createShortcutsFor } from "./shortcutMenu";
 import { Cover } from "./Cover";
 import { PanelHeader, type PanelPin } from "./PanelHeader";
 import { Select } from "./Select";
@@ -21,6 +26,7 @@ import { sourceName } from "./SourceIcon";
 
 const tr = translator(shellMulti);
 const trCommon = translator(shellCommon);
+const trShortcuts = translator(shortcutsText);
 
 /** Fallbacks for `--qk-stack-cover-width` and `--qk-stack-min-step` (theme.css). */
 const COVER = 120;
@@ -44,6 +50,8 @@ export function MultiSelectPanel(props: {
   const [width, setWidth] = createSignal(0);
   const [sizes, setSizes] = createSignal({ cover: COVER, step: MIN_STEP });
   const [removing, setRemoving] = createSignal(false);
+  const [shortcutMenu, setShortcutMenu] = createSignal<PopoverAnchor | null>(null);
+  let shortcutButton: HTMLButtonElement | undefined;
   let stack: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -269,6 +277,23 @@ export function MultiSelectPanel(props: {
             <RefreshCw class="icon" aria-hidden="true" />
             {tr("refreshMetadata")}
           </button>
+          <button
+            ref={(el) => (shortcutButton = el)}
+            type="button"
+            class="btn"
+            aria-haspopup="menu"
+            aria-expanded={shortcutMenu() !== null}
+            onClick={(event) =>
+              setShortcutMenu(
+                shortcutMenu() === null
+                  ? { rect: event.currentTarget.getBoundingClientRect(), align: "start" }
+                  : null,
+              )
+            }
+          >
+            <Link class="icon" aria-hidden="true" />
+            {trShortcuts("createShortcuts")}
+          </button>
           <button type="button" class="btn" onClick={() => store.openCombine(ids())}>
             <Combine class="icon" aria-hidden="true" />
             {tr("combineInto")}
@@ -279,6 +304,33 @@ export function MultiSelectPanel(props: {
           </button>
         </div>
       </div>
+      <Show when={shortcutMenu()}>
+        {(anchor) => (
+          <Menu
+            anchor={anchor()}
+            label={trShortcuts("createShortcuts")}
+            inside={() => [shortcutButton]}
+            onClose={(returnFocus) => {
+              setShortcutMenu(null);
+              if (returnFocus) shortcutButton?.focus();
+            }}
+            entries={[
+              {
+                label: trShortcuts("desktop"),
+                onSelect: () => void createShortcutsFor(ids(), ["desktop"]),
+              },
+              {
+                label: trShortcuts("startMenu"),
+                onSelect: () => void createShortcutsFor(ids(), ["startMenu"]),
+              },
+              {
+                label: trShortcuts("both"),
+                onSelect: () => void createShortcutsFor(ids(), ["desktop", "startMenu"]),
+              },
+            ]}
+          />
+        )}
+      </Show>
       <Show when={removing()}>
         <ConfirmDialog
           title={tr("removeGamesTitle")}

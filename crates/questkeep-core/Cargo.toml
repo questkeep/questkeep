@@ -35,6 +35,8 @@ zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2
 # Win32_System_Diagnostics_Debug: a process's working directory); the version is the one already
 # locked.
 windows-sys = { version = "0.61.2", features = ["Wdk_System_Threading", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Diagnostics_Debug", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# Shortcuts (.lnk files through IShellLinkW); the version is the one already locked (Tauri).
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
 
 [dev-dependencies]
 image = { version = "0.25.10", default-features = false, features = ["png"] }

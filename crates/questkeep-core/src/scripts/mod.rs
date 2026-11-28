@@ -469,6 +469,7 @@ impl Scripts {
         entry.cover_path = resolve(entry.cover_path.take());
         entry.icon_path = resolve(entry.icon_path.take());
         entry.background_path = resolve(entry.background_path.take());
+        entry.logo_path = resolve(entry.logo_path.take());
         Ok(entry)
     }
 

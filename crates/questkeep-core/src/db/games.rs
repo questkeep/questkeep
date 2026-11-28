@@ -19,7 +19,7 @@ use crate::model::{
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
-    cover_path, icon_path, background_path, description, release_date, developers, publishers, \
+    cover_path, icon_path, background_path, logo_path, description, release_date, developers, publishers, \
     genres, metadata_updated_at, extra, details, completion_status, user_score, notes, \
     COALESCE(kind_user, kind) AS kind, \
     COALESCE((SELECT detect_launches FROM game_tracking \
@@ -207,6 +207,7 @@ fn text_columns(field: TextField) -> &'static [&'static str] {
         TextField::SortingName => &["sorting_name"],
         TextField::Description => &["description"],
         TextField::Notes => &["notes"],
+        TextField::Version => &["json_extract(details, '$.meta.version')"],
         TextField::InstallDir => &["install_dir"],
         TextField::SourceGameId => &["source_game_id"],
         TextField::LaunchTarget => &["json_extract(play_action, '$.target')"],
@@ -432,6 +433,7 @@ pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         cover_path: row.get("cover_path")?,
         icon_path: row.get("icon_path")?,
         background_path: row.get("background_path")?,
+        logo_path: row.get("logo_path")?,
         description: row.get("description")?,
         release_date: row.get("release_date")?,
         developers: string_list(row.get("developers")?),
@@ -445,6 +447,9 @@ pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         game_modes: meta.game_modes,
         themes: meta.themes,
         perspectives: meta.perspectives,
+        regions: meta.regions,
+        version: meta.version,
+        manual: meta.manual,
         critic_score: meta.critic_score,
         community_score: meta.community_score,
         install_size: meta.install_size,
@@ -1087,6 +1092,19 @@ impl Database {
         Ok(())
     }
 
+    /// Sets (or clears) the logo path, stored relative to the data dir.
+    pub fn set_logo_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        self.check_recorded("set_logo_path");
+        let changed = self.conn().execute(
+            "UPDATE games SET logo_path = ?2 WHERE id = ?1",
+            params![id.to_string(), relative],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::GameNotFound(id));
+        }
+        Ok(())
+    }
+
     /// Store games whose metadata was never fetched: `(id, source, source_game_id)`.
     pub fn games_needing_metadata(&self) -> Result<Vec<(Uuid, String, String)>> {
         self.store_game_keys("metadata_updated_at IS NULL AND merged_into IS NULL")
@@ -1158,6 +1176,24 @@ impl Database {
 
     /// Library entries (not merged copies) without an icon, installed games first, with their
     /// source.
+    /// Entries whose `extra` has `key`, with their source.
+    pub fn games_with_extra_key(&self, key: &str) -> Result<Vec<(Uuid, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, source FROM games WHERE merged_into IS NULL \
+             AND json_extract(COALESCE(extra, '{}'), '$.' || ?1) IS NOT NULL",
+        )?;
+        let rows = stmt
+            .query_map([key], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, source)| Some((Uuid::parse_str(&id).ok()?, source)))
+            .collect())
+    }
+
     pub fn games_without_icon(&self) -> Result<Vec<(Uuid, String)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
@@ -1945,6 +1981,7 @@ mod tests {
             .unwrap();
         db.set_background_path(g.id, Some("images/backgrounds/x.jpg"))
             .unwrap();
+        db.set_logo_path(g.id, Some("images/logos/x.png")).unwrap();
         let g = db.get_game(g.id).unwrap();
         assert_eq!(g.genres, vec!["Action", "Indie"]);
         assert_eq!(g.release_date.as_deref(), Some("2020-05-01"));
@@ -1953,6 +1990,7 @@ mod tests {
             g.background_path.as_deref(),
             Some("images/backgrounds/x.jpg")
         );
+        assert_eq!(g.logo_path.as_deref(), Some("images/logos/x.png"));
         assert!(db.games_needing_metadata().unwrap().is_empty());
 
         let other = db.insert_game(&manual("Manual"), now).unwrap();
@@ -1988,5 +2026,11 @@ mod tests {
             db.set_extra_value(Uuid::new_v4(), "k", None).is_err(),
             "unknown game"
         );
+        // The games still marked for something (the logo search of migration 22).
+        assert_eq!(
+            db.games_with_extra_key("other").unwrap(),
+            vec![(manual.id, "manual".to_string())]
+        );
+        assert!(db.games_with_extra_key("logoBackfill").unwrap().is_empty());
     }
 }

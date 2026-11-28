@@ -20,6 +20,7 @@ import { store } from "../lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { extensionEntries } from "./ExtensionIcon";
 import { Menu, type MenuEntry } from "./Menu";
+import { shortcutMenuEntry } from "./shortcutMenu";
 import type { PopoverAnchor } from "./Popover";
 
 const tr = translator(shellMenus);
@@ -92,6 +93,7 @@ export function MultiContextMenu(props: {
     },
     { kind: "submenu", label: tr("completionStatus"), entries: statusEntries },
     { kind: "submenu", label: tr("categories"), entries: categoryEntries },
+    shortcutMenuEntry(() => props.games.map((g) => g.id)),
     {
       label: tr("edit"),
       icon: iconOf(Pencil),

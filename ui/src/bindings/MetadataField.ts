@@ -3,4 +3,4 @@
 /**
  * A metadata field that sources can provide.
  */
-export type MetadataField = "description" | "releaseDate" | "developers" | "publishers" | "genres" | "tags" | "features" | "series" | "ageRatings" | "platforms" | "gameModes" | "themes" | "perspectives" | "criticScore" | "communityScore" | "installSize" | "timeToBeat";
+export type MetadataField = "description" | "releaseDate" | "developers" | "publishers" | "genres" | "tags" | "features" | "series" | "ageRatings" | "platforms" | "gameModes" | "themes" | "perspectives" | "regions" | "version" | "manual" | "criticScore" | "communityScore" | "installSize" | "timeToBeat";

@@ -250,6 +250,8 @@ pub mod reason {
     /// Auto categories given to games that now match their filter.
     pub const AUTO_CATEGORIES: &str = "autoCategories";
     pub const LAUNCH_PROFILES: &str = "launchProfiles";
+    /// An entry's tools changed.
+    pub const TOOLS: &str = "tools";
     /// Scripts: `args.name`.
     pub const SCRIPT_SAVE: &str = "scriptSave";
     pub const SCRIPT_DELETE: &str = "scriptDelete";

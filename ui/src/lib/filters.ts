@@ -89,6 +89,7 @@ type ListKey =
   | "gameMode"
   | "theme"
   | "perspective"
+  | "region"
   | "source"
   | "category"
   | "completionStatus";
@@ -147,7 +148,8 @@ type TextKey =
   | "textInstallDir"
   | "textSourceGameId"
   | "textLaunchTarget"
-  | "textLaunchArgs";
+  | "textLaunchArgs"
+  | "version";
 
 const textField = (field: TextField, key: TextKey): FieldInfo => ({
   kind: "text",
@@ -231,6 +233,8 @@ export const FIELDS: FieldInfo[] = [
   listText("gameMode", "gameMode"),
   listText("theme", "theme"),
   listText("perspective", "perspective"),
+  listText("region", "region"),
+  textField("version", "version"),
   textField("installDir", "textInstallDir"),
   textField("sourceGameId", "textSourceGameId"),
   textField("launchTarget", "textLaunchTarget"),
@@ -246,6 +250,7 @@ export const FIELDS: FieldInfo[] = [
   list("gameMode", "gameMode", "about"),
   list("theme", "theme", "about"),
   list("perspective", "perspective", "about"),
+  list("region", "region", "about"),
   range("releaseYear", "releaseYear", "about", "year"),
   range("criticScore", "criticScore", "scores", "score", [
     fixed("75 +", 75, null),
@@ -632,6 +637,7 @@ function listNames(game: Game, field: string): string[] | undefined {
     gameMode: game.gameModes,
     theme: game.themes,
     perspective: game.perspectives,
+    region: game.regions,
   };
   return names[field];
 }
@@ -700,6 +706,8 @@ function textValues(game: Game, field: TextField): (string | null)[] {
       return [game.notes];
     case "installDir":
       return [game.installDir];
+    case "version":
+      return [game.version];
     case "anyText":
       return [game.name, game.description, game.notes];
     case "sourceGameId":

@@ -26,6 +26,10 @@ const MIN_INTERVAL: Duration = Duration::from_millis(500);
 const COVER_SIZES: [(u32, u32); 3] = [(600, 900), (342, 482), (660, 930)];
 /// Filters sent with every image query.
 const SAFE_FILTERS: &str = "types=static&nsfw=false&humor=false&epilepsy=false";
+/// Logo styles the automatic fetch takes (the picker offers all of them).
+const LOGO_STYLES: &str = "styles=official,white";
+/// Logos are transparent artwork, so only formats with an alpha channel.
+const LOGO_MIMES: &str = "mimes=image/png,image/webp";
 /// How many of the best-ranked images to try downloading before giving up.
 const DOWNLOAD_TRIES: usize = 3;
 
@@ -37,6 +41,7 @@ pub(crate) fn checked_key(kind: ImageKind) -> &'static str {
     match kind {
         ImageKind::Cover => "steamGridDbCoverCheckedAt",
         ImageKind::Background => "steamGridDbBackgroundCheckedAt",
+        ImageKind::Logo => "steamGridDbLogoCheckedAt",
         // Icons are never looked up there; the key only keeps the match exhaustive.
         ImageKind::Icon => "steamGridDbIconCheckedAt",
     }
@@ -44,10 +49,11 @@ pub(crate) fn checked_key(kind: ImageKind) -> &'static str {
 
 /// Every `games.extra` key that records a search finding nothing (SteamGridDB, IGDB): cleared
 /// when the name searches use changes.
-pub(crate) fn lookup_markers() -> [&'static str; 3] {
+pub(crate) fn lookup_markers() -> [&'static str; 4] {
     [
         checked_key(ImageKind::Cover),
         checked_key(ImageKind::Background),
+        checked_key(ImageKind::Logo),
         super::igdb::CHECKED_KEY,
     ]
 }
@@ -207,6 +213,10 @@ impl SteamGridDb {
                 Some(&COVER_SIZES),
             ),
             ImageKind::Background => (format!("/heroes/game/{game_id}?{SAFE_FILTERS}"), None),
+            ImageKind::Logo => (
+                format!("/logos/game/{game_id}?{LOGO_STYLES}&{LOGO_MIMES}&{SAFE_FILTERS}"),
+                None,
+            ),
             // Tray icons come from local sources and the stores, never from SteamGridDB.
             ImageKind::Icon => return Ok(Vec::new()),
         };
@@ -214,6 +224,15 @@ impl SteamGridDb {
             return Ok(Vec::new());
         };
         Ok(rank_images(parse_images(&body)?, sizes))
+    }
+
+    /// Download URLs of a Steam game's logos, asked by app id (no game lookup needed).
+    fn steam_logo_urls(&self, app_id: &str) -> Result<Vec<String>> {
+        let path = format!("/logos/steam/{app_id}?{LOGO_STYLES}&{LOGO_MIMES}&{SAFE_FILTERS}");
+        let Some(body) = self.get(&path)? else {
+            return Ok(Vec::new());
+        };
+        Ok(rank_images(parse_images(&body)?, None))
     }
 
     /// Every suitable image for the picker, best first: grids (covers), heroes (backgrounds) or
@@ -230,6 +249,10 @@ impl SteamGridDb {
             ImageKind::Background => (
                 format!("/heroes/game/{game_id}?{SAFE_FILTERS}"),
                 "SteamGridDB · hero",
+            ),
+            ImageKind::Logo => (
+                format!("/logos/game/{game_id}?{LOGO_MIMES}&{SAFE_FILTERS}"),
+                "SteamGridDB · logo",
             ),
             ImageKind::Icon => (
                 format!("/icons/game/{game_id}?{SAFE_FILTERS}"),
@@ -254,7 +277,7 @@ impl SteamGridDb {
             .collect())
     }
 
-    /// Looks the game up and downloads its best cover or background. `Ok(None)` means
+    /// Looks the game up and downloads its best cover, background or logo. `Ok(None)` means
     /// SteamGridDB has nothing suitable; errors are transient or key problems and should not be
     /// remembered as "checked".
     pub fn fetch_image(
@@ -263,15 +286,28 @@ impl SteamGridDb {
         lookup: &Lookup<'_>,
         kind: ImageKind,
     ) -> Result<Option<(&'static str, Vec<u8>)>> {
-        let Some(game_id) = self.resolve_game(lookup)? else {
-            return Ok(None);
+        let urls = if kind == ImageKind::Logo
+            && let Some(app_id) = steam_app_id(lookup)
+        {
+            self.steam_logo_urls(app_id)?
+        } else {
+            let Some(game_id) = self.resolve_game(lookup)? else {
+                return Ok(None);
+            };
+            self.image_urls(game_id, kind)?
         };
-        let urls = self.image_urls(game_id, kind)?;
         Ok(urls
             .iter()
             .take(DOWNLOAD_TRIES)
             .find_map(|url| download(http, url)))
     }
+}
+
+/// The Steam app id of a lookup for a Steam game, which SteamGridDB serves logos for directly.
+fn steam_app_id<'a>(lookup: &Lookup<'a>) -> Option<&'a str> {
+    lookup.source_game_id.filter(|id| {
+        lookup.source == "steam" && !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())
+    })
 }
 
 fn normalize_key(key: Option<String>) -> Option<String> {
@@ -420,6 +456,30 @@ mod tests {
         {"id":3,"score":0,"style":"alternate","width":920,"height":430,"nsfw":false,"humor":false,"epilepsy":false,"upvotes":50,"downvotes":0,"url":"https://cdn2.steamgriddb.com/grid/wide.png"},
         {"id":4,"score":0,"style":"alternate","width":342,"height":482,"nsfw":false,"humor":false,"epilepsy":false,"upvotes":7,"downvotes":2,"url":"https://cdn2.steamgriddb.com/grid/b.jpg"},
         {"id":5,"score":0,"style":"alternate","width":600,"height":900,"nsfw":false,"humor":true,"epilepsy":false,"upvotes":40,"downvotes":0,"url":"https://cdn2.steamgriddb.com/grid/funny.png"}]}"#;
+
+    #[test]
+    fn parses_logos_and_finds_steam_app_ids() {
+        let body = r#"{"success":true,"data":[
+            {"id":1,"score":3,"style":"official","width":800,"height":300,"nsfw":false,"humor":false,"epilepsy":false,"upvotes":0,"downvotes":0,"url":"https://cdn2.steamgriddb.com/logo/a.png"},
+            {"id":2,"score":1,"style":"white","width":600,"height":200,"nsfw":false,"humor":false,"epilepsy":false,"upvotes":0,"downvotes":0,"url":"https://cdn2.steamgriddb.com/logo/b.webp"}]}"#;
+        assert_eq!(
+            rank_images(parse_images(body).unwrap(), None),
+            vec![
+                "https://cdn2.steamgriddb.com/logo/a.png",
+                "https://cdn2.steamgriddb.com/logo/b.webp"
+            ]
+        );
+        let lookup = |source, id| Lookup {
+            name: "Portal",
+            source,
+            source_game_id: id,
+            year: None,
+        };
+        assert_eq!(steam_app_id(&lookup("steam", Some("400"))), Some("400"));
+        assert_eq!(steam_app_id(&lookup("epic", Some("400"))), None);
+        assert_eq!(steam_app_id(&lookup("steam", Some("a/b"))), None);
+        assert_eq!(steam_app_id(&lookup("steam", None)), None);
+    }
 
     #[test]
     fn parses_search_and_picks_exact_name_first() {

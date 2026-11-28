@@ -116,7 +116,7 @@ fn strings(list: &[String]) -> FieldValue {
 }
 
 /// The list fields of [`Game`] shown as sets, with their keys.
-const LIST_FIELDS: [&str; 11] = [
+const LIST_FIELDS: [&str; 12] = [
     "developers",
     "publishers",
     "genres",
@@ -128,12 +128,13 @@ const LIST_FIELDS: [&str; 11] = [
     "gameModes",
     "themes",
     "perspectives",
+    "regions",
 ];
 
 impl EntrySnapshot {
     /// The field table: what the log shows of `game`. `categories` maps category ids to names.
     pub fn of(game: &Game, categories: &HashMap<String, String>, extras: &EntryExtras) -> Self {
-        let lists: [&Vec<String>; 11] = [
+        let lists: [&Vec<String>; 12] = [
             &game.developers,
             &game.publishers,
             &game.genres,
@@ -145,6 +146,7 @@ impl EntrySnapshot {
             &game.game_modes,
             &game.themes,
             &game.perspectives,
+            &game.regions,
         ];
         let extra = |key: &str| {
             FieldValue::Value(
@@ -161,6 +163,8 @@ impl EntrySnapshot {
             ("kind", plain(&game.kind)),
             ("description", opt(&game.description)),
             ("releaseDate", opt(&game.release_date)),
+            ("version", opt(&game.version)),
+            ("manual", opt(&game.manual)),
         ];
         fields.extend(LIST_FIELDS.iter().zip(lists).map(|(k, l)| (*k, strings(l))));
         fields.extend([
@@ -271,6 +275,7 @@ impl EntrySnapshot {
                 "background",
                 FieldValue::Opaque(game.background_path.clone()),
             ),
+            ("logo", FieldValue::Opaque(game.logo_path.clone())),
             ("icon", FieldValue::Opaque(game.icon_path.clone())),
         ]);
         Self {
@@ -433,6 +438,7 @@ mod tests {
             cover_path: Some("images/covers/a.jpg".into()),
             icon_path: None,
             background_path: None,
+            logo_path: None,
             description: Some("A rogue-like.".into()),
             release_date: None,
             developers: vec!["Supergiant Games".into()],
@@ -446,6 +452,9 @@ mod tests {
             game_modes: Vec::new(),
             themes: Vec::new(),
             perspectives: Vec::new(),
+            regions: Vec::new(),
+            version: None,
+            manual: None,
             critic_score: None,
             community_score: None,
             install_size: None,
@@ -513,6 +522,19 @@ mod tests {
         // Set from nothing: no `before`.
         assert_eq!(changes[1].before, None);
         assert_eq!(changes[1].mode, ChangeMode::Value);
+    }
+
+    #[test]
+    fn regions_version_and_manual_show_in_the_diff() {
+        let a = game();
+        let mut b = a.clone();
+        b.regions = vec!["Europe".into()];
+        b.version = Some("1.4.2".into());
+        b.manual = Some("https://example.org/manual".into());
+        let changes = diff(&snap(&a), &snap(&b));
+        assert_eq!(fields(&changes), ["version", "manual", "regions"]);
+        assert_eq!(changes[0].after, Some(json!("1.4.2")));
+        assert_eq!(changes[2].mode, ChangeMode::Set);
     }
 
     #[test]

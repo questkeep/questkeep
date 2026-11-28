@@ -14,6 +14,7 @@ mod install_dirs;
 mod live;
 mod local;
 mod scan;
+mod trailers;
 pub mod vdf;
 mod web;
 
@@ -254,6 +255,13 @@ impl LibraryProvider for SteamProvider {
         live::fetch_news(app_id)
     }
 
+    fn trailers(
+        &self,
+        app_id: &str,
+    ) -> Result<Vec<questkeep_store_api::model::Trailer>, ProviderError> {
+        trailers::fetch_trailers(app_id)
+    }
+
     /// The user's achievements: with the Web API key when one is configured, else with the store
     /// sign-in. `Ok(None)` without either (nothing to read them with) or for games without
     /// achievements.
@@ -334,6 +342,24 @@ impl LibraryProvider for SteamProvider {
                     "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_hero.jpg"
                 ),
                 format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"),
+            ]
+            .map(ImageCandidate::Url),
+        );
+        candidates
+    }
+
+    /// The title as transparent artwork: the local library cache, then the CDN.
+    fn logo_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
+        if !is_app_id(app_id) {
+            return Vec::new();
+        }
+        let mut candidates = self.cached_art(app_id, &["logo.png"]);
+        candidates.extend(
+            [
+                format!(
+                    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}/logo.png"
+                ),
+                format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/logo.png"),
             ]
             .map(ImageCandidate::Url),
         );
@@ -1067,6 +1093,32 @@ mod tests {
             ImageCandidate::Url(u) if u.contains("page_bg_generated")
         )));
         assert!(provider.background_candidates("x1").is_empty());
+    }
+
+    #[test]
+    fn logo_candidates_prefer_local_cache_then_cdn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("appcache/librarycache");
+        let hashed = cache.join("123/abc");
+        fs::create_dir_all(&hashed).unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        let c = provider.logo_candidates("123");
+        assert_eq!(
+            c,
+            [
+                ImageCandidate::File(cache.join("123_logo.png")),
+                ImageCandidate::File(cache.join("123").join("logo.png")),
+                ImageCandidate::File(hashed.join("logo.png")),
+                ImageCandidate::Url(
+                    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/123/logo.png"
+                        .into()
+                ),
+                ImageCandidate::Url(
+                    "https://cdn.cloudflare.steamstatic.com/steam/apps/123/logo.png".into()
+                ),
+            ]
+        );
+        assert!(provider.logo_candidates("x1").is_empty());
     }
 
     #[test]

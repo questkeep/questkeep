@@ -77,6 +77,15 @@ impl DataPaths {
         self.root.join("images")
     }
 
+    /// Icons of the shortcuts Questkeep made (they must outlive the image cache).
+    pub fn tool_icons_dir(&self) -> PathBuf {
+        self.images_dir().join("tool-icons")
+    }
+
+    pub fn shortcut_icons_dir(&self) -> PathBuf {
+        self.root.join("shortcut-icons")
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.root.join("logs")
     }

@@ -44,6 +44,8 @@ const en = {
   imgCoverHint: "Grid view and game page.",
   imgBackground: "Background",
   imgBackgroundHint: "Behind the game page header.",
+  imgLogo: "Logo",
+  imgLogoHint: "The game's title as artwork, in the game page header.",
   imgIcon: "Icon",
   imgIconHint: "List view, tray and command bar.",
   imagesHint:
@@ -90,6 +92,10 @@ const en = {
   fieldAgeRating: "Age rating",
   fieldGameModes: "Game modes",
   fieldPerspective: "Perspective",
+  fieldRegions: "Regions",
+  fieldVersion: "Version",
+  fieldManual: "Manual",
+  manualPlaceholder: "File path or web address",
   fieldThemes: "Themes",
   linksHint:
     "Links from all sources are shown on the game page. Hide the ones you don't need, or add your own.",
@@ -155,6 +161,8 @@ export const gameEdit: Translations<typeof en> = {
     imgCoverHint: "Rasteransicht und Spielseite.",
     imgBackground: "Hintergrund",
     imgBackgroundHint: "Hinter dem Kopf der Spielseite.",
+    imgLogo: "Logo",
+    imgLogoHint: "Der Spieltitel als Grafik im Kopf der Spielseite.",
     imgIcon: "Symbol",
     imgIconHint: "Listenansicht, Infobereich und Befehlsleiste.",
     imagesHint:
@@ -201,6 +209,10 @@ export const gameEdit: Translations<typeof en> = {
     fieldAgeRating: "Altersfreigabe",
     fieldGameModes: "Spielmodi",
     fieldPerspective: "Perspektive",
+    fieldRegions: "Regionen",
+    fieldVersion: "Version",
+    fieldManual: "Handbuch",
+    manualPlaceholder: "Dateipfad oder Webadresse",
     fieldThemes: "Themen",
     linksHint:
       "Links aus allen Quellen werden auf der Spielseite angezeigt. Blende nicht benötigte aus oder füge eigene hinzu.",
@@ -262,6 +274,8 @@ export const gameEdit: Translations<typeof en> = {
     imgCoverHint: "Vue en grille et page du jeu.",
     imgBackground: "Arrière-plan",
     imgBackgroundHint: "Derrière l’en-tête de la page du jeu.",
+    imgLogo: "Logo",
+    imgLogoHint: "Le titre du jeu en image, dans l’en-tête de la page du jeu.",
     imgIcon: "Icône",
     imgIconHint: "Vue en liste, zone de notification et barre de commandes.",
     imagesHint:
@@ -308,6 +322,10 @@ export const gameEdit: Translations<typeof en> = {
     fieldAgeRating: "Classification d’âge",
     fieldGameModes: "Modes de jeu",
     fieldPerspective: "Perspective",
+    fieldRegions: "Régions",
+    fieldVersion: "Version",
+    fieldManual: "Manuel",
+    manualPlaceholder: "Chemin de fichier ou adresse web",
     fieldThemes: "Thèmes",
     linksHint:
       "Les liens de toutes les sources sont affichés sur la page du jeu. Masquez ceux dont vous n’avez pas besoin ou ajoutez les vôtres.",
@@ -369,6 +387,8 @@ export const gameEdit: Translations<typeof en> = {
     imgCoverHint: "Vista a griglia e pagina del gioco.",
     imgBackground: "Sfondo",
     imgBackgroundHint: "Dietro l’intestazione della pagina del gioco.",
+    imgLogo: "Logo",
+    imgLogoHint: "Il titolo del gioco come immagine, nell’intestazione della pagina del gioco.",
     imgIcon: "Icona",
     imgIconHint: "Vista elenco, area di notifica e barra dei comandi.",
     imagesHint:
@@ -415,6 +435,10 @@ export const gameEdit: Translations<typeof en> = {
     fieldAgeRating: "Classificazione per età",
     fieldGameModes: "Modalità di gioco",
     fieldPerspective: "Prospettiva",
+    fieldRegions: "Regioni",
+    fieldVersion: "Versione",
+    fieldManual: "Manuale",
+    manualPlaceholder: "Percorso del file o indirizzo web",
     fieldThemes: "Temi",
     linksHint:
       "I link di tutte le fonti sono mostrati nella pagina del gioco. Nascondi quelli che non ti servono o aggiungi i tuoi.",
@@ -476,6 +500,8 @@ export const gameEdit: Translations<typeof en> = {
     imgCoverHint: "Vista de cuadrícula y página del juego.",
     imgBackground: "Fondo",
     imgBackgroundHint: "Detrás de la cabecera de la página del juego.",
+    imgLogo: "Logo",
+    imgLogoHint: "El título del juego como imagen, en la cabecera de la página del juego.",
     imgIcon: "Icono",
     imgIconHint: "Vista de lista, bandeja del sistema y barra de comandos.",
     imagesHint:
@@ -522,6 +548,10 @@ export const gameEdit: Translations<typeof en> = {
     fieldAgeRating: "Clasificación por edad",
     fieldGameModes: "Modos de juego",
     fieldPerspective: "Perspectiva",
+    fieldRegions: "Regiones",
+    fieldVersion: "Versión",
+    fieldManual: "Manual",
+    manualPlaceholder: "Ruta de archivo o dirección web",
     fieldThemes: "Temas",
     linksHint:
       "Los enlaces de todas las fuentes se muestran en la página del juego. Oculta los que no necesites o añade los tuyos.",
@@ -583,6 +613,8 @@ export const gameEdit: Translations<typeof en> = {
     imgCoverHint: "Visualização em grade e página do jogo.",
     imgBackground: "Plano de fundo",
     imgBackgroundHint: "Atrás do cabeçalho da página do jogo.",
+    imgLogo: "Logo",
+    imgLogoHint: "O título do jogo como imagem, no cabeçalho da página do jogo.",
     imgIcon: "Ícone",
     imgIconHint: "Visualização em lista, bandeja do sistema e barra de comandos.",
     imagesHint:
@@ -629,6 +661,10 @@ export const gameEdit: Translations<typeof en> = {
     fieldAgeRating: "Classificação etária",
     fieldGameModes: "Modos de jogo",
     fieldPerspective: "Perspectiva",
+    fieldRegions: "Regiões",
+    fieldVersion: "Versão",
+    fieldManual: "Manual",
+    manualPlaceholder: "Caminho do arquivo ou endereço web",
     fieldThemes: "Temas",
     linksHint:
       "Os links de todas as fontes aparecem na página do jogo. Oculte os que você não precisa ou adicione os seus.",

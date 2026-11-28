@@ -139,6 +139,7 @@ const LIST_FIELDS = {
   gameMode: "gameModes",
   theme: "themes",
   perspective: "perspectives",
+  region: "regions",
 } as const satisfies Partial<Record<GroupBy, keyof Game>>;
 
 /** The label of the group of games without a value. */

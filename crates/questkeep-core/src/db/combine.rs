@@ -73,6 +73,13 @@ fn move_user_data(tx: &Transaction<'_>, from: &str, to: &str) -> Result<()> {
         "UPDATE launch_profiles SET entry_id = ?2 WHERE entry_id = ?1",
         [from, to],
     )?;
+    // Tools follow the entry; the ones moved in go after the entry's own.
+    tx.execute(
+        "UPDATE game_tools SET entry_id = ?2, \
+         position = position + (SELECT COUNT(*) FROM game_tools WHERE entry_id = ?2) \
+         WHERE entry_id = ?1",
+        [from, to],
+    )?;
     tx.execute(
         "UPDATE games SET default_profile = (SELECT default_profile FROM games WHERE id = ?1) \
          WHERE id = ?2 AND default_profile IS NULL",

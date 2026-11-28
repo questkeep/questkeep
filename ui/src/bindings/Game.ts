@@ -57,13 +57,25 @@ iconPath: string | null,
  */
 backgroundPath: string | null, 
 /**
+ * Absolute path of the cached logo (the title as artwork) when returned by the library API.
+ */
+logoPath: string | null, 
+/**
  * Plain-text description from store metadata.
  */
 description: string | null, 
 /**
  * Release date as `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
  */
-releaseDate: string | null, developers: Array<string>, publishers: Array<string>, genres: Array<string>, tags: Array<string>, features: Array<string>, series: Array<string>, ageRatings: Array<string>, platforms: Array<string>, gameModes: Array<string>, themes: Array<string>, perspectives: Array<string>, criticScore: Score | null, communityScore: Score | null, installSize: number | null, timeToBeat: TimeToBeat | null, 
+releaseDate: string | null, developers: Array<string>, publishers: Array<string>, genres: Array<string>, tags: Array<string>, features: Array<string>, series: Array<string>, ageRatings: Array<string>, platforms: Array<string>, gameModes: Array<string>, themes: Array<string>, perspectives: Array<string>, regions: Array<string>, 
+/**
+ * The game's version, free text.
+ */
+version: string | null, 
+/**
+ * File path (absolute, or relative to the install folder) or http(s) URL of the manual.
+ */
+manual: string | null, criticScore: Score | null, communityScore: Score | null, installSize: number | null, timeToBeat: TimeToBeat | null, 
 /**
  * Pages about the game from all sources.
  */

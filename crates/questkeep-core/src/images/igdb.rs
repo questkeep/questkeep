@@ -325,7 +325,7 @@ impl Igdb {
         lookup: &IgdbLookup<'_>,
         kind: super::ImageKind,
     ) -> Result<Vec<ImageOption>> {
-        if kind == super::ImageKind::Icon {
+        if matches!(kind, super::ImageKind::Icon | super::ImageKind::Logo) {
             return Ok(Vec::new());
         }
         let id = match lookup.id {
@@ -346,6 +346,24 @@ impl Igdb {
             &self.query(&self.inner.games_url, &body)?,
             kind,
         ))
+    }
+
+    /// The game's trailers (YouTube videos), for the game page.
+    pub fn videos(
+        &self,
+        lookup: &IgdbLookup<'_>,
+    ) -> Result<Vec<questkeep_store_api::model::Trailer>> {
+        let id = match lookup.id {
+            Some(id) => id,
+            None => {
+                let Some(id) = self.find_game(lookup)?.and_then(|g| g.id) else {
+                    return Ok(Vec::new());
+                };
+                id
+            }
+        };
+        let body = format!("fields videos.video_id,videos.name; where id = {id};");
+        Ok(parse_videos(&self.query(&self.inner.games_url, &body)?))
     }
 
     /// The linked game, or else the search hit with the same name.
@@ -413,6 +431,45 @@ fn search_text(name: &str) -> String {
         .collect::<String>()
         .trim()
         .to_string()
+}
+
+/// The YouTube videos of a `games` reply (`videos.video_id`, `videos.name`). Trailers come
+/// first, then the rest in IGDB's order.
+pub(crate) fn parse_videos(body: &str) -> Vec<questkeep_store_api::model::Trailer> {
+    let Ok(games) = serde_json::from_str::<serde_json::Value>(body) else {
+        return Vec::new();
+    };
+    let mut videos: Vec<questkeep_store_api::model::Trailer> = games
+        .as_array()
+        .and_then(|g| g.first())
+        .and_then(|g| g["videos"].as_array())
+        .map(|videos| {
+            videos
+                .iter()
+                .filter_map(|v| {
+                    let id = v["video_id"].as_str()?.trim();
+                    // YouTube ids: letters, digits, - and _.
+                    if id.is_empty()
+                        || !id
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    {
+                        return None;
+                    }
+                    Some(questkeep_store_api::model::Trailer {
+                        name: v["name"].as_str().unwrap_or_default().trim().to_string(),
+                        thumbnail: Some(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg")),
+                        video: None,
+                        video_hd: None,
+                        youtube_id: Some(id.to_string()),
+                        source: "igdb".into(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    videos.sort_by_key(|v| !v.name.to_lowercase().contains("trailer"));
+    videos
 }
 
 pub(crate) fn search_body(name: &str) -> String {
@@ -694,7 +751,8 @@ fn parse_images(body: &str, kind: super::ImageKind) -> Vec<ImageOption> {
                     .map(|s| option(s, "1080p", "screenshot_med", "IGDB · screenshot")),
             )
             .collect(),
-        super::ImageKind::Icon => Vec::new(),
+        // IGDB has no logos.
+        super::ImageKind::Logo | super::ImageKind::Icon => Vec::new(),
     }
 }
 
@@ -1091,6 +1149,20 @@ mod tests {
             year: None,
             id: None,
         }
+    }
+
+    #[test]
+    fn parses_youtube_videos_trailers_first() {
+        let body = r#"[{"id":1,"videos":[{"name":"Gameplay","video_id":"abc_DEF-1"},{"name":"Launch Trailer","video_id":"xyz"},{"name":"bad","video_id":"a/b"}]}]"#;
+        let videos = parse_videos(body);
+        assert_eq!(videos.len(), 2);
+        assert_eq!(videos[0].youtube_id.as_deref(), Some("xyz"));
+        assert_eq!(
+            videos[1].thumbnail.as_deref(),
+            Some("https://i.ytimg.com/vi/abc_DEF-1/hqdefault.jpg")
+        );
+        assert!(parse_videos("[]").is_empty());
+        assert!(parse_videos("oops").is_empty());
     }
 
     #[test]

@@ -70,6 +70,7 @@ export const GAME_GROUPS: Option<GroupBy>[] = [
   option("gameMode", "groupGameMode"),
   option("theme", "groupTheme"),
   option("perspective", "groupPerspective"),
+  option("region", "groupRegion"),
 ];
 
 export const NUMBER_GROUPS: Option<GroupBy>[] = [

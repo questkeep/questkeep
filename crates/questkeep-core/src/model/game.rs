@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 pub use questkeep_store_api::model::{
     Achievement, Achievements, ActionKind, CatalogHit, GameLink, GameMetadata, GameNews,
-    ImportedGame, NewsItem, PlayAction, Score, TimeToBeat, TrackingMode,
+    ImportedGame, NewsItem, PlayAction, Score, TimeToBeat, TrackingMode, Trailer,
 };
 
 /// Provider id used for games added by hand.
@@ -76,6 +76,8 @@ pub struct Game {
     pub icon_path: Option<String>,
     /// Absolute path of the cached background (hero) image when returned by the library API.
     pub background_path: Option<String>,
+    /// Absolute path of the cached logo (the title as artwork) when returned by the library API.
+    pub logo_path: Option<String>,
     /// Plain-text description from store metadata.
     pub description: Option<String>,
     /// Release date as `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
@@ -91,6 +93,11 @@ pub struct Game {
     pub game_modes: Vec<String>,
     pub themes: Vec<String>,
     pub perspectives: Vec<String>,
+    pub regions: Vec<String>,
+    /// The game's version, free text.
+    pub version: Option<String>,
+    /// File path (absolute, or relative to the install folder) or http(s) URL of the manual.
+    pub manual: Option<String>,
     pub critic_score: Option<Score>,
     pub community_score: Option<Score>,
     #[ts(type = "number | null")]
@@ -329,10 +336,10 @@ mod tests {
             "installDir": null, "playAction": null, "playtimeSeconds": 0, "playCount": 0,
             "lastPlayed": null, "dateAdded": "2026-01-01T00:00:00Z", "favorite": false,
             "hidden": false, "kind": "game", "detectLaunches": true, "ignoredProcesses": [],
-            "coverPath": null, "iconPath": null, "backgroundPath": null, "description": null,
+            "coverPath": null, "iconPath": null, "backgroundPath": null, "logoPath": null, "description": null,
             "releaseDate": null, "developers": [], "publishers": [], "genres": [], "tags": [],
             "features": [], "series": [], "ageRatings": [], "platforms": [], "gameModes": [],
-            "themes": [], "perspectives": [], "criticScore": null, "communityScore": null,
+            "themes": [], "perspectives": [], "regions": [], "version": null, "manual": null, "criticScore": null, "communityScore": null,
             "installSize": null, "timeToBeat": null, "links": [], "fieldSources": {},
             "completionStatus": null, "userScore": null, "notes": null, "categories": [],
             "copies": [], "metadataUpdatedAt": null, "extra": {}

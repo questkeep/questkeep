@@ -128,6 +128,8 @@ pub fn variables(ctx: &Context<'_>) -> Vec<ScriptVariable> {
             .unwrap_or_default(),
     );
     add(G, "QK_RELEASE_DATE", opt(&g.release_date));
+    add(G, "QK_VERSION", opt(&g.version));
+    add(G, "QK_MANUAL", opt(&g.manual));
     add(G, "QK_PLAYTIME_SECONDS", g.playtime_seconds.to_string());
     add(G, "QK_PLAYTIME", duration(g.playtime_seconds));
     add(G, "QK_PLAY_COUNT", g.play_count.to_string());
@@ -150,10 +152,12 @@ pub fn variables(ctx: &Context<'_>) -> Vec<ScriptVariable> {
     add(Li, "QK_GAME_MODES", list(&g.game_modes));
     add(Li, "QK_THEMES", list(&g.themes));
     add(Li, "QK_PERSPECTIVES", list(&g.perspectives));
+    add(Li, "QK_REGIONS", list(&g.regions));
     add(Li, "QK_AGE_RATINGS", list(&g.age_ratings));
 
     add(I, "QK_COVER_PATH", opt(&g.cover_path));
     add(I, "QK_BACKGROUND_PATH", opt(&g.background_path));
+    add(I, "QK_LOGO_PATH", opt(&g.logo_path));
     add(I, "QK_ICON_PATH", opt(&g.icon_path));
 
     add(

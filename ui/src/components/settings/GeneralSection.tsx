@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js";
+import type { AutoShortcuts } from "../../bindings/AutoShortcuts";
 import type { StartupPage } from "../../bindings/StartupPage";
 import { LOCALE_NAMES, LOCALES, resolveLocale, translator } from "../../i18n";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
@@ -88,6 +89,25 @@ export function GeneralSection(props: { model: SettingsModel }) {
               option="watchInstallFolders"
               checked={current().watchInstallFolders}
             />
+            <div class="settings-row">
+              <label for="auto-shortcuts">{tr("autoShortcuts")}</label>
+              <Select<AutoShortcuts>
+                id="auto-shortcuts"
+                class="input settings-row__input"
+                aria-describedby="auto-shortcuts-hint"
+                value={current().autoShortcuts}
+                options={[
+                  { value: "off", label: tr("autoShortcutsOff") },
+                  { value: "desktop", label: tr("autoShortcutsDesktop") },
+                  { value: "startMenu", label: tr("autoShortcutsStartMenu") },
+                  { value: "both", label: tr("autoShortcutsBoth") },
+                ]}
+                onChange={(autoShortcuts) => void props.model.update({ autoShortcuts })}
+              />
+            </div>
+            <p class="field__hint" id="auto-shortcuts-hint">
+              {tr("autoShortcutsHint")}
+            </p>
           </fieldset>
           <fieldset class="fieldset settings-group">
             <legend class="fieldset__legend">{tr("playtimeGroup")}</legend>

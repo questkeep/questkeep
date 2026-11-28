@@ -38,6 +38,7 @@ export function settingEntries(): SearchEntry[] {
     e("scanOnStartup", "general", general("scanOnStartup")),
     e("autoSync", "general", general("autoSync")),
     e("watchInstallFolders", "general", general("watchInstallFolders")),
+    e("autoShortcuts", "general", general("autoShortcuts")),
     e("detectExternalLaunches", "general", general("detectExternalLaunches")),
     e("showStartPage", "general", general("showStartPage")),
     e("showStatistics", "general", general("showStatistics")),

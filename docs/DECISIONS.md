@@ -35,6 +35,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   from `mise ls-remote --minimum-release-age 2d` (Node: newest release of the LTS major;
   `mise upgrade --bump` ignores LTS, jdx/mise#4051), keeping the 2-day minimum age used for npm and
   Cargo. GITHUB_TOKEN pull requests do not start CI, so reopen the PR to run the checks.
+- **Debug builds let go of a console made just for them** (`console.rs`): they are console programs so `pnpm dev` shows the logs, but a shortcut or link that starts the debug exe would leave a console window open. If no other process shares the console (`GetConsoleProcessList` = 1), `FreeConsole` closes it; release builds have no console at all.
 
 ## Architecture
 
@@ -110,6 +111,11 @@ Short log of choices made while building. Newest at the bottom of each section.
   so a name can't tell instances apart; each starts the game in its instance folder, and Sodium
   rewrites the command line on Windows (seen with Prism), so `--gameDir` alone isn't enough.
   Command lines are read only while such a game is tracked: on Windows that opens each new process.
+- **Tools are their own list, not non-play launch profiles:** a profile is what Play can start (tracked, scripts, playtime); a config tool or a wiki link is something else that must never become the default or count as playing. `game_tools` rows (an action JSON like profiles) follow the entry on combine; a relative program path starts from the install folder, and Windows' "needs elevation" error is retried elevated, since config tools often ask for admin rights. Link profiles reuse the profile model with a `uri` action and keep the game's folder for tracking.
+- **Tool icons: picked pictures are copied, defaults are derived.** A picked picture (or a program's icon) is copied to `images/tool-icons/<tool id>-<time>.<ext>` when picked, so the Edit form can preview it; saving keeps only the files the tools still use. Without one, a program's icon is taken once into `tool-icons/auto` (keyed by the program path) and a link gets its site's favicon from a second `SiteIcons` cache (`images/tool-sites`), which, unlike the price sites', never forgets hosts.
+- **The action row is planned from measured widths** (`planActionRow`): the tool buttons are measured named and as icons in a hidden copy, then the page picks, best first, one line with names, one line with icons, one line with Favorite/Hide/Edit folded, else Play's group on its own line with names, icons, or as many icons as fit plus "…". Measuring both forms up front avoids the flicker of trying a form and checking whether it wrapped.
+- **Shortcuts start Questkeep, not the game:** `questkeep.exe --start <id>` keeps tracking, scripts and the store launch path in one place, and the shortcut keeps working when the game moves between stores. Questkeep records each file it writes (`game_shortcuts`) and deletes only files that still point at `--start <that id>`, so a shortcut the user renamed, moved or re-targeted is never touched. The icon is the game's own executable when it starts one, else its icon PNG wrapped in an .ico (PNG-in-ICO) under `<data>/shortcut-icons`. The COM calls (IShellLinkW) need `unsafe`; the module allows it like the other platform helpers.
+- **"Newly installed" means installed by this sync, not added by it:** a store's first sync brings every installed game at once; counting those would put hundreds of shortcuts on the desktop. New entries count only when the store had been synced before; games that were already installed get shortcuts through multi-select instead. Automatic shortcuts go away when the game is uninstalled; ones the user asked for stay until the game is removed.
 
 ## Steam and covers
 
@@ -252,6 +258,10 @@ Short log of choices made while building. Newest at the bottom of each section.
   default method keeps other providers untouched. With a key, SteamGridDB is tried first and the
   logo is the fallback. Covers already stored are never replaced automatically (a user-picked
   cover is indistinguishable from a fetched one); `refetch_artwork` replaces on request.
+- **Logos come from the store first, then SteamGridDB** (official and white styles only), like backgrounds. Steam's `logo.png` is on the CDN for most apps; newer apps only have hashed paths, which is when SteamGridDB fills in.
+- **Libraries from before logos get one logo search per game.** Logos are only fetched with a game's first metadata download, so migration 22 marks every entry without a logo (`extra.logoBackfill`); the metadata worker runs one logo job per marked game at start (store first, then SteamGridDB) and removes the mark, so it happens once, even across restarts, and new games are unaffected.
+- **Logos are sized by area, by their solid artwork, measured in the webview.** Max width/height made wide logos huge and square ones tiny; the same area (`--qk-details-logo-area*`, width = √(area × aspect)) makes them look equally big. The box is the logo's solid part (rows/columns with enough pixels of alpha ≥ 160), so glow, shadow and transparent margins spill around it instead of shrinking the letters. Measured on a canvas in the UI (the asset protocol allows the window's origin), so WebP and every other format the webview shows work, and no file or database change is needed.
+- **Trailers are fetched while the game page is open and cached for 6 hours, never stored.** Steam's `appdetails` only lists HLS/DASH streams now; the CDN still serves progressive `movie480.mp4`/`movie_max.mp4` by movie id, which a plain `<video>` plays without an HLS library (undocumented: if it goes, the card shows the poster and a link). IGDB's videos are YouTube ids: embedded through youtube-nocookie only after a click and only from an http(s) origin (Windows); `tauri://` origins get YouTube's "Error 153", so Linux links out.
 
 ## Metadata (IGDB)
 

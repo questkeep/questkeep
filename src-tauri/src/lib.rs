@@ -4,6 +4,7 @@ mod activity_layer;
 mod autostart;
 mod backups;
 mod commands;
+mod console;
 mod external;
 mod game_window;
 mod i18n;
@@ -100,11 +101,29 @@ impl AppState {
         }
     }
 
+    /// Queues the one logo search of games from before logos (marked by a migration). Runs
+    /// after the metadata queued before it.
+    pub fn queue_pending_logos(&self) {
+        if !self.library.settings().fetch_metadata {
+            return;
+        }
+        match self.library.pending_logo_ids() {
+            Ok(ids) => {
+                let queued = self.metadata.enqueue_logos(ids);
+                if queued > 0 {
+                    tracing::info!(queued, "queued logo searches");
+                }
+            }
+            Err(err) => tracing::warn!(%err, "could not list games waiting for a logo"),
+        }
+    }
+
     /// Follow-up downloads after the library changed (a scan or startup).
     pub fn queue_downloads(&self) {
         self.queue_missing_covers();
         self.queue_missing_metadata();
         self.queue_missing_icons();
+        self.queue_pending_logos();
     }
 }
 
@@ -428,6 +447,7 @@ fn note_second_start(app: &tauri::AppHandle, started: Option<&str>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    console::release_own_console();
     let mut builder = tauri::Builder::default();
     // Starting Questkeep again (e.g. from the Start menu while it waits in the tray) shows the
     // running instance instead of opening a second process. Debug builds skip it so a dev
@@ -546,6 +566,7 @@ pub fn run() {
             commands::refresh_all_metadata,
             commands::game_player_count,
             commands::game_news,
+            commands::game_trailers,
             commands::game_achievements,
             commands::game_activity,
             commands::game_sessions,
@@ -562,6 +583,13 @@ pub fn run() {
             commands::launch_profiles,
             commands::save_launch_profile,
             commands::replace_launch_profiles,
+            commands::game_tools,
+            commands::replace_game_tools,
+            commands::run_game_tool,
+            commands::tool_icons,
+            commands::tool_default_icon,
+            commands::import_tool_icon,
+            commands::create_shortcuts,
             commands::delete_launch_profile,
             commands::order_launch_profiles,
             commands::set_default_launch_profile,
@@ -621,6 +649,7 @@ pub fn run() {
             commands::set_group_merges,
             commands::open_app_folder,
             commands::open_install_folder,
+            commands::open_manual,
             commands::take_notices,
             commands::seed_fake_library,
             commands::check_update,

@@ -38,6 +38,7 @@ pub enum GroupBy {
     GameMode,
     Theme,
     Perspective,
+    Region,
     ReleaseYear,
     /// Playtime ranges.
     Playtime,

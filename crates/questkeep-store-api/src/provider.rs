@@ -6,6 +6,7 @@ use crate::auth::AccountAuth;
 pub use crate::model::AddGameOption;
 use crate::model::{
     Achievements, CatalogHit, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+    Trailer,
 };
 use crate::settings::StoreSettings;
 
@@ -130,6 +131,11 @@ pub trait LibraryProvider: Send + Sync {
     fn news(&self, _source_game_id: &str) -> Result<Option<GameNews>, ProviderError> {
         Ok(None)
     }
+    /// The game's trailers, best first. Called only while its game page is open; empty (the
+    /// default) when the store has none.
+    fn trailers(&self, _source_game_id: &str) -> Result<Vec<Trailer>, ProviderError> {
+        Ok(Vec::new())
+    }
     /// The signed-in user's achievements in the game, with the same `config` as
     /// [`scan_owned`](Self::scan_owned). `Ok(None)` (the default) when the store has none for
     /// it or no account or key is set up to read them.
@@ -161,6 +167,10 @@ pub trait LibraryProvider: Send + Sync {
     }
     /// Where a wide background / hero image for the game may be found, best first.
     fn background_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
+        Vec::new()
+    }
+    /// Where the game's logo (its title as artwork, transparent PNG) may be found, best first.
+    fn logo_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
     /// Where a small square game icon may be found, best first (local files before downloads).

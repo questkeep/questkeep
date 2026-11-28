@@ -36,6 +36,9 @@ function meta(over: Partial<GameMetadata> = {}): GameMetadata {
     gameModes: [],
     themes: [],
     perspectives: [],
+    regions: [],
+    version: null,
+    manual: null,
     criticScore: null,
     communityScore: null,
     installSize: null,
@@ -69,7 +72,7 @@ describe("edit game helpers", () => {
       links: [],
       automaticSortingName: "Hades",
       sortingName: null,
-      userImages: { cover: false, background: false, icon: false },
+      userImages: { cover: false, background: false, logo: false, icon: false },
       metadataLink: null,
       metadataName: null,
       automaticMetadataName: "",
@@ -95,6 +98,28 @@ describe("edit game helpers", () => {
     expect(edits.hiddenLinks).toEqual(["https://hidden"]);
     expect(editedCount(SECTION_FIELDS.details, edited)).toBe(1);
     expect(editedCount(SECTION_FIELDS.general, edited)).toBe(1);
+  });
+
+  it("keeps regions, version and manual as the user's edits", () => {
+    const edited = new Set<MetadataField>(["regions", "version", "manual"]);
+    expect(editedCount(SECTION_FIELDS.details, edited)).toBe(3);
+    const values = meta({
+      regions: ["Europe", "Japan"],
+      version: "1.4.2",
+      manual: "docs/manual.pdf",
+    });
+    const edits = buildEdits(values, edited, [], []);
+    expect(edits.edited).toEqual(["manual", "regions", "version"]);
+    expect(edits.meta.regions).toEqual(["Europe", "Japan"]);
+    expect(edits.meta.version).toBe("1.4.2");
+    expect(edits.meta.manual).toBe("docs/manual.pdf");
+    // The edits start the dialog with the user's values.
+    const info = {
+      automatic: meta(),
+      edits,
+    } as unknown as GameEditInfo;
+    expect(startValues(info).regions).toEqual(["Europe", "Japan"]);
+    expect(startValues(info).version).toBe("1.4.2");
   });
 
   it("parse numbers as typed", () => {

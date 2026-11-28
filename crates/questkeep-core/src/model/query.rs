@@ -46,6 +46,7 @@ pub enum ListField {
     GameMode,
     Theme,
     Perspective,
+    Region,
 }
 
 impl ListField {
@@ -65,6 +66,7 @@ impl ListField {
             Self::GameMode => F::GameModes,
             Self::Theme => F::Themes,
             Self::Perspective => F::Perspectives,
+            Self::Region => F::Regions,
         })
     }
 }
@@ -136,6 +138,9 @@ pub enum TextField {
     GameMode,
     Theme,
     Perspective,
+    Region,
+    /// The game's version.
+    Version,
 }
 
 impl TextField {
@@ -154,6 +159,7 @@ impl TextField {
             Self::GameMode => F::GameModes,
             Self::Theme => F::Themes,
             Self::Perspective => F::Perspectives,
+            Self::Region => F::Regions,
             _ => return None,
         })
     }

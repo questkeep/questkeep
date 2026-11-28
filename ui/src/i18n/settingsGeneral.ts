@@ -87,6 +87,13 @@ const en = {
   systemNotifications: "Show system notifications while Questkeep is in the background",
   systemNotificationsHint:
     "Errors and warnings, when the window is minimized or in the tray. They are always kept in the bell.",
+  autoShortcuts: "Shortcuts for newly installed games",
+  autoShortcutsOff: "Don't create",
+  autoShortcutsDesktop: "On the desktop",
+  autoShortcutsStartMenu: "In the Start menu",
+  autoShortcutsBoth: "On the desktop and in the Start menu",
+  autoShortcutsHint:
+    "Only for games installed from now on; they go away again when the game is uninstalled. For games you already have, select them and use Create shortcuts.",
 };
 
 /** Settings → General (GeneralSection). */
@@ -186,6 +193,13 @@ export const settingsGeneral: Translations<typeof en> = {
     systemNotifications: "Systembenachrichtigungen zeigen, solange Questkeep im Hintergrund ist",
     systemNotificationsHint:
       "Fehler und Warnungen, wenn das Fenster minimiert oder im Infobereich ist. In der Glocke bleiben sie immer erhalten.",
+    autoShortcuts: "Verknüpfungen für neu installierte Spiele",
+    autoShortcutsOff: "Nicht erstellen",
+    autoShortcutsDesktop: "Auf dem Desktop",
+    autoShortcutsStartMenu: "Im Startmenü",
+    autoShortcutsBoth: "Auf dem Desktop und im Startmenü",
+    autoShortcutsHint:
+      "Nur für Spiele, die ab jetzt installiert werden; sie verschwinden wieder, wenn das Spiel deinstalliert wird. Für vorhandene Spiele wähle sie aus und nutze „Verknüpfungen erstellen“.",
   },
   fr: {
     loading: "Chargement…",
@@ -282,6 +296,13 @@ export const settingsGeneral: Translations<typeof en> = {
     systemNotifications: "Afficher les notifications système quand Questkeep est en arrière-plan",
     systemNotificationsHint:
       "Erreurs et avertissements, quand la fenêtre est réduite ou dans la zone de notification. Ils restent toujours dans la cloche.",
+    autoShortcuts: "Raccourcis pour les jeux nouvellement installés",
+    autoShortcutsOff: "Ne pas créer",
+    autoShortcutsDesktop: "Sur le bureau",
+    autoShortcutsStartMenu: "Dans le menu Démarrer",
+    autoShortcutsBoth: "Sur le bureau et dans le menu Démarrer",
+    autoShortcutsHint:
+      "Seulement pour les jeux installés à partir de maintenant ; ils disparaissent quand le jeu est désinstallé. Pour les jeux que tu as déjà, sélectionne-les et utilise Créer des raccourcis.",
   },
   it: {
     loading: "Caricamento…",
@@ -374,6 +395,13 @@ export const settingsGeneral: Translations<typeof en> = {
     systemNotifications: "Mostra le notifiche di sistema quando Questkeep è in background",
     systemNotificationsHint:
       "Errori e avvisi, quando la finestra è ridotta a icona o nell'area di notifica. Restano sempre nella campanella.",
+    autoShortcuts: "Collegamenti per i giochi appena installati",
+    autoShortcutsOff: "Non creare",
+    autoShortcutsDesktop: "Sul desktop",
+    autoShortcutsStartMenu: "Nel menu Start",
+    autoShortcutsBoth: "Sul desktop e nel menu Start",
+    autoShortcutsHint:
+      "Solo per i giochi installati da ora in poi; spariscono quando il gioco viene disinstallato. Per i giochi che hai già, selezionali e usa Crea collegamenti.",
   },
   es: {
     loading: "Cargando…",
@@ -468,6 +496,13 @@ export const settingsGeneral: Translations<typeof en> = {
       "Mostrar notificaciones del sistema mientras Questkeep está en segundo plano",
     systemNotificationsHint:
       "Errores y avisos, cuando la ventana está minimizada o en la bandeja. Siempre se conservan en la campana.",
+    autoShortcuts: "Accesos directos para juegos recién instalados",
+    autoShortcutsOff: "No crear",
+    autoShortcutsDesktop: "En el escritorio",
+    autoShortcutsStartMenu: "En el menú Inicio",
+    autoShortcutsBoth: "En el escritorio y en el menú Inicio",
+    autoShortcutsHint:
+      "Solo para juegos instalados a partir de ahora; desaparecen al desinstalar el juego. Para los juegos que ya tienes, selecciónalos y usa Crear accesos directos.",
   },
   pt: {
     loading: "Carregando…",
@@ -561,5 +596,12 @@ export const settingsGeneral: Translations<typeof en> = {
       "Mostrar notificações do sistema enquanto o Questkeep está em segundo plano",
     systemNotificationsHint:
       "Erros e avisos, quando a janela está minimizada ou na bandeja. Ficam sempre guardados no sino.",
+    autoShortcuts: "Atalhos para jogos recém-instalados",
+    autoShortcutsOff: "Não criar",
+    autoShortcutsDesktop: "No ambiente de trabalho",
+    autoShortcutsStartMenu: "No menu Iniciar",
+    autoShortcutsBoth: "No ambiente de trabalho e no menu Iniciar",
+    autoShortcutsHint:
+      "Só para jogos instalados a partir de agora; desaparecem quando o jogo é desinstalado. Para os jogos que já tem, selecione-os e use Criar atalhos.",
   },
 };

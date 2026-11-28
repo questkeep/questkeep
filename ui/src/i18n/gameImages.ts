@@ -3,6 +3,7 @@ import type { Translations } from ".";
 const en = {
   chooseCover: "Choose a cover",
   chooseBackground: "Choose a background",
+  chooseLogo: "Choose a logo",
   chooseIcon: "Choose an icon",
   imageSources: "Image sources",
   all: "All {count}",
@@ -30,6 +31,7 @@ export const gameImages: Translations<typeof en> = {
   de: {
     chooseCover: "Cover auswählen",
     chooseBackground: "Hintergrund auswählen",
+    chooseLogo: "Logo auswählen",
     chooseIcon: "Symbol auswählen",
     imageSources: "Bildquellen",
     all: "Alle {count}",
@@ -53,6 +55,7 @@ export const gameImages: Translations<typeof en> = {
   fr: {
     chooseCover: "Choisir une jaquette",
     chooseBackground: "Choisir un arrière-plan",
+    chooseLogo: "Choisir un logo",
     chooseIcon: "Choisir une icône",
     imageSources: "Sources d’images",
     all: "Toutes {count}",
@@ -77,6 +80,7 @@ export const gameImages: Translations<typeof en> = {
   it: {
     chooseCover: "Scegli una copertina",
     chooseBackground: "Scegli uno sfondo",
+    chooseLogo: "Scegli un logo",
     chooseIcon: "Scegli un’icona",
     imageSources: "Fonti delle immagini",
     all: "Tutte {count}",
@@ -101,6 +105,7 @@ export const gameImages: Translations<typeof en> = {
   es: {
     chooseCover: "Elegir una portada",
     chooseBackground: "Elegir un fondo",
+    chooseLogo: "Elegir un logo",
     chooseIcon: "Elegir un icono",
     imageSources: "Fuentes de imágenes",
     all: "Todas {count}",
@@ -125,6 +130,7 @@ export const gameImages: Translations<typeof en> = {
   pt: {
     chooseCover: "Escolher uma capa",
     chooseBackground: "Escolher um plano de fundo",
+    chooseLogo: "Escolher um logo",
     chooseIcon: "Escolher um ícone",
     imageSources: "Fontes de imagens",
     all: "Todas {count}",

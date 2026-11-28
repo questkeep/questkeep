@@ -23,6 +23,7 @@ import type { GameLink } from "../bindings/GameLink";
 import type { GameMetadata } from "../bindings/GameMetadata";
 import type { ImageSlot } from "../bindings/ImageSlot";
 import type { InstalledProgram } from "../bindings/InstalledProgram";
+import type { GameTool } from "../bindings/GameTool";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { MetadataLink } from "../bindings/MetadataLink";
 import type { MetadataField } from "../bindings/MetadataField";
@@ -57,7 +58,7 @@ import {
 } from "../lib/editDrafts";
 import { errorMessage } from "../lib/errors";
 import { deriveGameName } from "../lib/names";
-import { pickDirectory, pickExecutable, pickGameImage } from "../lib/pickers";
+import { pickDirectory, pickExecutable, pickGameImage, pickManualFile } from "../lib/pickers";
 import { store } from "../lib/store";
 import { ChipInput } from "./ChipInput";
 import { Cover } from "./Cover";
@@ -122,6 +123,7 @@ const nameOf = (id: string) => storeName(id);
 /** The shown address of a game's image, fresh after it changed. */
 function urlOf(game: Game, slot: ImageSlot): string | null {
   if (slot === "cover") return store.coverUrl(game);
+  if (slot === "logo") return store.logoUrl(game);
   return slot === "icon" ? store.iconUrl(game) : store.backgroundUrl(game);
 }
 
@@ -376,6 +378,22 @@ export function EditGameDialog(props: {
     setProfiles(next);
     setProfilesChanged(true);
   }
+  // Tools: a draft saved with the rest.
+  const [tools, setTools] = createSignal<GameTool[] | undefined>(isNew ? [] : undefined);
+  const [toolsChanged, setToolsChanged] = createSignal(false);
+  onMount(() => {
+    if (isNew) return;
+    Promise.resolve()
+      .then(() => api.gameTools(id))
+      .then((loaded) => {
+        if (!toolsChanged()) setTools(loaded ?? []);
+      })
+      .catch(() => setTools([]));
+  });
+  function changeTools(next: GameTool[]) {
+    setTools(next);
+    setToolsChanged(true);
+  }
   // Images waiting for Save.
   const [imageDrafts, setImageDrafts] = createSignal<ImageDrafts>(new Map());
   const setImageDraft = (slot: ImageSlot, value: string | null) =>
@@ -461,6 +479,7 @@ export function EditGameDialog(props: {
       actions().size > 0 ||
       linkChanged() ||
       profilesChanged() ||
+      toolsChanged() ||
       imageDrafts().size > 0 ||
       (base !== undefined && !untouched(base)) ||
       (startSnapshot !== "" && snapshot() !== startSnapshot)
@@ -642,7 +661,12 @@ export function EditGameDialog(props: {
       }
       if (current) {
         const date = current.releaseDate?.trim() ?? "";
-        const meta = { ...current, releaseDate: date === "" ? null : date };
+        const meta = {
+          ...current,
+          releaseDate: date === "" ? null : date,
+          version: current.version?.trim() || null,
+          manual: current.manual?.trim() || null,
+        };
         const edits = {
           edits: buildEdits(meta, edited(), ownLinks(), hidden()),
           sortingName: sortingName(),
@@ -682,6 +706,10 @@ export function EditGameDialog(props: {
       const draftProfiles = profiles();
       if (profilesChanged() && draftProfiles) {
         steps.push(() => api.replaceLaunchProfiles(gameId, profilesDraft(draftProfiles, real)));
+      }
+      const draftTools = tools();
+      if (toolsChanged() && draftTools) {
+        steps.push(() => api.replaceGameTools(gameId, draftTools));
       }
       // In order: a failing step stops the rest.
       await steps
@@ -729,7 +757,12 @@ export function EditGameDialog(props: {
   }
 
   const pathOf = (slot: ImageSlot) =>
-    ({ cover: game().coverPath, background: game().backgroundPath, icon: game().iconPath })[slot];
+    ({
+      cover: game().coverPath,
+      background: game().backgroundPath,
+      logo: game().logoPath,
+      icon: game().iconPath,
+    })[slot];
   /** Whether the image is (or will be on Save) one the user chose. */
   const userImage = (slot: ImageSlot) => {
     const draft = imageDrafts();
@@ -936,6 +969,8 @@ export function EditGameDialog(props: {
                   onChange={changeProfiles}
                   copyAction={copyAction}
                   onCopyAction={setCopyAction}
+                  tools={tools()}
+                  onToolsChange={changeTools}
                 />
               </Match>
               <Match when={section() === "tracking"}>
@@ -997,6 +1032,18 @@ export function EditGameDialog(props: {
                     onChoose={() => void chooseFile("background")}
                     onPick={() => setPicker("background")}
                     onRemove={() => setImageDraft("background", null)}
+                  />
+                  <ImageRow
+                    game={game()}
+                    slot="logo"
+                    title={tr("imgLogo")}
+                    hint={tr("imgLogoHint")}
+                    path={game().logoPath}
+                    draft={imageDrafts().get("logo")}
+                    user={userImage("logo")}
+                    onChoose={() => void chooseFile("logo")}
+                    onPick={() => setPicker("logo")}
+                    onRemove={() => setImageDraft("logo", null)}
                   />
                   <ImageRow
                     game={game()}
@@ -1240,6 +1287,41 @@ export function EditGameDialog(props: {
                         </div>
                       )}
                     </For>
+                    <div class="field">
+                      {label(tr("fieldVersion"), "version")}
+                      <input
+                        id={fieldId("version")}
+                        class="input"
+                        classList={{ "input--edited": isEdited("version") }}
+                        value={values()?.version ?? ""}
+                        placeholder="1.0.0"
+                        onInput={(event) => setField("version", event.currentTarget.value || null)}
+                      />
+                    </div>
+                    <div class="field field--full">
+                      {label(tr("fieldManual"), "manual")}
+                      <span class="field__row">
+                        <input
+                          id={fieldId("manual")}
+                          class="input"
+                          classList={{ "input--edited": isEdited("manual") }}
+                          value={values()?.manual ?? ""}
+                          placeholder={tr("manualPlaceholder")}
+                          onInput={(event) => setField("manual", event.currentTarget.value || null)}
+                        />
+                        <button
+                          type="button"
+                          class="btn"
+                          onClick={() =>
+                            void pickManualFile().then(
+                              (path) => path !== null && setField("manual", path),
+                            )
+                          }
+                        >
+                          {trAdd("browse")}
+                        </button>
+                      </span>
+                    </div>
                   </div>
                   <h3 class="edit-section__title">{tr("numbers")}</h3>
                   <div class="edit-grid">

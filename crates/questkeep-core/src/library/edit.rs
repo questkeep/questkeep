@@ -32,6 +32,7 @@ fn kind_of(slot: ImageSlot) -> ImageKind {
     match slot {
         ImageSlot::Cover => ImageKind::Cover,
         ImageSlot::Background => ImageKind::Background,
+        ImageSlot::Logo => ImageKind::Logo,
         ImageSlot::Icon => ImageKind::Icon,
     }
 }
@@ -97,6 +98,7 @@ impl Library {
             user_images: UserImages {
                 cover: is_user_image(&game, ImageKind::Cover),
                 background: is_user_image(&game, ImageKind::Background),
+                logo: is_user_image(&game, ImageKind::Logo),
                 icon: is_user_image(&game, ImageKind::Icon),
             },
             metadata_link: game.metadata_link(),
@@ -225,6 +227,7 @@ impl Library {
             match kind {
                 ImageKind::Cover => self.db.set_cover_path(entry, Some(&relative))?,
                 ImageKind::Background => self.db.set_background_path(entry, Some(&relative))?,
+                ImageKind::Logo => self.db.set_logo_path(entry, Some(&relative))?,
                 ImageKind::Icon => {
                     self.db.set_icon_path(entry, Some(&relative))?;
                     self.db
@@ -249,7 +252,7 @@ impl Library {
         self.get_game(entry)
     }
 
-    /// Removes the cover or background for good (no source fills it again), or resets the
+    /// Removes the cover, background or logo for good (no source fills it again), or resets the
     /// icon so it is made again from the store or the executable.
     pub fn remove_user_image(&self, id: Uuid, slot: ImageSlot) -> Result<Game> {
         let entry = self.db.entry_of(id)?;
@@ -260,6 +263,7 @@ impl Library {
             match kind {
                 ImageKind::Cover => self.db.set_cover_path(entry, None)?,
                 ImageKind::Background => self.db.set_background_path(entry, None)?,
+                ImageKind::Logo => self.db.set_logo_path(entry, None)?,
                 ImageKind::Icon => self.db.set_icon_path(entry, None)?,
             }
             let marker = (kind != ImageKind::Icon).then_some(serde_json::Value::Bool(true));
@@ -298,7 +302,7 @@ impl Library {
                 });
             }
         }
-        if self.igdb.is_configured() && kind != ImageKind::Icon {
+        if self.igdb.is_configured() && !matches!(kind, ImageKind::Icon | ImageKind::Logo) {
             sources.push(ImageSource {
                 id: crate::model::IGDB_SOURCE.into(),
                 name: "IGDB".into(),
@@ -550,7 +554,7 @@ impl Library {
                 (None, Some(action)) if !action.target.trim().is_empty() => {}
                 (None, _) => {
                     return Err(CoreError::Invalid(
-                        "Choose the executable this profile starts.".into(),
+                        "Choose the executable or enter the link this profile starts.".into(),
                     ));
                 }
             }
@@ -602,7 +606,7 @@ impl Library {
                     (None, Some(action)) if !action.target.trim().is_empty() => {}
                     (None, _) => {
                         return Err(CoreError::Invalid(
-                            "Choose the executable this profile starts.".into(),
+                            "Choose the executable or enter the link this profile starts.".into(),
                         ));
                     }
                 }
@@ -797,9 +801,12 @@ impl Library {
             }
             (None, Some(action)) => {
                 let mut game = self.db.get_game(entry)?;
-                game.install_dir = Path::new(&action.target)
-                    .parent()
-                    .map(|p| p.display().to_string());
+                // A link profile keeps the game's folder for tracking.
+                if action.kind == ActionKind::File {
+                    game.install_dir = Path::new(&action.target)
+                        .parent()
+                        .map(|p| p.display().to_string());
+                }
                 game.play_action = Some(action.clone());
                 Ok(game)
             }
@@ -855,6 +862,7 @@ fn store_candidates(
     match kind {
         ImageKind::Cover => provider.cover_candidates(store_id),
         ImageKind::Background => provider.background_candidates(store_id),
+        ImageKind::Logo => provider.logo_candidates(store_id),
         ImageKind::Icon => provider.icon_candidates(store_id),
     }
 }

@@ -60,7 +60,7 @@ describe("DetailsView", () => {
     expect(page()).toHaveTextContent("Times started");
     expect(page()).toHaveTextContent("A long descent.");
     expect(page()).toHaveTextContent("Roguelike");
-    expect(page().querySelector(".details__stores")).toHaveTextContent("Steam");
+    expect(page().querySelector(".details__badge--stores")).toHaveTextContent("Steam");
     expect(container.querySelector(".details__hero img")).not.toBeNull();
     // The list highlights the selection.
     expect(screen.getByRole("option", { name: "Alpha" })).toHaveAttribute("aria-selected", "true");

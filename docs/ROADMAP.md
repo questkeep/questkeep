@@ -125,6 +125,10 @@ popup's More menu, and hidden games in Explore.
 - Ctrl+K runs commands too: under the games, up to three matching commands (go to a page, view, plugin page or settings page, everything in the Questkeep menu such as Sync all or Sync › Steam, notifications, the selected game's action scripts).
 - Random game: the dice in the toolbar (or "Pick a random game" in Ctrl+K) picks a game from what the open view shows, only installed ones unless unticked, with Play, Open page and Pick another (every game once before repeats).
 - Start games from outside: `questkeep://start/<id>` (also `show` and `search`) and `--start <id>` (`--show`, `--search`); the game page shows the game ID with a copy menu for the ID, the start link and the start command. Start links only start installed games.
+- Region, version and manual fields (Edit > Details): region is filterable, groupable and a column; "Open manual" in the game menus opens the file or link.
+- Tools: programs and links next to Play on the game page (a config tool, a mod manager, a wiki), set up in Edit > Launch and started without tracking. Launch profiles can open a link.
+- Desktop and Start menu shortcuts: "Create shortcut" in the game menus and "Create shortcuts" for a selection start the game through Questkeep; Settings > General can create them for newly installed games (removed again on uninstall).
+- Game logos (Steam, SteamGridDB, or your own in Edit > Images) replace the title on the game page; a Trailer card plays Steam trailers and IGDB's YouTube videos after a click.
 
 ## Next
 
@@ -137,13 +141,9 @@ popup's More menu, and hidden games in Explore.
 - **Categories follow-ups**: Heroic categories; map a single store category onto an existing
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
-- **Small gaps**: region, version and manual (path or URL) fields.
-- **Desktop shortcuts**: create a desktop or Start menu shortcut for a game (with its icon) that
-  runs the start command.
-- **Multiple play actions per game**: file, URL, script and emulator actions, play and non-play
-  (e.g. a config tool); the groundwork for emulation.
-- **Logos and trailers**: a logo image kind (Steam, SteamGridDB) and trailers on the game page;
-  the media Playnite themes rely on most (Extra Metadata Loader), later a launch splash screen.
+- **Emulator actions**: profiles that start a game through an emulator (with the emulation item
+  below); file and link profiles and tools exist.
+- **Launch splash screen**: a logo over the background while a game starts.
 - **Discord Rich Presence and per-game HDR, display and audio**; HDR state is already read in
   `questkeep-system`.
 - **Plugin signatures**: signature checks for plugins installed from the registry (the

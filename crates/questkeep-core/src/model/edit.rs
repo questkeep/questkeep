@@ -100,6 +100,7 @@ pub struct GameEditInfo {
 pub struct UserImages {
     pub cover: bool,
     pub background: bool,
+    pub logo: bool,
     pub icon: bool,
 }
 
@@ -230,5 +231,6 @@ pub struct ImageSource {
 pub enum ImageSlot {
     Cover,
     Background,
+    Logo,
     Icon,
 }

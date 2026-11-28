@@ -3,4 +3,4 @@
 /**
  * Which image of a game.
  */
-export type ImageSlot = "cover" | "background" | "icon";
+export type ImageSlot = "cover" | "background" | "logo" | "icon";

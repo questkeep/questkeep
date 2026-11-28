@@ -37,6 +37,18 @@ ageRatings: Array<string>,
  */
 platforms: Array<string>, gameModes: Array<string>, themes: Array<string>, perspectives: Array<string>, 
 /**
+ * Regions the game was released for ("Europe", "Japan", ...).
+ */
+regions: Array<string>, 
+/**
+ * The game's version, free text ("1.4.2"). Only the user sets it for now.
+ */
+version: string | null, 
+/**
+ * A file path or an http(s) URL of the game's manual. Only the user sets it for now.
+ */
+manual: string | null, 
+/**
  * Press score, 0-100.
  */
 criticScore: Score | null, 

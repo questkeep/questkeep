@@ -105,6 +105,7 @@
   /* Shadows */
   --qk-shadow-tile: 0 2px 8px #00000066;
   --qk-shadow-tile-hover: 0 10px 24px #000000aa;
+  --qk-details-logo-shadow: drop-shadow(0 1px 4px #000000aa);
   --qk-shadow-panel: -12px 0 32px #00000066;
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
@@ -197,6 +198,7 @@
 
   --qk-shadow-tile: 0 2px 8px #1b1e2624;
   --qk-shadow-tile-hover: 0 10px 24px #1b1e2638;
+  --qk-details-logo-shadow: drop-shadow(0 1px 3px #00000066);
   --qk-shadow-panel: -12px 0 32px #1b1e261f;
   --qk-shadow-dialog: 0 24px 64px #1b1e2640;
   --qk-shadow-badge: 0 1px 4px #1b1e2640;
@@ -384,6 +386,8 @@
   --qk-grid-gap: 16px;
   --qk-grid-padding: 20px;
   --qk-control-height: 34px;
+  /* A tool's picture in its Edit form, inside a control-height box. */
+  --qk-tool-icon-preview-size: 22px;
   --qk-keyword-width: 220px;
   --qk-keyword-min-width: 140px;
   --qk-price-site-name-width: 200px;
@@ -417,6 +421,11 @@
   --qk-column-min: 64px;
   --qk-column-resize-width: 8px;
   --qk-details-hero-height: 170px;
+  /* The stores and player labels in the hero's top corners; in the side panel below its buttons. */
+  --qk-details-badge-top: var(--qk-space-3);
+  --qk-details-badge-top-panel: calc(var(--qk-control-height) + var(--qk-space-3) * 2);
+  /* The hero area of a game without a background: a hint of the accent, fading out. */
+  --qk-details-hero-empty: color-mix(in oklab, var(--qk-color-accent) 14%, var(--qk-color-surface));
   --qk-details-hero-overlap: 90px;
   --qk-description-clamp-lines: 5;
   --qk-source-icon-size: 12px;
@@ -432,6 +441,8 @@
   --qk-details-page-hero-height: 280px;
   --qk-details-page-hero-overlap: 110px;
   --qk-details-play-width: 180px;
+  /* Play when it has a line of its own (narrow game page): centered, at most this wide. */
+  --qk-details-play-max-width: 240px;
   --qk-details-play-height: 44px;
   --qk-edit-nav-width: 170px;
   --qk-edit-pane-height: 560px;
@@ -439,6 +450,26 @@
   --qk-image-frame-width: 200px;
   --qk-image-frame-height: 140px;
   --qk-image-icon-preview: 48px;
+  /* Checkered backdrop of the logo preview, so white and black logos both stay visible. */
+  --qk-image-checker-a: color-mix(in oklab, var(--qk-color-text) 8%, var(--qk-color-bg));
+  --qk-image-checker-b: color-mix(in oklab, var(--qk-color-text) 22%, var(--qk-color-bg));
+  --qk-image-checker-size: 12px;
+  --qk-picker-logo-width: 200px;
+  /* The logo in the game page header, by content width (breakpoints 560px and 1400px live in
+     app.css, container queries can not read variables): the area it covers, in square pixels
+     (a plain number), and its max height. */
+  --qk-details-logo-area-sm: 9000;
+  --qk-details-logo-area: 18000;
+  --qk-details-logo-area-lg: 42000;
+  --qk-details-logo-height-sm: 64px;
+  --qk-details-logo-height: 96px;
+  --qk-details-logo-height-lg: 150px;
+  /* Trailer card: a 16:9 stage no taller than this share of the window. */
+  --qk-trailer-max-height: 60vh;
+  --qk-trailer-backdrop: #000000;
+  --qk-trailer-play-size: 56px;
+  --qk-trailer-play-bg: #000000aa;
+  --qk-trailer-play-fg: #ffffff;
   --qk-playtime-input-width: 5.5rem;
   --qk-quick-launch-icon: 20px;
   --qk-quick-access-width: 340px;

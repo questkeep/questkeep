@@ -67,6 +67,9 @@ const emptyMeta = () => ({
   gameModes: [],
   themes: [],
   perspectives: [],
+  regions: [],
+  version: null,
+  manual: null,
   criticScore: null,
   communityScore: null,
   installSize: null,
@@ -83,7 +86,7 @@ function mockEditInfo() {
     links: [],
     automaticSortingName: "Hades",
     sortingName: null,
-    userImages: { cover: false, background: false, icon: false },
+    userImages: { cover: false, background: false, logo: false, icon: false },
     metadataLink: null,
     metadataName: null,
     automaticMetadataName: "",
@@ -112,6 +115,41 @@ async function offered() {
 }
 
 describe("DetailsPanel", () => {
+  it("shows the logo instead of the title text and keeps the heading", () => {
+    const { container } = render(() => (
+      <DetailsPanel
+        game={makeGame({ logoPath: "C:/data/images/logos/g1.png" })}
+        onClose={vi.fn<() => void>()}
+      />
+    ));
+    const heading = screen.getByRole("heading", { name: "Hades" });
+    expect(within(heading).getByText("Hades")).toHaveClass("visually-hidden");
+    const logo = container.querySelector<HTMLImageElement>(".details__logo img");
+    expect(logo?.getAttribute("src")).toContain("logos/g1.png");
+    expect(logo?.getAttribute("alt")).toBe("");
+  });
+
+  it("shows the title text without a logo, and again when the logo fails to load", async () => {
+    const none = render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+    expect(none.container.querySelector(".details__logo img")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Hades" })).not.toHaveClass("details__title--logo");
+    none.unmount();
+
+    const { container } = render(() => (
+      <DetailsPanel
+        game={makeGame({ logoPath: "C:/data/images/logos/g1.png" })}
+        onClose={vi.fn<() => void>()}
+      />
+    ));
+    const logo = container.querySelector(".details__logo img");
+    expect(logo).not.toBeNull();
+    if (logo) await fireEvent.error(logo);
+    expect(container.querySelector(".details__logo img")).toBeNull();
+    const heading = screen.getByRole("heading", { name: "Hades" });
+    expect(heading).not.toHaveClass("details__title--logo");
+    expect(heading).toHaveTextContent("Hades");
+  });
+
   it("launches the game with Play", async () => {
     vi.mocked(api.launchGame).mockResolvedValue(undefined);
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
@@ -576,6 +614,34 @@ describe("DetailsPanel", () => {
         "Add a SteamGridDB API key in the settings first.",
       ),
     );
+  });
+
+  it("offers Open manual only when a manual is set", async () => {
+    vi.mocked(api.openManual).mockResolvedValue(undefined);
+    const { unmount } = render(() => (
+      <DetailsPanel game={makeGame({ manual: null })} onClose={vi.fn<() => void>()} />
+    ));
+    const menu = await openMore();
+    expect(within(menu).queryByRole("menuitem", { name: "Open manual" })).toBeNull();
+    unmount();
+    render(() => (
+      <DetailsPanel
+        game={makeGame({ manual: "https://example.org/manual.pdf", version: "1.4.2" })}
+        onClose={vi.fn<() => void>()}
+      />
+    ));
+    expect(screen.getByText("1.4.2")).toBeTruthy();
+    await chooseMore("Open manual");
+    await waitFor(() => expect(api.openManual).toHaveBeenCalledWith("g1"));
+  });
+
+  it("shows the failure of Open manual in the panel", async () => {
+    vi.mocked(api.openManual).mockRejectedValue("The manual was not found: x.pdf");
+    render(() => (
+      <DetailsPanel game={makeGame({ manual: "x.pdf" })} onClose={vi.fn<() => void>()} />
+    ));
+    await chooseMore("Open manual");
+    expect(await screen.findByRole("alert")).toHaveTextContent("The manual was not found");
   });
 
   it("opens the install folder from the More menu when it is known", async () => {

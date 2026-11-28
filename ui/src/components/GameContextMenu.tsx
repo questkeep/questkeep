@@ -1,4 +1,5 @@
 import AppWindow from "lucide-solid/icons/app-window";
+import BookOpen from "lucide-solid/icons/book-open";
 import Combine from "lucide-solid/icons/combine";
 import Gamepad from "lucide-solid/icons/gamepad-2";
 import EyeOff from "lucide-solid/icons/eye-off";
@@ -20,6 +21,7 @@ import {
   activateGame,
   launchGame,
   openInstallFolder,
+  openManual,
   openLauncherPage,
   refreshMetadata,
   removeGame,
@@ -42,6 +44,7 @@ import { CombinePicker } from "./CombinePicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
+import { shortcutMenuEntry } from "./shortcutMenu";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { ScriptIcon } from "./ScriptIcon";
@@ -251,6 +254,16 @@ export function GameContextMenu(props: {
             onSelect: () => void report(openInstallFolder(game().id)),
           },
         ]),
+    ...(game().manual
+      ? [
+          {
+            label: tr("openManual"),
+            icon: iconOf(BookOpen),
+            onSelect: () => void report(openManual(game().id)),
+          },
+        ]
+      : []),
+    shortcutMenuEntry(() => [game().id]),
     ...launcherPageCopies(game(), store.providers()).map((copy) => ({
       label: tr("showIn", { store: copyLabel(copy, sourceName) }),
       icon: iconOf(ExternalLink),

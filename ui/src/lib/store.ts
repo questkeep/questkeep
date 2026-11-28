@@ -273,6 +273,8 @@ function createAppStore() {
   const [quickAccess, setQuickAccess] = createSignal<string[]>(["add:manual"]);
   /** Icons of the price sites by host (webview addresses); a site without one shows a globe. */
   const [siteIcons, setSiteIcons] = createSignal<Record<string, string>>({});
+  /** Counts favicon arrivals (price sites and tool links), so their pictures are asked again. */
+  const [siteIconsVersion, setSiteIconsVersion] = createSignal(0);
   /** Combined groups per grouping field (settings). */
   const [groupMerges, setGroupMergesState] = createSignal<Partial<Record<string, GroupMerge[]>>>(
     {},
@@ -1178,6 +1180,10 @@ function createAppStore() {
     return imageUrl(game, game.backgroundPath);
   }
 
+  function logoUrl(game: Game): string | null {
+    return imageUrl(game, game.logoPath);
+  }
+
   function setViewMode(mode: ViewLayout) {
     changeView((state) => ({ ...state, layout: mode }));
   }
@@ -1385,6 +1391,7 @@ function createAppStore() {
         setActivityChange((last) => ({ seq: last.seq + 1, gameIds: event.gameIds }));
         break;
       case "siteIconsChanged":
+        setSiteIconsVersion((v) => v + 1);
         void loadSiteIcons();
         break;
     }
@@ -1804,6 +1811,7 @@ function createAppStore() {
     quickAccess,
     /** The icon address of a price site, or null (show the globe). */
     siteIconUrl: (url: string) => siteIconUrl(siteIcons(), url),
+    siteIconsVersion,
     loadSiteIcons,
     showSettingsSection,
     takeSettingsSection: () => {
@@ -1905,6 +1913,7 @@ function createAppStore() {
     coverUrl,
     iconUrl,
     backgroundUrl,
+    logoUrl,
     // selection
     selectGame,
     toggleSelect,

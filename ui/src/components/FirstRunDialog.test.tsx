@@ -45,6 +45,7 @@ const SETTINGS: Settings = {
   titleBar: { quickAccess: ["add:manual"] },
   activity: { libraryMaxMb: 50, systemDays: 30, recordPluginRequests: true },
   detectExternalLaunches: true,
+  autoShortcuts: "off",
   showStartPage: true,
   showStatistics: true,
   startupPage: { kind: "start" },

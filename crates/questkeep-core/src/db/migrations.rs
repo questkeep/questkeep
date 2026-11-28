@@ -459,6 +459,63 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (source, source_game_id)
     );
     "#,
+    // 21: tools: programs and links next to Play on an entry's page (a config tool, a mod
+    // manager, a wiki), started without tracking. `action` is a `PlayAction` (JSON).
+    // Shortcuts: the desktop and Start menu shortcuts Questkeep made, so it can remove them
+    // again when the game is uninstalled or removed (only while they still point at the game).
+    // `logo_path`: the game's logo image (its title as artwork), like `background_path`; the
+    // entries view gains it.
+    r#"
+    CREATE TABLE game_tools (
+        id       TEXT PRIMARY KEY,
+        entry_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        name     TEXT NOT NULL,
+        action   TEXT NOT NULL,
+        position INTEGER NOT NULL
+    );
+    CREATE INDEX game_tools_entry ON game_tools (entry_id);
+    CREATE TABLE game_shortcuts (
+        path       TEXT PRIMARY KEY,
+        game_id    TEXT NOT NULL,
+        place      TEXT NOT NULL,
+        automatic  INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX game_shortcuts_game ON game_shortcuts (game_id);
+    ALTER TABLE games ADD COLUMN logo_path TEXT;
+
+    DROP VIEW library_entries;
+    CREATE VIEW library_entries AS
+    SELECT g.id, g.name, g.sorting_name, g.search_key, g.source, g.source_game_id,
+        (g.installed OR EXISTS
+            (SELECT 1 FROM games m WHERE m.merged_into = g.id AND m.installed)) AS installed,
+        g.install_dir, g.play_action,
+        g.playtime_seconds + COALESCE(
+            (SELECT SUM(m.playtime_seconds) FROM games m WHERE m.merged_into = g.id), 0)
+            AS playtime_seconds,
+        g.play_count + COALESCE(
+            (SELECT SUM(m.play_count) FROM games m WHERE m.merged_into = g.id), 0) AS play_count,
+        COALESCE(
+            MAX(g.last_played,
+                (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)),
+            g.last_played,
+            (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)) AS last_played,
+        g.date_added, g.favorite, g.hidden, g.cover_path, g.icon_path, g.background_path,
+        g.description, g.release_date, g.developers, g.publishers, g.genres,
+        g.metadata_updated_at, g.extra, g.merged_into, g.copy_position,
+        g.details, g.release_year, g.critic_score, g.community_score, g.install_size, g.ttb_main,
+        g.completion_status, g.user_score, g.notes, g.kind, g.kind_user, g.logo_path
+    FROM games g WHERE g.merged_into IS NULL;
+    "#,
+    // 22: a tool's own icon (an image the user picked, under images/tool-icons); without one the
+    // page shows the program's icon or the site's favicon. Games without a logo get one logo
+    // search (libraries from before logos): `extra.logoBackfill` until it ran.
+    r#"
+    ALTER TABLE game_tools ADD COLUMN icon TEXT;
+    UPDATE games SET extra = json_set(COALESCE(extra, '{}'), '$.logoBackfill', json('true'))
+    WHERE logo_path IS NULL AND merged_into IS NULL
+        AND json_extract(COALESCE(extra, '{}'), '$.userLogo') IS NULL;
+    "#,
 ];
 
 /// Latest schema version this build knows.

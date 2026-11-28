@@ -40,6 +40,12 @@ import type { ImageSource } from "../bindings/ImageSource";
 import type { GameLinks } from "../bindings/GameLinks";
 import type { ImportExclusion } from "../bindings/ImportExclusion";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
+import type { GameTool } from "../bindings/GameTool";
+import type { ToolIconFile } from "../bindings/ToolIconFile";
+import type { ImportedToolIcon } from "../bindings/ImportedToolIcon";
+import type { Trailer } from "../bindings/Trailer";
+import type { ShortcutPlace } from "../bindings/ShortcutPlace";
+import type { ShortcutResult } from "../bindings/ShortcutResult";
 import type { ProfileInput } from "../bindings/ProfileInput";
 import type { ProfilesDraft } from "../bindings/ProfilesDraft";
 import type { GameNews } from "../bindings/GameNews";
@@ -312,6 +318,7 @@ export const setCompletionStatus = (ids: string[], status: string | null) =>
 /** How many people play the game right now; `null` when no store can tell. */
 export const gamePlayerCount = (id: string) => invoke<number | null>("game_player_count", { id });
 export const gameNews = (id: string) => invoke<GameNews | null>("game_news", { id });
+export const gameTrailers = (id: string) => invoke<Trailer[]>("game_trailers", { id });
 export const gameAchievements = (id: string) =>
   invoke<Achievements | null>("game_achievements", { id });
 /** Playtime per week for the last 12 weeks. */
@@ -352,6 +359,9 @@ export const saveSettings = (settings: Settings) => invoke<void>("save_settings"
 /** Opens the app's data or logs folder in the file manager (done by the Rust side). */
 export const openAppFolder = (kind: "data" | "logs") => invoke<void>("open_app_folder", { kind });
 export const openInstallFolder = (id: string) => invoke<void>("open_install_folder", { id });
+
+/** Opens the game's manual (a web address or a file), failing with a readable message. */
+export const openManual = (id: string) => invoke<void>("open_manual", { id });
 export const seedFakeLibrary = (count: number) => invoke<number>("seed_fake_library", { count });
 
 export const refetchArtwork = (id: string) => invoke<void>("refetch_artwork", { id });
@@ -432,6 +442,20 @@ export const searchMetadata = (source: string, query: string) =>
   invoke<CatalogHit[]>("search_metadata", { source, query });
 export const setMetadataLink = (id: string, link: MetadataLink | null) =>
   invoke<Game>("set_metadata_link", { id, link });
+export const gameTools = (id: string) => invoke<GameTool[]>("game_tools", { id });
+/** Saves a game's whole tool list in this order. */
+export const replaceGameTools = (id: string, tools: GameTool[]) =>
+  invoke<GameTool[]>("replace_game_tools", { id, tools });
+export const toolIcons = (id: string) => invoke<ToolIconFile[]>("tool_icons", { id });
+export const toolDefaultIcon = (id: string, tool: GameTool) =>
+  invoke<string | null>("tool_default_icon", { id, tool });
+export const importToolIcon = (toolId: string, source: string) =>
+  invoke<ImportedToolIcon>("import_tool_icon", { toolId, source });
+export const runGameTool = (id: string, toolId: string) =>
+  invoke<void>("run_game_tool", { id, toolId });
+/** Creates (or updates) shortcuts that start these games through Questkeep. */
+export const createShortcuts = (ids: string[], places: ShortcutPlace[]) =>
+  invoke<ShortcutResult>("create_shortcuts", { ids, places });
 export const launchProfiles = (id: string) => invoke<LaunchProfiles>("launch_profiles", { id });
 /** Saves a whole profile list (the Edit dialog's draft) in one step. */
 export const replaceLaunchProfiles = (id: string, draft: ProfilesDraft) =>

@@ -451,12 +451,25 @@ pub struct SiteIcons {
 }
 
 impl SiteIcons {
+    /// The price sites' icons, in `<data>/images/sites`.
     pub fn new(paths: &DataPaths, events: EventBus) -> Self {
         Self::with_fetch(paths, events, Box::new(HttpFetch::new()))
     }
 
+    /// Favicons for other links (the links of tools), in `<data>/images/<folder>`.
+    pub fn in_folder(paths: &DataPaths, events: EventBus, folder: &str) -> Self {
+        Self::open(
+            paths.images_dir().join(folder),
+            events,
+            Box::new(HttpFetch::new()),
+        )
+    }
+
     pub(crate) fn with_fetch(paths: &DataPaths, events: EventBus, fetch: Box<dyn Fetch>) -> Self {
-        let dir = paths.images_dir().join("sites");
+        Self::open(paths.images_dir().join("sites"), events, fetch)
+    }
+
+    fn open(dir: PathBuf, events: EventBus, fetch: Box<dyn Fetch>) -> Self {
         let state = std::fs::read(dir.join(STATE_FILE))
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
@@ -502,6 +515,24 @@ impl SiteIcons {
             }
         }
         self.forget_others(&wanted);
+        self.fetch_due(wanted, force);
+    }
+
+    /// Fetches, in a background thread, the icons of these https links that are missing or due,
+    /// keeping every other icon. Returns at once.
+    pub fn request(&self, urls: &[&str]) {
+        let mut wanted: Vec<HttpsUrl> = Vec::new();
+        for url in urls {
+            if let Some(url) = HttpsUrl::parse(url)
+                && !wanted.iter().any(|w| w.host == url.host)
+            {
+                wanted.push(url);
+            }
+        }
+        self.fetch_due(wanted, false);
+    }
+
+    fn fetch_due(&self, wanted: Vec<HttpsUrl>, force: bool) {
         let now = Utc::now();
         let due: Vec<HttpsUrl> = {
             let state = self.lock_state();

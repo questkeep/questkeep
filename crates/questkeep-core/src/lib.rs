@@ -20,6 +20,7 @@ pub mod installs;
 pub mod launcher;
 pub mod library;
 pub mod live;
+pub mod manual;
 pub mod metadata;
 pub mod model;
 pub mod notifications;

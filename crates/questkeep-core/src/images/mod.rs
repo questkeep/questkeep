@@ -14,7 +14,9 @@ use uuid::Uuid;
 use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
-pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
+pub use fetcher::{
+    CoverFetcher, CoverJob, LOGO_BACKFILL_KEY, MetadataFetcher, MetadataJob, image_extension,
+};
 pub(crate) use fetcher::{download, http_agent};
 pub(crate) use igdb::CHECKED_KEY as IGDB_CHECKED_KEY;
 pub use igdb::{Igdb, IgdbLookup};
@@ -35,6 +37,7 @@ pub(crate) fn user_image_key(kind: ImageKind) -> &'static str {
     match kind {
         ImageKind::Cover => "userCover",
         ImageKind::Background => "userBackground",
+        ImageKind::Logo => "userLogo",
         ImageKind::Icon => "userIcon",
     }
 }
@@ -75,17 +78,25 @@ pub enum ImageKind {
     Cover,
     /// Wide background / hero image.
     Background,
+    /// The game's title as transparent artwork (usually PNG or WebP).
+    Logo,
     /// Small square icon for menus (always a 32x32 PNG, see [`icons`]).
     Icon,
 }
 
 impl ImageKind {
-    const ALL: [ImageKind; 3] = [ImageKind::Cover, ImageKind::Background, ImageKind::Icon];
+    const ALL: [ImageKind; 4] = [
+        ImageKind::Cover,
+        ImageKind::Background,
+        ImageKind::Logo,
+        ImageKind::Icon,
+    ];
 
     fn dir_name(self) -> &'static str {
         match self {
             ImageKind::Cover => "covers",
             ImageKind::Background => "backgrounds",
+            ImageKind::Logo => "logos",
             ImageKind::Icon => "icons",
         }
     }

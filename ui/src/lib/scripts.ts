@@ -271,10 +271,7 @@ export function actionScripts(applied: readonly Script[]): Script[] {
 }
 
 /** The action buttons of the game page: the first ones as buttons, the rest under "More". */
-export function splitActions(
-  actions: readonly Script[],
-  buttons = 2,
-): { shown: Script[]; more: Script[] } {
+export function splitActions<T>(actions: readonly T[], buttons = 2): { shown: T[]; more: T[] } {
   return { shown: actions.slice(0, buttons), more: actions.slice(buttons) };
 }
 

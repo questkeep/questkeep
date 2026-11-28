@@ -11,6 +11,7 @@ mod exe_icon;
 #[cfg(windows)]
 mod priority;
 mod processes;
+pub mod shortcut;
 
 pub use close::{close_windows, terminate};
 pub use processes::{ProcessRef, list_processes, open_process};

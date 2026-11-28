@@ -3,4 +3,4 @@
 /**
  * A field filtered by a list of values.
  */
-export type ListField = "source" | "category" | "completionStatus" | "genre" | "tag" | "feature" | "series" | "platform" | "ageRating" | "developer" | "publisher" | "gameMode" | "theme" | "perspective";
+export type ListField = "source" | "category" | "completionStatus" | "genre" | "tag" | "feature" | "series" | "platform" | "ageRating" | "developer" | "publisher" | "gameMode" | "theme" | "perspective" | "region";

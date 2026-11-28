@@ -38,10 +38,28 @@ export function pickGameImage(icon: boolean): Promise<string | null> {
   ]);
 }
 
+/** A tool's icon: a picture, or a program whose icon is taken. */
+export function pickToolIcon(): Promise<string | null> {
+  return pickFile(tr("chooseIcon"), [
+    {
+      name: tr("filterIconOrImage"),
+      extensions: ["png", "jpg", "jpeg", "webp", "gif", "ico", "svg", "exe"],
+    },
+  ]);
+}
+
 /** A Questkeep backup archive to import. */
 export function pickBackupFile(): Promise<string | null> {
   return pickFile(tr("chooseBackup"), [
     { name: tr("filterBackup"), extensions: ["zip"] },
+    { name: tr("filterAllFiles"), extensions: ["*"] },
+  ]);
+}
+
+/** A game's manual: a document, or any file. */
+export function pickManualFile(): Promise<string | null> {
+  return pickFile(tr("chooseManual"), [
+    { name: tr("filterManual"), extensions: ["pdf", "txt", "md", "html", "htm", "doc", "docx"] },
     { name: tr("filterAllFiles"), extensions: ["*"] },
   ]);
 }

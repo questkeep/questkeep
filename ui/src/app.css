@@ -1333,6 +1333,41 @@ ul {
   height: 100%;
   object-fit: cover;
 }
+/* Small labels in the hero's top corners: the stores (left), players right now (right). In the
+   side panel they sit below its pin and close buttons. */
+.details__badge {
+  position: absolute;
+  z-index: 1;
+  top: var(--qk-details-badge-top);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  max-width: calc(50% - var(--qk-details-pad));
+  margin: 0;
+  padding: var(--qk-space-1) var(--qk-space-3);
+  border-radius: var(--qk-radius-pill);
+  background: var(--qk-color-hero-button);
+  color: var(--qk-color-text);
+  font-size: var(--qk-font-size-sm);
+  font-weight: var(--qk-font-weight-bold);
+  white-space: nowrap;
+}
+.details__badge > span:not(.players-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.details__badge--stores {
+  left: var(--qk-details-pad);
+}
+.details__badge--players {
+  right: var(--qk-details-pad);
+}
+.details:not(.details--page) .details__badge {
+  top: var(--qk-details-badge-top-panel);
+}
+.details__hero--empty {
+  background: var(--qk-details-hero-empty);
+}
 .details__hero::after {
   content: "";
   position: absolute;
@@ -1372,6 +1407,43 @@ ul {
   line-height: var(--qk-line-height-tight);
   word-break: break-word;
 }
+/* A logo replaces the title text; the h2 stays (its text visually hidden) for the heading structure. */
+.details__title--logo {
+  position: relative;
+  line-height: 0;
+}
+/* Sized by area, not by width or height: every logo covers about the same space, so a wide one
+   gets wide but short and a square one taller. --qk-logo-aspect is set from the loaded image. */
+.details__logo {
+  --logo-area: var(--qk-details-logo-area-sm);
+  --logo-max-height: var(--qk-details-logo-height-sm);
+  display: block;
+  width: min(
+    100%,
+    calc(sqrt(var(--logo-area) * var(--qk-logo-aspect, 3)) * 1px),
+    calc(var(--logo-max-height) * var(--qk-logo-aspect, 3))
+  );
+  aspect-ratio: var(--qk-logo-aspect, 3);
+  position: relative;
+  /* Centered under the centered cover; beside the cover (wider) it starts at the left. */
+  margin-inline: auto;
+  visibility: hidden;
+}
+.details__logo--ready {
+  visibility: visible;
+}
+/* The box is the logo's solid artwork (--qk-logo-left/top/width/height, shares of the image);
+   the whole image is placed around it, so glow and shadow spill over the box. */
+.details__logo img {
+  position: absolute;
+  left: calc(-100% * var(--qk-logo-left, 0) / var(--qk-logo-width, 1));
+  top: calc(-100% * var(--qk-logo-top, 0) / var(--qk-logo-height, 1));
+  width: calc(100% / var(--qk-logo-width, 1));
+  height: calc(100% / var(--qk-logo-height, 1));
+  max-width: none;
+  pointer-events: none;
+  filter: var(--qk-details-logo-shadow);
+}
 .details__subtitle {
   color: var(--qk-color-text-muted);
 }
@@ -1382,8 +1454,28 @@ ul {
   gap: var(--qk-space-3) var(--qk-space-5);
   margin-top: var(--qk-space-2);
 }
-.details__actions .play-split {
+/* Narrow: Play on a line of its own, centered and no wider than a button needs to be. */
+/* Play with the tool and script buttons beside it. Narrow: a centered line of its own, Play
+   growing up to its max width when there is room. */
+.details__launch {
+  display: flex;
   flex: 1 1 100%;
+  align-items: center;
+  justify-content: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.details__launch .play-split {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.details__launch .btn--play {
+  flex: 0 1 var(--qk-details-play-max-width);
+  min-width: var(--qk-details-play-width);
+}
+.details__launch .script-actions {
+  flex: none;
+  flex-wrap: nowrap;
 }
 .details__stats {
   display: flex;
@@ -1402,13 +1494,23 @@ ul {
   margin: 0;
   font-weight: var(--qk-font-weight-bold);
 }
-.details__stores {
+/* Stats and the buttons: one item of the action row, so they wrap below Play together. Below
+   Play it takes the line, with the buttons at its right end. */
+.details__meta {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: var(--qk-space-2);
+  gap: var(--qk-space-3) var(--qk-space-5);
+  min-width: 0;
+}
+.details__meta .details__stats {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .details__tools {
   display: flex;
+  flex: none;
+  margin-left: auto;
   align-items: center;
   gap: var(--qk-space-2);
 }
@@ -1494,11 +1596,22 @@ ul {
   .details__title {
     font-size: var(--qk-font-size-title);
   }
-  .details__actions .play-split {
-    flex: none;
+  .details__logo {
+    --logo-area: var(--qk-details-logo-area);
+    --logo-max-height: var(--qk-details-logo-height);
+    margin-inline: 0;
   }
-  .details__tools {
-    margin-left: auto;
+  .details__launch {
+    flex: none;
+    justify-content: flex-start;
+  }
+  /* `width: auto`: the generic 100% would take the whole split and push its chevron out. */
+  .details__launch .btn--play {
+    flex: none;
+    width: auto;
+  }
+  .details__meta {
+    flex: 0 1 auto;
   }
   .details__actions .btn--play {
     min-width: var(--qk-details-play-width);
@@ -1506,6 +1619,13 @@ ul {
   }
 }
 /* Wide: About, News and Details on the left, the at-a-glance cards on the right. */
+@container details (min-width: 1400px) {
+  .details__logo {
+    --logo-area: var(--qk-details-logo-area-lg);
+    --logo-max-height: var(--qk-details-logo-height-lg);
+  }
+}
+
 @container details (min-width: 700px) {
   .details__cards {
     display: grid;
@@ -1520,9 +1640,6 @@ ul {
   }
   .details__cards .details-card {
     order: 0;
-  }
-  .details__stats .details__stat--stores {
-    display: block;
   }
 }
 @container details (min-width: 720px) {
@@ -1947,6 +2064,16 @@ ul {
   height: var(--qk-image-icon-preview);
   image-rendering: auto;
 }
+.image-row--logo .image-row__frame {
+  background-color: var(--qk-image-checker-a);
+  background-image: conic-gradient(
+    var(--qk-image-checker-b) 25%,
+    transparent 0 50%,
+    var(--qk-image-checker-b) 0 75%,
+    transparent 0
+  );
+  background-size: calc(var(--qk-image-checker-size) * 2) calc(var(--qk-image-checker-size) * 2);
+}
 .image-row__info {
   display: flex;
   flex-direction: column;
@@ -2203,6 +2330,9 @@ ul {
 .image-picker--cover .image-picker__grid {
   grid-template-columns: repeat(auto-fill, minmax(var(--qk-picker-cover-width), 1fr));
 }
+.image-picker--logo .image-picker__grid {
+  grid-template-columns: repeat(auto-fill, minmax(var(--qk-picker-logo-width), 1fr));
+}
 .image-picker--icon .image-picker__grid {
   grid-template-columns: repeat(auto-fill, minmax(var(--qk-picker-icon-width), 1fr));
 }
@@ -2221,6 +2351,22 @@ ul {
 }
 .image-picker--cover .image-picker__item {
   aspect-ratio: 2 / 3;
+}
+.image-picker--logo .image-picker__item {
+  background-color: var(--qk-image-checker-a);
+  background-image: conic-gradient(
+    var(--qk-image-checker-b) 25%,
+    transparent 0 50%,
+    var(--qk-image-checker-b) 0 75%,
+    transparent 0
+  );
+  background-size: calc(var(--qk-image-checker-size) * 2) calc(var(--qk-image-checker-size) * 2);
+}
+.image-picker--logo .image-picker__item img {
+  inset: var(--qk-space-2);
+  width: calc(100% - var(--qk-space-2) * 2);
+  height: calc(100% - var(--qk-space-2) * 2);
+  object-fit: contain;
 }
 .image-picker--icon .image-picker__item {
   aspect-ratio: 1;
@@ -5325,11 +5471,6 @@ ul {
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-faint);
 }
-.details__stat--players dd {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--qk-space-1);
-}
 .players-dot {
   width: var(--qk-titlebar-dot-size);
   height: var(--qk-titlebar-dot-size);
@@ -5583,10 +5724,6 @@ ul {
   margin: 0;
   color: var(--qk-color-text-muted);
   font-size: var(--qk-font-size-sm);
-}
-/* Narrow: the stores are listed in the Library card instead. */
-.details__stat--stores {
-  display: none;
 }
 
 /* First-run setup */
@@ -8114,10 +8251,29 @@ ul {
   font-size: var(--qk-font-size-xs);
 }
 .script-actions {
+  position: relative;
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
   gap: var(--qk-space-2);
+}
+/* The hidden copy of the buttons the game page measures. */
+.script-actions__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: var(--qk-space-2);
+  white-space: nowrap;
+  visibility: hidden;
+  pointer-events: none;
+}
+/* A tool's picture (its icon, the program's or the site's), the size of an icon. */
+.tool-icon {
+  width: var(--qk-icon-size);
+  height: var(--qk-icon-size);
+  flex: none;
+  object-fit: contain;
 }
 
 /* Pages with several parts show each part as a card. */
@@ -9056,4 +9212,123 @@ label[for="quick-launch-add"] {
   font-family: var(--qk-font-mono);
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-muted);
+}
+
+/* Trailer card: a 16:9 stage, never taller than a share of the window (a 4K page must not get a
+   2000px video), centered in its card. */
+.trailer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.trailer__stage {
+  position: relative;
+  width: 100%;
+  max-width: calc(var(--qk-trailer-max-height) * 16 / 9);
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-trailer-backdrop);
+}
+.trailer__poster {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.trailer__poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.trailer__play {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--qk-trailer-play-size);
+  height: var(--qk-trailer-play-size);
+  border-radius: 50%;
+  background: var(--qk-trailer-play-bg);
+  color: var(--qk-trailer-play-fg);
+  font-size: var(--qk-font-size-xl);
+  transition: transform var(--qk-duration-fast) var(--qk-easing);
+}
+.trailer__poster:hover .trailer__play,
+.trailer__poster:focus-visible .trailer__play {
+  transform: scale(1.08);
+}
+.trailer__video,
+.trailer__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--qk-trailer-backdrop);
+}
+.trailer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qk-space-2);
+  font-size: var(--qk-font-size-sm);
+  min-width: 0;
+}
+.trailer__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trailer__position,
+.trailer__source {
+  white-space: nowrap;
+}
+.trailer__hd[aria-pressed="true"] {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+}
+.trailer__error {
+  margin: 0;
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+/* Spaced like the launch profiles above it (an .edit-section). */
+.tools-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  margin-top: var(--qk-space-5);
+}
+.tools-edit__target {
+  overflow-wrap: anywhere;
+}
+/* The Icon row of a tool's form: the picture in a control-sized box, centered with the buttons. */
+.tools-edit__icon {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.tools-edit__icon-preview {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--qk-control-height);
+  height: var(--qk-control-height);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface-raised);
+}
+.tools-edit__icon-preview .icon,
+.tools-edit__icon-preview .tool-icon {
+  width: var(--qk-tool-icon-preview-size);
+  height: var(--qk-tool-icon-preview-size);
 }

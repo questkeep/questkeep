@@ -12,6 +12,7 @@ mod script;
 mod sorting;
 mod start;
 mod sync;
+mod tool;
 mod view;
 
 pub use category::*;
@@ -29,4 +30,5 @@ pub use sorting::{
 };
 pub use start::*;
 pub use sync::{ImportExclusion, SyncTimes};
+pub use tool::{GameTool, ImportedToolIcon, ToolIconFile};
 pub use view::*;

@@ -866,6 +866,33 @@ pub async fn open_install_folder(
         })
 }
 
+/// Opens a game's manual: a web address in the browser, a file (relative ones against the install
+/// folder) with its system handler. Done from Rust so the webview needs no permission for it.
+#[tauri::command]
+pub async fn open_manual(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<()> {
+    use questkeep_core::manual::{ManualTarget, resolve};
+    use tauri_plugin_opener::OpenerExt;
+    let target = blocking(state, move |s| {
+        let game = s.library.get_game(parse_id(&id)?)?;
+        resolve(game.manual.as_deref(), game.install_dir.as_deref())
+    })
+    .await?;
+    let opened = match target {
+        ManualTarget::Url(url) => app.opener().open_url(url, None::<&str>),
+        ManualTarget::File(path) => app
+            .opener()
+            .open_path(path.display().to_string(), None::<&str>),
+    };
+    opened.map_err(|e| {
+        tracing::warn!(error = %e, "could not open a manual");
+        format!("Could not open the manual: {e}")
+    })
+}
+
 /// Sign-in state of every store with an account (GOG, Epic).
 #[tauri::command]
 pub async fn account_status(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<AccountStatus>> {
@@ -1268,6 +1295,15 @@ pub async fn game_news(state: State<'_, Arc<AppState>>, id: String) -> CmdResult
     blocking(state, move |s| s.library.game_news(parse_id(&id)?)).await
 }
 
+/// A game's trailers (game page).
+#[tauri::command]
+pub async fn game_trailers(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Vec<questkeep_core::model::Trailer>> {
+    blocking(state, move |s| s.library.game_trailers(parse_id(&id)?)).await
+}
+
 /// Price comparison sites suggested for the user's region (Settings).
 #[tauri::command]
 pub fn price_site_suggestions() -> questkeep_core::price_sites::PriceSiteSuggestions {
@@ -1477,6 +1513,88 @@ pub async fn launch_profiles(
     id: String,
 ) -> CmdResult<LaunchProfiles> {
     blocking(state, move |s| s.library.launch_profiles(parse_id(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn game_tools(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Vec<questkeep_core::model::GameTool>> {
+    blocking(state, move |s| s.library.game_tools(parse_id(&id)?)).await
+}
+
+/// Saves the Edit dialog's tool list (in this order).
+#[tauri::command]
+pub async fn replace_game_tools(
+    state: State<'_, Arc<AppState>>,
+    caller: Caller,
+    id: String,
+    tools: Vec<questkeep_core::model::GameTool>,
+) -> CmdResult<Vec<questkeep_core::model::GameTool>> {
+    acting(state, caller, move |s| {
+        s.library.replace_game_tools(parse_id(&id)?, &tools)
+    })
+    .await
+}
+
+/// The icon files to draw for a game's tools (game page).
+#[tauri::command]
+pub async fn tool_icons(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Vec<questkeep_core::model::ToolIconFile>> {
+    blocking(state, move |s| s.library.tool_icons(parse_id(&id)?)).await
+}
+
+/// The automatic icon of a tool in the Edit dialog (its program's icon or the link's favicon).
+#[tauri::command]
+pub async fn tool_default_icon(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    tool: questkeep_core::model::GameTool,
+) -> CmdResult<Option<String>> {
+    blocking(state, move |s| {
+        s.library.tool_default_icon(parse_id(&id)?, &tool)
+    })
+    .await
+}
+
+/// Copies a picked picture (a file, a program's icon, or a web search result) for a tool.
+#[tauri::command]
+pub async fn import_tool_icon(
+    state: State<'_, Arc<AppState>>,
+    tool_id: String,
+    source: String,
+) -> CmdResult<questkeep_core::model::ImportedToolIcon> {
+    blocking(state, move |s| {
+        s.library.import_tool_icon(parse_id(&tool_id)?, &source)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn run_game_tool(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    tool_id: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.run_game_tool(parse_id(&id)?, parse_id(&tool_id)?)
+    })
+    .await
+}
+
+/// Creates (or updates) desktop / Start menu shortcuts for games.
+#[tauri::command]
+pub async fn create_shortcuts(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+    places: Vec<questkeep_core::platform::shortcut::ShortcutPlace>,
+) -> CmdResult<questkeep_core::library::ShortcutResult> {
+    blocking(state, move |s| {
+        s.library.create_shortcuts(&parse_ids(&ids)?, &places)
+    })
+    .await
 }
 
 /// Adds (`profile_id` none) or changes a launch profile.

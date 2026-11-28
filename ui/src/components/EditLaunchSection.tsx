@@ -7,6 +7,7 @@ import { createSignal, createUniqueId, For, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import type { LaunchProfile } from "../bindings/LaunchProfile";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
+import type { GameTool } from "../bindings/GameTool";
 import type { PlayAction } from "../bindings/PlayAction";
 import { moveItem } from "../lib/editGame";
 import { pickDirectory, pickExecutable } from "../lib/pickers";
@@ -14,10 +15,13 @@ import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { copyLabel } from "../lib/copies";
 import { SourceIcon, sourceName } from "./SourceIcon";
+import { EditToolsList } from "./EditToolsList";
 
 const tr = translator(gameLaunch);
 
 const EXECUTABLE = "executable";
+/** An own profile that opens a link (`uri` action) instead of starting an executable. */
+const LINK = "link";
 
 function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
@@ -45,7 +49,10 @@ function ProfileForm(props: {
   const startAction = () => (manualCopy() ? props.copyAction : props.profile?.action) ?? null;
   const [name, setName] = createSignal(props.profile?.customName ?? "");
   const [basedOn, setBasedOn] = createSignal(
-    props.profile ? (props.profile.copyId ?? EXECUTABLE) : (props.game.copies[0]?.id ?? EXECUTABLE),
+    props.profile
+      ? (props.profile.copyId ??
+          (props.profile.own && props.profile.action?.kind === "uri" ? LINK : EXECUTABLE))
+      : (props.game.copies[0]?.id ?? EXECUTABLE),
   );
   const [args, setArgs] = createSignal(
     (manualCopy() ? startAction()?.args : props.profile?.args) ?? "",
@@ -56,6 +63,7 @@ function ProfileForm(props: {
   const argsId = createUniqueId();
 
   const executable = () => manualCopy() || basedOn() === EXECUTABLE;
+  const link = () => !manualCopy() && basedOn() === LINK;
   const argsSupported = () => {
     if (executable()) return true;
     if (props.profile && !own()) return props.profile.argsSupported;
@@ -67,24 +75,33 @@ function ProfileForm(props: {
     event.preventDefault();
     event.stopPropagation();
     const base = startAction();
-    const action: PlayAction | null = executable()
+    const action: PlayAction | null = link()
       ? {
-          kind: base?.kind ?? "file",
+          kind: "uri",
           target: target().trim(),
-          args: emptyToNull(args()),
-          workingDir: emptyToNull(workingDir()),
+          args: null,
+          workingDir: null,
           tracking: base?.tracking ?? "default",
           trackingPath: base?.trackingPath ?? null,
         }
-      : null;
-    if (executable() && action?.target === "") {
-      setError(tr("chooseExecutable"));
+      : executable()
+        ? {
+            kind: manualCopy() ? (base?.kind ?? "file") : "file",
+            target: target().trim(),
+            args: emptyToNull(args()),
+            workingDir: emptyToNull(workingDir()),
+            tracking: base?.tracking ?? "default",
+            trackingPath: base?.trackingPath ?? null,
+          }
+        : null;
+    if ((executable() || link()) && action?.target === "") {
+      setError(tr(link() ? "chooseLink" : "chooseExecutable"));
       return;
     }
     const failure = props.onSave({
       name: emptyToNull(name()),
       basedOn: basedOn(),
-      args: executable() ? null : emptyToNull(args()),
+      args: executable() || link() ? null : emptyToNull(args()),
       action,
     });
     setError(failure);
@@ -132,6 +149,15 @@ function ProfileForm(props: {
             >
               {tr("executable")}
             </button>
+            <button
+              type="button"
+              role="radio"
+              class="segmented__option"
+              aria-checked={basedOn() === LINK}
+              onClick={() => setBasedOn(LINK)}
+            >
+              {tr("link")}
+            </button>
           </div>
         </div>
       </Show>
@@ -154,27 +180,40 @@ function ProfileForm(props: {
           </span>
         </label>
       </Show>
-      <div class="field field--full">
-        <label class="field__label" for={argsId}>
-          {executable() ? tr("arguments") : tr("extraArguments")}
+      <Show when={link()}>
+        <label class="field field--full">
+          <span class="field__label">{tr("link")}</span>
+          <input
+            class="input"
+            value={target()}
+            placeholder={tr("linkPlaceholder")}
+            onInput={(event) => setTarget(event.currentTarget.value)}
+          />
         </label>
-        <input
-          id={argsId}
-          class="input"
-          value={args()}
-          disabled={!argsSupported()}
-          placeholder={tr("argsPlaceholder")}
-          aria-describedby="profile-args-hint"
-          onInput={(event) => setArgs(event.currentTarget.value)}
-        />
-        <span class="field__hint" id="profile-args-hint">
-          {argsSupported()
-            ? executable()
-              ? tr("passedToExe")
-              : tr("passedToStore")
-            : tr("noArgs")}
-        </span>
-      </div>
+      </Show>
+      <Show when={!link()}>
+        <div class="field field--full">
+          <label class="field__label" for={argsId}>
+            {executable() ? tr("arguments") : tr("extraArguments")}
+          </label>
+          <input
+            id={argsId}
+            class="input"
+            value={args()}
+            disabled={!argsSupported()}
+            placeholder={tr("argsPlaceholder")}
+            aria-describedby="profile-args-hint"
+            onInput={(event) => setArgs(event.currentTarget.value)}
+          />
+          <span class="field__hint" id="profile-args-hint">
+            {argsSupported()
+              ? executable()
+                ? tr("passedToExe")
+                : tr("passedToStore")
+              : tr("noArgs")}
+          </span>
+        </div>
+      </Show>
       <Show when={executable()}>
         <label class="field field--full">
           <span class="field__label">{tr("workingDir")}</span>
@@ -226,6 +265,9 @@ export function EditLaunchSection(props: {
   /** The (edited) launch of a manual copy. */
   copyAction: (copyId: string) => PlayAction | null;
   onCopyAction: (copyId: string, action: PlayAction) => void;
+  /** The (edited) tools; `undefined` while loading. */
+  tools: GameTool[] | undefined;
+  onToolsChange: (tools: GameTool[]) => void;
 }) {
   const [open, setOpen] = createSignal<string | null>(null);
   const [menu, setMenu] = createSignal<{ profile: LaunchProfile; anchor: PopoverAnchor } | null>(
@@ -263,7 +305,9 @@ export function EditLaunchSection(props: {
       props.onCopyAction(profile.id, input.action);
     }
     const copy =
-      input.basedOn === EXECUTABLE ? null : props.game.copies.find((c) => c.id === input.basedOn);
+      input.basedOn === EXECUTABLE || input.basedOn === LINK
+        ? null
+        : props.game.copies.find((c) => c.id === input.basedOn);
     if (profile && !profile.own) {
       const manual = profile.source === "manual";
       const next: LaunchProfile = {
@@ -497,6 +541,15 @@ export function EditLaunchSection(props: {
               if (returnFocus) button?.focus();
             }}
             entries={menuEntries(current().profile)}
+          />
+        )}
+      </Show>
+      <Show when={props.tools}>
+        {(tools) => (
+          <EditToolsList
+            game={props.game}
+            tools={tools()}
+            onChange={(next) => props.onToolsChange(next)}
           />
         )}
       </Show>

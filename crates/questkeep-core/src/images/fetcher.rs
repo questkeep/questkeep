@@ -305,6 +305,21 @@ fn process(shared: &Shared, job: &CoverJob) {
     if wants_background && let Some((ext, bytes)) = sgdb(ImageKind::Background) {
         changed |= store(shared, &game, ImageKind::Background, ext, &bytes);
     }
+    // The logo follows the same rule: the metadata worker does it for stores that offer logos.
+    let provider_has_logo = || {
+        let (Some(provider), Some(id)) = (provider.as_ref(), job.source_game_id.as_deref()) else {
+            return false;
+        };
+        !provider.logo_candidates(id).is_empty()
+    };
+    let wants_logo = shared.artwork.is_configured()
+        && (job.force
+            || (game.logo_path.is_none()
+                && !is_checked(&game, ImageKind::Logo)
+                && !provider_has_logo()));
+    if wants_logo && let Some((ext, bytes)) = sgdb(ImageKind::Logo) {
+        changed |= store(shared, &game, ImageKind::Logo, ext, &bytes);
+    }
     if changed {
         shared.events.publish(CoreEvent::GamesChanged {
             ids: vec![job.game_id],
@@ -331,6 +346,7 @@ fn store(shared: &Shared, game: &Game, kind: ImageKind, ext: &str, bytes: &[u8])
                     super::drop_cover_icon(&shared.db, &shared.images, game).map(|_| ())
                 }),
             ImageKind::Background => shared.db.set_background_path(game.id, Some(&rel)),
+            ImageKind::Logo => shared.db.set_logo_path(game.id, Some(&rel)),
             ImageKind::Icon => shared.db.set_icon_path(game.id, Some(&rel)),
         })
         .inspect_err(|err| tracing::warn!(game = %game.id, %err, "could not store image"))
@@ -441,7 +457,14 @@ enum Job {
     Metadata(MetadataJob),
     /// Make the game's tray icon.
     Icon(Uuid),
+    /// Look for a logo once more (games of libraries from before logos, see
+    /// [`LOGO_BACKFILL_KEY`]).
+    Logo(Uuid),
 }
+
+/// `games.extra` key of games that still get one logo search: set by the migration that came
+/// with logos, removed once the game was searched.
+pub const LOGO_BACKFILL_KEY: &str = "logoBackfill";
 
 /// Single-worker metadata queue. Like [`CoverFetcher`], closing it stops the worker after its
 /// current job.
@@ -534,6 +557,26 @@ impl MetadataFetcher {
         self.send_all(sender, jobs)
     }
 
+    /// Queues one logo search for each of these games, skipping games already queued.
+    /// Returns how many were queued.
+    pub fn enqueue_logos(&self, ids: impl IntoIterator<Item = Uuid>) -> usize {
+        let guard = self.sender.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(sender) = guard.as_ref() else {
+            return 0;
+        };
+        let mut queued = self
+            .shared
+            .queued
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let jobs = ids
+            .into_iter()
+            .filter(|id| queued.insert(*id))
+            .map(Job::Logo)
+            .collect();
+        self.send_all(sender, jobs)
+    }
+
     /// Counts and sends jobs; returns how many were sent. Counted before sending, so the worker
     /// can't finish a job before it is counted.
     fn send_all(&self, sender: &Sender<Job>, jobs: Vec<Job>) -> usize {
@@ -582,6 +625,29 @@ fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
                     process_metadata(shared, &job, &mut last_request);
                     Ok(())
                 });
+            }
+            Job::Logo(id) => {
+                let change = shared
+                    .runs
+                    .change(&shared.db, Actor::app(), reason::METADATA_FETCH);
+                let stored = shared
+                    .db
+                    .record_long(&change, &[id], || {
+                        let stored = backfill_logo(shared, id);
+                        shared.db.set_extra_value(id, LOGO_BACKFILL_KEY, None)?;
+                        Ok(stored)
+                    })
+                    .unwrap_or(false);
+                shared
+                    .queued
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&id);
+                if stored {
+                    shared
+                        .events
+                        .publish(CoreEvent::GamesChanged { ids: vec![id] });
+                }
             }
             Job::Icon(id) => {
                 let change = shared
@@ -684,6 +750,7 @@ fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut
     }
     if let Some((provider, source_id)) = &store {
         changed |= fetch_background(shared, provider.as_ref(), job.game_id, source_id);
+        changed |= fetch_logo(shared, Some((provider.as_ref(), source_id)), job.game_id);
         // Last step: the store data is cached by now, so this adds no request for most stores.
         shared
             .icons_seen
@@ -895,6 +962,70 @@ fn fetch_background(
         .and_then(|rel| shared.db.set_background_path(game_id, Some(&rel)))
         .inspect_err(|err| tracing::warn!(game = %game_id, %err, "could not store background"))
         .is_ok()
+}
+
+/// Stores a logo if the game has none yet, from the store first, then SteamGridDB. Returns
+/// whether one was stored.
+fn fetch_logo(
+    shared: &MetadataShared,
+    store: Option<(&dyn LibraryProvider, &str)>,
+    game_id: Uuid,
+) -> bool {
+    let Ok(Some(game)) = shared.db.find_game(game_id) else {
+        return false;
+    };
+    if game.logo_path.is_some() || super::is_user_image(&game, ImageKind::Logo) {
+        return false;
+    }
+    let candidates = store
+        .map(|(provider, id)| provider.logo_candidates(id))
+        .unwrap_or_default();
+    let found = first_image(&shared.http, &candidates).or_else(|| {
+        (shared.artwork.is_configured() && !is_checked(&game, ImageKind::Logo))
+            .then(|| {
+                steamgriddb_lookup(
+                    &shared.db,
+                    &shared.artwork,
+                    &shared.http,
+                    &game,
+                    ImageKind::Logo,
+                )
+            })
+            .flatten()
+    });
+    let Some((ext, bytes)) = found else {
+        return false;
+    };
+    shared
+        .images
+        .store_image(ImageKind::Logo, game_id, ext, &bytes)
+        .and_then(|rel| shared.db.set_logo_path(game_id, Some(&rel)))
+        .inspect_err(|err| tracing::warn!(game = %game_id, %err, "could not store logo"))
+        .is_ok()
+}
+
+/// The one logo search of a game from before logos: its store (or the store game a manual game
+/// is linked to) first, then SteamGridDB. Returns whether a logo was stored.
+fn backfill_logo(shared: &MetadataShared, game_id: Uuid) -> bool {
+    let Ok(Some(game)) = shared.db.find_game(game_id) else {
+        return false;
+    };
+    if is_fake_source(&game.source) {
+        return false;
+    }
+    let target = match (&game.source_game_id, game.linked_store_game()) {
+        (_, Some(linked)) => Some(linked),
+        (Some(id), None) => Some((game.source.clone(), id.clone())),
+        (None, None) => None,
+    };
+    let provider = target
+        .as_ref()
+        .and_then(|(source, id)| shared.providers.get(source).map(|p| (p, id.as_str())));
+    fetch_logo(
+        shared,
+        provider.as_ref().map(|(p, id)| (p.as_ref(), *id)),
+        game_id,
+    )
 }
 
 /// Makes the game's tray icon if it has none (or its file is gone). Returns whether one was
@@ -1235,10 +1366,13 @@ mod tests {
         fn background_candidates(&self, _id: &str) -> Vec<ImageCandidate> {
             vec![ImageCandidate::File(self.0.clone())]
         }
+        fn logo_candidates(&self, _id: &str) -> Vec<ImageCandidate> {
+            vec![ImageCandidate::File(self.0.clone())]
+        }
     }
 
     #[test]
-    fn fetches_metadata_and_background() {
+    fn fetches_metadata_background_and_logo() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = DataPaths::new(tmp.path().join("data"));
         paths.ensure_dirs().unwrap();
@@ -1282,7 +1416,7 @@ mod tests {
         assert_eq!(fetcher.enqueue(jobs), 3);
 
         let start = Instant::now();
-        while db.get_game(games[2].id).unwrap().background_path.is_none() {
+        while db.get_game(games[2].id).unwrap().logo_path.is_none() {
             assert!(start.elapsed() < Duration::from_secs(5));
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -1290,6 +1424,10 @@ mod tests {
         assert_eq!(g1.description.as_deref(), Some("A game."));
         assert_eq!(g1.genres, vec!["Puzzle".to_string()]);
         assert!(g1.background_path.is_some());
+        assert!(
+            g1.logo_path.is_some(),
+            "the store's logo is stored after the background"
+        );
         let g2 = db.get_game(games[1].id).unwrap();
         assert!(
             g2.metadata_updated_at.is_some(),

@@ -15,6 +15,7 @@ import { Modal } from "./Modal";
 const TITLES = {
   cover: "chooseCover",
   background: "chooseBackground",
+  logo: "chooseLogo",
   icon: "chooseIcon",
 } as const satisfies Record<ImageSlot, string>;
 

@@ -1,6 +1,6 @@
 //! `Library`: the facade the Tauri shell talks to. Wires database, providers, images and events.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
@@ -38,6 +38,10 @@ use crate::tray::{self, TrayGames};
 use questkeep_store_api::model::{AddGameOption, AddGameSection, AddGameTarget};
 
 mod edit;
+mod shortcuts;
+mod tools;
+
+pub use shortcuts::ShortcutResult;
 
 /// A metadata source the user can put in order (settings).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -104,6 +108,8 @@ pub struct Library {
     scripts: crate::scripts::Scripts,
     /// Icons of the price comparison sites.
     site_icons: crate::images::SiteIcons,
+    /// Favicons of tools' links.
+    tool_sites: crate::images::SiteIcons,
     /// Who changed what (also attached to the database, where the recorder finds it).
     activity: Arc<ActivityLog>,
     /// Stores whose expired sign-in was noted in the activity log in this run.
@@ -177,6 +183,7 @@ impl Library {
         );
         scripts.clean_up_files();
         let site_icons = crate::images::SiteIcons::new(&paths, events.clone());
+        let tool_sites = crate::images::SiteIcons::in_folder(&paths, events.clone(), "tool-sites");
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
             let change = Change::new(Actor::app(), reason::RESOLVE_ALL);
@@ -203,6 +210,7 @@ impl Library {
             notifications,
             scripts,
             site_icons,
+            tool_sites,
             activity,
             expired_noted: Mutex::default(),
         }
@@ -584,6 +592,7 @@ impl Library {
         game.cover_path = resolve(game.cover_path.take());
         game.icon_path = resolve(game.icon_path.take());
         game.background_path = resolve(game.background_path.take());
+        game.logo_path = resolve(game.logo_path.take());
         game
     }
 
@@ -655,6 +664,26 @@ impl Library {
     /// A game's latest news from its stores (game page).
     pub fn game_news(&self, id: Uuid) -> Result<Option<GameNews>> {
         Ok(self.live.news(&self.db.get_game(id)?))
+    }
+
+    /// A game's trailers: from its stores, else IGDB's YouTube videos (game page).
+    pub fn game_trailers(&self, id: Uuid) -> Result<Vec<questkeep_store_api::model::Trailer>> {
+        let game = self.db.get_game(self.db.entry_of(id)?)?;
+        Ok(self.live.trailers(&game, || {
+            if !self.igdb.is_configured() {
+                return Vec::new();
+            }
+            let name = game.lookup_name();
+            let lookup = crate::images::IgdbLookup {
+                name: &name,
+                year: game.lookup_year(),
+                id: game.linked_igdb_id(),
+            };
+            self.igdb.videos(&lookup).unwrap_or_else(|err| {
+                tracing::info!(%err, game = %game.id, "no IGDB videos");
+                Vec::new()
+            })
+        }))
     }
 
     /// The user's achievements in a game (game page).
@@ -1228,6 +1257,7 @@ impl Library {
             for (kind, path) in [
                 (ImageKind::Cover, source.cover_path.as_deref()),
                 (ImageKind::Background, source.background_path.as_deref()),
+                (ImageKind::Logo, source.logo_path.as_deref()),
                 (ImageKind::Icon, source.icon_path.as_deref()),
             ] {
                 let Some(file) = path.and_then(|p| self.images.resolve(p)) else {
@@ -1242,6 +1272,7 @@ impl Library {
                             ImageKind::Background => {
                                 self.db.set_background_path(entry, Some(&relative))?
                             }
+                            ImageKind::Logo => self.db.set_logo_path(entry, Some(&relative))?,
                             ImageKind::Icon => self.db.set_icon_path(entry, Some(&relative))?,
                         }
                         self.db.set_extra_value(
@@ -1363,6 +1394,7 @@ impl Library {
         )?;
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![game.id] });
+        self.shortcuts_after_installs(&[game.id], &[]);
         self.get_game(game.id)
     }
 
@@ -1429,6 +1461,7 @@ impl Library {
         let copies = self.db.record_group(&change, ids, || {
             self.db.delete_games(ids, exclude, Utc::now())
         })?;
+        self.remove_shortcuts(ids, false);
         for id in ids.iter().chain(&copies) {
             if let Err(err) = self.images.remove_all(*id) {
                 tracing::warn!(%err, %id, "could not delete cached images");
@@ -1728,6 +1761,22 @@ impl Library {
         };
         let games = merge_owned(installed, owned.unwrap_or_default());
         let now = Utc::now();
+        // For shortcuts of newly installed games: what was installed before this sync, and
+        // whether the store was synced before (its first sync brings every installed game).
+        let installs_before = self
+            .db
+            .installed_entry_ids()
+            .and_then(|installed| {
+                Ok((
+                    installed,
+                    self.db.entry_ids()?.into_iter().collect::<HashSet<_>>(),
+                ))
+            })
+            .ok();
+        let synced_before = self
+            .db
+            .sync_times()
+            .is_ok_and(|t| t.providers.contains_key(provider_id));
         // One batch per sync, with one snapshot of the library before and after.
         let change = Change::new(Actor::for_provider(provider.as_ref()), trigger.reason())
             .args(serde_json::json!({ "store": provider.id(), "trigger": trigger.as_str() }));
@@ -1769,6 +1818,22 @@ impl Library {
             self.events.publish(CoreEvent::GamesChanged {
                 ids: summary.changed_ids.clone(),
             });
+        }
+        if let Some((installed_before, entries_before)) = installs_before
+            && let Ok(installed_after) = self.db.installed_entry_ids()
+        {
+            let installed = shortcuts::newly_installed(
+                &installed_before,
+                &entries_before,
+                &installed_after,
+                synced_before,
+            );
+            let mut uninstalled: Vec<Uuid> = installed_before
+                .difference(&installed_after)
+                .copied()
+                .collect();
+            uninstalled.sort();
+            self.shortcuts_after_installs(&installed, &uninstalled);
         }
         self.events.publish(CoreEvent::LibraryScanned {
             provider: provider_id.to_string(),
@@ -1925,6 +1990,18 @@ impl Library {
             .collect())
     }
 
+    /// Games that still get their one logo search (libraries from before logos, marked by a
+    /// migration), for the metadata worker.
+    pub fn pending_logo_ids(&self) -> Result<Vec<Uuid>> {
+        Ok(self
+            .db
+            .games_with_extra_key(crate::images::LOGO_BACKFILL_KEY)?
+            .into_iter()
+            .filter(|(_, source)| !is_fake_source(source))
+            .map(|(id, _)| id)
+            .collect())
+    }
+
     /// Prepares fetching a game's cover and background from SteamGridDB again, replacing the
     /// current ones: clears the "nothing found" markers and returns the job for the cover
     /// fetcher (which also handles the background). Fails when no API key is configured.
@@ -1942,7 +2019,7 @@ impl Library {
                 "Add a SteamGridDB API key in the settings first.".into(),
             ));
         }
-        for kind in [ImageKind::Cover, ImageKind::Background] {
+        for kind in [ImageKind::Cover, ImageKind::Background, ImageKind::Logo] {
             self.db
                 .set_extra_value(id, crate::images::checked_key(kind), None)?;
         }
@@ -2244,7 +2321,7 @@ impl Library {
         let value = link.map(serde_json::to_value).transpose()?;
         self.db.set_extra_value(id, METADATA_LINK_KEY, value)?;
         if redo_images {
-            for kind in [ImageKind::Cover, ImageKind::Background] {
+            for kind in [ImageKind::Cover, ImageKind::Background, ImageKind::Logo] {
                 if crate::images::is_user_image(game, kind) {
                     continue;
                 }
@@ -2254,6 +2331,7 @@ impl Library {
                         self.db.set_cover_path(id, None)?;
                         crate::images::drop_cover_icon(&self.db, &self.images, game)?;
                     }
+                    ImageKind::Logo => self.db.set_logo_path(id, None)?,
                     _ => self.db.set_background_path(id, None)?,
                 }
                 self.db

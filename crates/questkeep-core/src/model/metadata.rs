@@ -38,6 +38,9 @@ pub enum MetadataField {
     GameModes,
     Themes,
     Perspectives,
+    Regions,
+    Version,
+    Manual,
     CriticScore,
     CommunityScore,
     InstallSize,
@@ -45,7 +48,7 @@ pub enum MetadataField {
 }
 
 impl MetadataField {
-    pub const ALL: [MetadataField; 17] = [
+    pub const ALL: [MetadataField; 20] = [
         Self::Description,
         Self::ReleaseDate,
         Self::Developers,
@@ -59,6 +62,9 @@ impl MetadataField {
         Self::GameModes,
         Self::Themes,
         Self::Perspectives,
+        Self::Regions,
+        Self::Version,
+        Self::Manual,
         Self::CriticScore,
         Self::CommunityScore,
         Self::InstallSize,
@@ -66,7 +72,7 @@ impl MetadataField {
     ];
 
     /// The list fields, which are stored as shared values and can be filtered and grouped by.
-    pub const LISTS: [MetadataField; 11] = [
+    pub const LISTS: [MetadataField; 12] = [
         Self::Developers,
         Self::Publishers,
         Self::Genres,
@@ -78,6 +84,7 @@ impl MetadataField {
         Self::GameModes,
         Self::Themes,
         Self::Perspectives,
+        Self::Regions,
     ];
 
     /// Stable key used in the database and settings (the serde name).
@@ -96,6 +103,9 @@ impl MetadataField {
             Self::GameModes => "gameModes",
             Self::Themes => "themes",
             Self::Perspectives => "perspectives",
+            Self::Regions => "regions",
+            Self::Version => "version",
+            Self::Manual => "manual",
             Self::CriticScore => "criticScore",
             Self::CommunityScore => "communityScore",
             Self::InstallSize => "installSize",
@@ -114,6 +124,8 @@ impl MetadataField {
         match self {
             Self::Description => text(&meta.description),
             Self::ReleaseDate => text(&meta.release_date),
+            Self::Version => text(&meta.version),
+            Self::Manual => text(&meta.manual),
             Self::CriticScore => meta.critic_score.is_some(),
             Self::CommunityScore => meta.community_score.is_some(),
             Self::InstallSize => meta.install_size.is_some(),
@@ -127,6 +139,8 @@ impl MetadataField {
         match self {
             Self::Description => into.description = from.description.clone(),
             Self::ReleaseDate => into.release_date = from.release_date.clone(),
+            Self::Version => into.version = from.version.clone(),
+            Self::Manual => into.manual = from.manual.clone(),
             Self::CriticScore => into.critic_score = from.critic_score.clone(),
             Self::CommunityScore => into.community_score = from.community_score.clone(),
             Self::InstallSize => into.install_size = from.install_size,
@@ -150,6 +164,7 @@ pub fn list_of(meta: &GameMetadata, field: MetadataField) -> &[String] {
         MetadataField::GameModes => &meta.game_modes,
         MetadataField::Themes => &meta.themes,
         MetadataField::Perspectives => &meta.perspectives,
+        MetadataField::Regions => &meta.regions,
         _ => &[],
     }
 }
@@ -166,6 +181,7 @@ fn list_of_mut(meta: &mut GameMetadata, field: MetadataField) -> &mut Vec<String
         MetadataField::Platforms => &mut meta.platforms,
         MetadataField::GameModes => &mut meta.game_modes,
         MetadataField::Themes => &mut meta.themes,
+        MetadataField::Regions => &mut meta.regions,
         // Only called for list fields.
         _ => &mut meta.perspectives,
     }

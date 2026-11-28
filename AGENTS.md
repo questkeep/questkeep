@@ -96,7 +96,9 @@ crates/questkeep-imaging/      icon decoding and scaling (core and tray popup)
 crates/questkeep-tray-popup/   Windows tray popup (Win32 + Direct2D: layout, render, window, a11y);
                                own input types, no core dependency
 crates/questkeep-core/src/     all app logic; sees stores only through the store API
-  library.rs                   facade used by the shell (manual add, update, scan, covers, seed)
+  library.rs                   facade used by the shell (manual add, update, scan, covers, seed);
+                               library/: edit.rs (Edit dialog), tools.rs (tools next to Play),
+                               shortcuts.rs (desktop/Start menu shortcuts, the auto setting)
   model/                       Game, PlayAction, queries, categories, library views (grouping),
                                sync times, sorting names (ts-rs exported)
   db/                          SQLite: migrations.rs (append-only), games.rs, sessions.rs, views.rs
@@ -112,11 +114,15 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
                                (mod.rs), installed runtimes (runtimes.rs), QK_* variables
                                and {Placeholders} (variables.rs)
   notifications.rs             the notification bell's entries (notifications.json, last 100)
+  live.rs                      game page data asked while it is open: players, news, trailers,
+                               achievements (cached)
+  manual.rs                    where "Open manual" goes (link, or a file in the install folder)
   images/                      cover/background cache (mod.rs; also the cover tiles the tray popup reads) + cover and metadata fetchers (fetcher.rs)
   game_state.rs                games.state_version: brings derived data (cover tiles) up to date in the background after start
   events.rs                    EventBus + CoreEvent
   external.rs                  questkeep:// links and --start/--show/--search: parsing, a game's links
-  platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
+  platform/                    executable icons, URI opening, processes, argument handling,
+                               shortcut.rs (.lnk / .desktop files) (cfg-gated)
   programs/                    installed programs for Add game (Apps list + Start menu, lnk.rs
                                reads .lnk files)
   user_themes.rs               themes from the theme editor (<data>/themes/*.json), plugin export

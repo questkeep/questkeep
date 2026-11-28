@@ -31,6 +31,12 @@ pub struct GameMetadata {
     pub game_modes: Vec<String>,
     pub themes: Vec<String>,
     pub perspectives: Vec<String>,
+    /// Regions the game was released for ("Europe", "Japan", ...).
+    pub regions: Vec<String>,
+    /// The game's version, free text ("1.4.2"). Only the user sets it for now.
+    pub version: Option<String>,
+    /// A file path or an http(s) URL of the game's manual. Only the user sets it for now.
+    pub manual: Option<String>,
     /// Press score, 0-100.
     pub critic_score: Option<Score>,
     /// Player score, 0-100 (e.g. the share of positive reviews).
@@ -266,6 +272,24 @@ pub struct NewsItem {
     pub snippet: String,
     /// Image URL, when the item has one.
     pub image: Option<String>,
+}
+
+/// A trailer for the game page: a video file the page plays itself, or a YouTube video.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Trailer {
+    pub name: String,
+    /// Poster image URL.
+    pub thumbnail: Option<String>,
+    /// A progressive MP4 (or WebM) a plain `<video>` can play.
+    pub video: Option<String>,
+    /// The same video in a higher quality, if there is one.
+    pub video_hd: Option<String>,
+    /// A YouTube video id, when the trailer is on YouTube instead.
+    pub youtube_id: Option<String>,
+    /// Where it comes from (`steam`, `igdb`, ...).
+    pub source: String,
 }
 
 /// The latest news of a game.

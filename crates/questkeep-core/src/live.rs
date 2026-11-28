@@ -13,9 +13,11 @@ use uuid::Uuid;
 use crate::model::{Achievements, Game, GameNews};
 use crate::providers::ProviderRegistry;
 use crate::settings::SettingsStore;
+use questkeep_store_api::model::Trailer;
 
 const PLAYERS_TTL: Duration = Duration::from_secs(10 * 60);
 const NEWS_TTL: Duration = Duration::from_secs(30 * 60);
+const TRAILERS_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 /// Achievements are fetched again after this, or after the game was played since.
 const ACHIEVEMENTS_TTL: chrono::Duration = chrono::Duration::hours(1);
 
@@ -62,6 +64,7 @@ pub struct LiveData {
     cache_dir: PathBuf,
     players: TtlCache<Option<u32>>,
     news: TtlCache<Option<GameNews>>,
+    trailers: TtlCache<Vec<Trailer>>,
 }
 
 impl LiveData {
@@ -72,6 +75,7 @@ impl LiveData {
             cache_dir,
             players: TtlCache::new(PLAYERS_TTL),
             news: TtlCache::new(NEWS_TTL),
+            trailers: TtlCache::new(TRAILERS_TTL),
         }
     }
 
@@ -122,6 +126,27 @@ impl LiveData {
         });
         self.players.put(&key, count, now);
         count
+    }
+
+    /// The game's trailers from its stores; `fallback` (IGDB) when no store has any. Cached.
+    pub fn trailers(&self, game: &Game, fallback: impl FnOnce() -> Vec<Trailer>) -> Vec<Trailer> {
+        let key = game.id.to_string();
+        let now = Instant::now();
+        if let Some(cached) = self.trailers.get(&key, now) {
+            return cached;
+        }
+        let mut trailers = self
+            .first(game, "trailers", |source, id| {
+                self.providers.get(source).map_or(Ok(None), |p| {
+                    p.trailers(id).map(|t| (!t.is_empty()).then_some(t))
+                })
+            })
+            .unwrap_or_default();
+        if trailers.is_empty() {
+            trailers = fallback();
+        }
+        self.trailers.put(&key, trailers.clone(), now);
+        trailers
     }
 
     /// The game's latest news, if a store has a feed.

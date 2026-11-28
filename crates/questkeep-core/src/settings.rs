@@ -61,6 +61,9 @@ pub struct Settings {
     /// Notice installed games started outside Questkeep (store clients, mod managers, shortcuts)
     /// and record their play sessions.
     pub detect_external_launches: bool,
+    /// Shortcuts Questkeep creates for games that become installed (not for games already
+    /// installed when this is turned on).
+    pub auto_shortcuts: AutoShortcuts,
     /// Show the start page (the Home entry above the views).
     pub show_start_page: bool,
     /// Show the statistics page (below Home).
@@ -319,6 +322,31 @@ pub enum LauncherClosePolicy {
     IfStartedByGame,
 }
 
+/// Where shortcuts for newly installed games go.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum AutoShortcuts {
+    #[default]
+    Off,
+    Desktop,
+    StartMenu,
+    Both,
+}
+
+impl AutoShortcuts {
+    /// The places this setting puts shortcuts in.
+    pub fn places(self) -> &'static [crate::platform::shortcut::ShortcutPlace] {
+        use crate::platform::shortcut::ShortcutPlace::{Desktop, StartMenu};
+        match self {
+            Self::Off => &[],
+            Self::Desktop => &[Desktop],
+            Self::StartMenu => &[StartMenu],
+            Self::Both => &[Desktop, StartMenu],
+        }
+    }
+}
+
 /// The page Questkeep shows when it opens.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -366,6 +394,7 @@ impl Default for Settings {
             start_with_system: false,
             start_minimized: true,
             detect_external_launches: true,
+            auto_shortcuts: AutoShortcuts::Off,
             show_start_page: true,
             show_statistics: true,
             startup_page: StartupPage::Start,
@@ -697,6 +726,7 @@ mod tests {
             start_with_system: true,
             start_minimized: false,
             detect_external_launches: false,
+            auto_shortcuts: AutoShortcuts::Both,
             show_start_page: false,
             show_statistics: false,
             startup_page: StartupPage::View { id: "fav".into() },

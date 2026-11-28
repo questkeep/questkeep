@@ -629,6 +629,90 @@ mod tests {
     }
 
     #[test]
+    fn regions_version_and_manual_are_the_users_and_survive_refreshes() {
+        use crate::model::{
+            FilterGroup, FilterNode, ListFilter, ListMode, MatchMode, TextField, TextFilter, TextOp,
+        };
+        let (db, id) = db_with("Hades", "steam");
+        let edits = UserEdits {
+            meta: GameMetadata {
+                regions: vec!["Europe".into(), "Japan".into()],
+                version: Some("1.4.2".into()),
+                manual: Some("manual.pdf".into()),
+                ..GameMetadata::default()
+            },
+            edited: vec![
+                MetadataField::Regions,
+                MetadataField::Version,
+                MetadataField::Manual,
+            ],
+            hidden_links: Vec::new(),
+        };
+        db.set_user_edits(id, &edits).unwrap();
+        // A store refresh with other data does not touch them.
+        let steam = GameMetadata {
+            description: Some("From Steam".into()),
+            ..GameMetadata::default()
+        };
+        db.set_source_metadata(id, "steam", Some(&steam), Utc::now())
+            .unwrap();
+        db.resolve_entry(id, &MetadataPriority::default(), &sources())
+            .unwrap();
+        let game = db.get_entry(id).unwrap();
+        assert_eq!(game.regions, ["Europe", "Japan"]);
+        assert_eq!(game.version.as_deref(), Some("1.4.2"));
+        assert_eq!(game.manual.as_deref(), Some("manual.pdf"));
+        assert_eq!(game.field_sources["regions"], "user");
+        assert_eq!(game.description.as_deref(), Some("From Steam"));
+
+        let regions = db.list_values(ListField::Region).unwrap();
+        assert_eq!(
+            regions.iter().map(|v| v.key.as_str()).collect::<Vec<_>>(),
+            ["europe", "japan"]
+        );
+        let query = |item| GameQuery {
+            filter: FilterGroup {
+                mode: MatchMode::All,
+                items: vec![item],
+                negate: false,
+            },
+            ..GameQuery::default()
+        };
+        let by_region = |key: &str| {
+            db.list_games(&query(FilterNode::List(ListFilter {
+                field: ListField::Region,
+                mode: ListMode::Any,
+                values: vec![key.into()],
+                negate: false,
+            })))
+            .unwrap()
+            .len()
+        };
+        assert_eq!(by_region("japan"), 1);
+        assert_eq!(by_region("usa"), 0);
+        let by_version = |text: &str| {
+            db.list_games(&query(FilterNode::Text(TextFilter {
+                field: TextField::Version,
+                op: TextOp::StartsWith,
+                value: text.into(),
+                case_sensitive: false,
+                negate: false,
+            })))
+            .unwrap()
+            .len()
+        };
+        assert_eq!(by_version("1.4"), 1);
+        assert_eq!(by_version("2."), 0);
+
+        // Clearing the edit empties the fields again.
+        db.set_user_edits(id, &UserEdits::default()).unwrap();
+        db.resolve_entry(id, &MetadataPriority::default(), &sources())
+            .unwrap();
+        let game = db.get_entry(id).unwrap();
+        assert!(game.regions.is_empty() && game.version.is_none() && game.manual.is_none());
+    }
+
+    #[test]
     fn stores_sources_and_shows_the_winning_values() {
         let (db, id) = db_with("Hades", "steam");
         let steam = GameMetadata {

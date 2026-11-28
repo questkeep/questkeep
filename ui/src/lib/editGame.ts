@@ -21,6 +21,7 @@ export type ListMetaField =
   | "ageRatings"
   | "gameModes"
   | "perspectives"
+  | "regions"
   | "themes";
 
 /** The dictionary key of a list field's label. */
@@ -42,6 +43,7 @@ export const LIST_FIELDS: {
   { field: "ageRatings", label: "fieldAgeRating", values: "ageRating" },
   { field: "gameModes", label: "fieldGameModes", values: "gameMode" },
   { field: "perspectives", label: "fieldPerspective", values: "perspective" },
+  { field: "regions", label: "fieldRegions", values: "region" },
   { field: "themes", label: "fieldThemes", values: "theme", wide: true },
 ];
 
@@ -50,6 +52,8 @@ export const SECTION_FIELDS: Record<"general" | "details", MetadataField[]> = {
   general: ["releaseDate", "description"],
   details: [
     ...LIST_FIELDS.map((f) => f.field),
+    "version",
+    "manual",
     "criticScore",
     "communityScore",
     "timeToBeat",
@@ -171,8 +175,8 @@ export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
 export const ICON_EXTENSIONS = ["png", "jpg", "jpeg", "ico", "exe", "dll"];
 
 /** The web search a picker tab starts with. */
-export function webQuery(name: string, slot: "cover" | "background" | "icon"): string {
-  const word = { cover: "cover", background: "wallpaper", icon: "icon" }[slot];
+export function webQuery(name: string, slot: "cover" | "background" | "logo" | "icon"): string {
+  const word = { cover: "cover", background: "wallpaper", logo: "logo", icon: "icon" }[slot];
   return `${name} ${word}`;
 }
 

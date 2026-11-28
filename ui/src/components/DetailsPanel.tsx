@@ -4,6 +4,7 @@ import ChevronDown from "lucide-solid/icons/chevron-down";
 import Combine from "lucide-solid/icons/combine";
 import Copy from "lucide-solid/icons/copy";
 import Ellipsis from "lucide-solid/icons/ellipsis";
+import BookOpen from "lucide-solid/icons/book-open";
 import Hash from "lucide-solid/icons/hash";
 import Link from "lucide-solid/icons/link";
 import SquareTerminal from "lucide-solid/icons/square-terminal";
@@ -16,6 +17,7 @@ import Clock from "lucide-solid/icons/clock";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
 import Pencil from "lucide-solid/icons/pencil";
+import Users from "lucide-solid/icons/users";
 import Play from "lucide-solid/icons/play";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
@@ -40,6 +42,7 @@ import {
   installGame,
   launchGame,
   openInstallFolder,
+  openManual,
   openLauncherPage,
   preferCopy,
   refetchArtwork,
@@ -51,6 +54,8 @@ import {
 } from "../lib/actions";
 import { copiesOf, copyLabel, launcherPageCopies, playCopy } from "../lib/copies";
 import { chipsThatFit } from "../lib/gamePage";
+import { type ActionWidths, planActionRow } from "../lib/actionRow";
+import { logoFrame as measureLogo } from "../lib/logoFrame";
 import {
   formatDate,
   formatPlaytime,
@@ -99,6 +104,7 @@ import { activity as activityDict } from "../i18n/activity";
 import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
 import { GameActionButtons } from "./GameActionButtons";
+import { TrailerCard } from "./TrailerCard";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { openLink } from "./settings/openLink";
@@ -247,12 +253,43 @@ const icon = (source: string | null) => () =>
  * library). Favorite, hidden and categories change in place; name, cover and launch options
  * in the Edit dialog; rare actions sit in the "More" menu.
  */
+/**
+ * The width the action row may take. Beside the cover the row is only as wide as its content,
+ * so its own width would never grow back once the buttons are folded: count from the header.
+ */
+function rowSpace(row: HTMLElement): number {
+  const head = row.closest<HTMLElement>(".details__head");
+  const cover = head?.querySelector<HTMLElement>(".details__cover");
+  if (!head || !cover) return exactWidth(row);
+  const style = getComputedStyle(head);
+  if (style.flexDirection !== "row") return exactWidth(row);
+  const gap = Number.parseFloat(style.columnGap) || 0;
+  return exactWidth(head) - exactWidth(cover) - gap;
+}
+
+/**
+ * Layout widths are fractional; whole-pixel ones (offsetWidth) add up to less than the browser
+ * lays out, which let the row wrap for a frame before the buttons folded.
+ */
+function exactWidth(element: Element): number {
+  return element.getBoundingClientRect().width;
+}
+
+/** The column gap of a flex container, in pixels. */
+function gapOf(element: Element): number {
+  return Number.parseFloat(getComputedStyle(element).columnGap) || 0;
+}
+
+/** Spare pixels per item, so the buttons fold just before the browser would wrap them. */
+const FIT_SLACK = 1;
+
 export function DetailsPanel(props: DetailsPanelProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [editing, setEditing] = createSignal<"general" | "launch" | null>(null);
   const [confirming, setConfirming] = createSignal<Confirming>(null);
   const [descriptionOpen, setDescriptionOpen] = createSignal(false);
   const [heroFailed, setHeroFailed] = createSignal(false);
+  const [logoFailed, setLogoFailed] = createSignal(false);
 
   const [storeMenu, setStoreMenu] = createSignal<PopoverAnchor | null>(null);
   const [moreMenu, setMoreMenu] = createSignal<PopoverAnchor | null>(null);
@@ -263,6 +300,21 @@ export function DetailsPanel(props: DetailsPanelProps) {
   );
   const [combining, setCombining] = createSignal<PopoverAnchor | null>(null);
   const [editingSessions, setEditingSessions] = createSignal(false);
+  /** Favorite, Hide and Edit live in the "…" menu: beside the stats they would wrap alone. */
+  const [compactTools, setCompactTools] = createSignal(false);
+  let actionsRow: HTMLDivElement | undefined;
+  let toolsBox: HTMLDivElement | undefined;
+  let metaBox: HTMLDivElement | undefined;
+  let launchBox: HTMLDivElement | undefined;
+  let playSplit: HTMLDivElement | undefined;
+  /** The tool and script buttons' widths, named and as icons (measured by them). */
+  let actionWidths: ActionWidths = { labels: [], icons: [], more: 0 };
+  /** How the action buttons are drawn: named or as icons, and how many before their "…". */
+  const [actionPlan, setActionPlan] = createSignal({ labels: true, shown: 2 });
+  /** The "…" button's width, for the folded block. */
+  let moreWidth = 0;
+  /** The tool buttons' width with all of them shown, measured while they are. */
+  let fullToolsWidth = 0;
   let storeMenuButton: HTMLButtonElement | undefined;
   let moreButton: HTMLButtonElement | undefined;
   let idButton: HTMLButtonElement | undefined;
@@ -318,6 +370,67 @@ export function DetailsPanel(props: DetailsPanelProps) {
   };
   const isPage = () => props.variant === "page";
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
+  // The logo stands in for the title text; one that does not load leaves the text.
+  const logoUrl = () => (logoFailed() ? null : store.logoUrl(props.game));
+  /** Where the logo's solid artwork sits; it is sized by that and its glow spills around. */
+  const [logoFrame] = createResource(logoUrl, measureLogo);
+
+  /** Folds the tool buttons into "…" when, with all of them, they would wrap onto a line alone. */
+  /**
+   * Plans the action row: the tool buttons named or as icons (the rest under their "…"), and
+   * Favorite, Hide and Edit folded into the header's "…" when they would wrap.
+   */
+  function fitTools() {
+    if (!actionsRow || !toolsBox || !metaBox || !launchBox || !playSplit) return;
+    if (!compactTools()) {
+      fullToolsWidth = exactWidth(toolsBox);
+      if (moreButton) moreWidth = exactWidth(moreButton);
+    }
+    const available = rowSpace(actionsRow);
+    // Not laid out (hidden, or a test without layout): nothing to fold.
+    if (available <= 0) return;
+    // Play at its smallest (it grows when there is room), with its store arrow.
+    const playParts = [...playSplit.children].map((child) =>
+      child.classList.contains("btn--play")
+        ? Math.max(Number.parseFloat(getComputedStyle(child).minWidth) || 0, exactWidth(child))
+        : exactWidth(child),
+    );
+    const play =
+      playParts.reduce((sum, width) => sum + width, 0) +
+      gapOf(playSplit) * Math.max(0, playParts.length - 1);
+    // The stats wrap by themselves; what counts is their width on one line.
+    const stats = metaBox.querySelector("dl");
+    const statWidths = stats ? [...stats.children].map(exactWidth) : [];
+    const statsWidth =
+      statWidths.reduce((sum, width) => sum + width, 0) +
+      (stats ? gapOf(stats) : 0) * Math.max(0, statWidths.length - 1);
+    const metaGap = gapOf(metaBox);
+    const items = 4 + actionWidths.labels.length;
+    const plan = planActionRow({
+      play,
+      actions: actionWidths,
+      launchGap: gapOf(launchBox),
+      metaFull: statsWidth + metaGap + fullToolsWidth,
+      metaFolded: statsWidth + metaGap + moreWidth,
+      row: available - FIT_SLACK * items,
+      gap: gapOf(actionsRow),
+      narrow: getComputedStyle(launchBox).flexBasis === "100%",
+    });
+    setActionPlan({ labels: plan.labels, shown: plan.shown });
+    setCompactTools(plan.foldMeta);
+  }
+
+  onMount(() => {
+    fitTools();
+    const observer = new ResizeObserver(() => fitTools());
+    if (actionsRow) {
+      const head = actionsRow.closest(".details__head");
+      if (head) observer.observe(head);
+      observer.observe(actionsRow);
+      for (const child of actionsRow.children) observer.observe(child);
+    }
+    onCleanup(() => observer.disconnect());
+  });
   const live = <T,>(load: (id: string) => Promise<T>) =>
     createResource(
       () => props.game.id,
@@ -327,6 +440,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
           .catch(() => null),
     )[0];
   const players = live(gamePlayerCount);
+  // Another game, or the player count arriving, changes what the row holds.
+  createEffect(
+    on(
+      () => [props.game.id, props.game.kind, players()],
+      () => requestAnimationFrame(fitTools),
+      { defer: true },
+    ),
+  );
   const news = live(gameNews);
   const achievements = live(gameAchievements);
   // Reloaded when a session ends (playtime changes).
@@ -377,6 +498,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         setEditingSessions(false);
         setDescriptionOpen(false);
         setHeroFailed(false);
+        setLogoFailed(false);
       },
       { defer: true },
     ),
@@ -440,7 +562,36 @@ export function DetailsPanel(props: DetailsPanelProps) {
     ];
   };
 
+  /** Favorite, Hide and Edit when their buttons are folded away. */
+  const foldedEntries = (): MenuEntry[] =>
+    compactTools()
+      ? [
+          {
+            label: tr("favorite"),
+            icon: () => <Star class="icon" aria-hidden="true" />,
+            checked: props.game.favorite,
+            onSelect: () =>
+              void run(() => updateGame(props.game.id, { favorite: !props.game.favorite })),
+          },
+          {
+            label: tr("hidden"),
+            icon: () => <EyeOff class="icon" aria-hidden="true" />,
+            checked: props.game.hidden,
+            onSelect: () =>
+              void run(() => updateGame(props.game.id, { hidden: !props.game.hidden })),
+          },
+          {
+            label: tr("edit"),
+            icon: () => <Pencil class="icon" aria-hidden="true" />,
+            hint: "F2",
+            onSelect: () => setEditing("general"),
+          },
+          { kind: "separator" },
+        ]
+      : [];
+
   const moreEntries = (): MenuEntry[] => [
+    ...foldedEntries(),
     {
       label: tr("refreshMetadata"),
       icon: () => <RefreshCw class="icon" aria-hidden="true" />,
@@ -485,6 +636,15 @@ export function DetailsPanel(props: DetailsPanelProps) {
             onSelect: () => void run(() => openInstallFolder(props.game.id)),
           },
         ]),
+    ...(props.game.manual
+      ? [
+          {
+            label: tr("openManual"),
+            icon: () => <BookOpen class="icon" aria-hidden="true" />,
+            onSelect: () => void run(() => openManual(props.game.id)),
+          },
+        ]
+      : []),
     ...launcherPageCopies(props.game, store.providers()).map(showInLauncher),
     ...extensionEntries("gameMore", { game: props.game, games: [props.game] }),
     ...copySubmenus(),
@@ -635,156 +795,220 @@ export function DetailsPanel(props: DetailsPanelProps) {
       aria-label={tr("gameDetails")}
     >
       <Show when={!isPage()}>
-        <PanelHeader pin={props.pin ?? null} onClose={props.onClose} overlay={heroUrl() !== null} />
+        <PanelHeader pin={props.pin ?? null} onClose={props.onClose} overlay />
       </Show>
 
       <div class="details__scroll">
-        <Show when={heroUrl()}>
-          {(src) => (
-            <div class="details__hero">
+        {/* Without a background the space stays, so the cover keeps its place between games. */}
+        <div class="details__hero" classList={{ "details__hero--empty": heroUrl() === null }}>
+          <Show when={heroUrl()}>
+            {(src) => (
               <img src={src()} alt="" draggable={false} onError={() => setHeroFailed(true)} />
-            </div>
-          )}
-        </Show>
+            )}
+          </Show>
+          {/* The stores and the player count sit in the background's top corners. */}
+          <p
+            class="details__badge details__badge--stores"
+            data-tooltip={combined() ? tr("stores") : tr("store")}
+          >
+            <SourceIcons game={props.game} />
+            <span>{storeNames(props.game)}</span>
+          </p>
+          <Show when={players()}>
+            {(count) => (
+              <p
+                class="details__badge details__badge--players"
+                data-tooltip={tr("playingNow")}
+                aria-label={`${tr("playingNow")}: ${count().toLocaleString(intlLocale())}`}
+              >
+                <Users class="icon" aria-hidden="true" />
+                <span class="players-dot" aria-hidden="true" />
+                {count().toLocaleString(intlLocale())}
+              </p>
+            )}
+          </Show>
+        </div>
 
-        <div class="details__head" classList={{ "details__head--overlap": heroUrl() !== null }}>
+        <div class="details__head details__head--overlap">
           <div class="details__cover">
             <Cover game={props.game} />
           </div>
           <div class="details__intro">
-            <h2 class="details__title">{props.game.name}</h2>
+            <Show when={logoUrl()} fallback={<h2 class="details__title">{props.game.name}</h2>}>
+              {(src) => {
+                // Width / height of the loaded image, for logos without a frame (WebP).
+                const [natural, setNatural] = createSignal<number>();
+                const frame = () => (logoFrame.state === "ready" ? logoFrame() : null);
+                const aspect = () => frame()?.aspect ?? natural();
+                return (
+                  <h2 class="details__title details__title--logo">
+                    <span class="visually-hidden">{props.game.name}</span>
+                    <span
+                      class="details__logo"
+                      classList={{ "details__logo--ready": logoFrame.state === "ready" }}
+                      style={{
+                        "--qk-logo-aspect": aspect()?.toFixed(4),
+                        "--qk-logo-left": frame()?.left.toFixed(4),
+                        "--qk-logo-top": frame()?.top.toFixed(4),
+                        "--qk-logo-width": frame()?.width.toFixed(4),
+                        "--qk-logo-height": frame()?.height.toFixed(4),
+                      }}
+                    >
+                      <img
+                        src={src()}
+                        alt=""
+                        draggable={false}
+                        onLoad={(event) => {
+                          const { naturalWidth: w, naturalHeight: h } = event.currentTarget;
+                          setNatural(w > 0 && h > 0 ? w / h : undefined);
+                        }}
+                        onError={() => setLogoFailed(true)}
+                      />
+                    </span>
+                  </h2>
+                );
+              }}
+            </Show>
             <Show when={subtitle()}>
               <p class="details__subtitle">{subtitle()}</p>
             </Show>
-            <div class="details__actions">
-              <div class="play-split">
-                <Show
-                  when={playable()}
-                  fallback={
+            <div class="details__actions" ref={(el) => (actionsRow = el)}>
+              {/* Play with the game's tools and action scripts beside it. */}
+              <div class="details__launch" ref={(el) => (launchBox = el)}>
+                <div class="play-split" ref={(el) => (playSplit = el)}>
+                  <Show
+                    when={playable()}
+                    fallback={
+                      <button
+                        type="button"
+                        class="btn btn--primary btn--play"
+                        onClick={() =>
+                          void install(
+                            props.game.installed ? (playProfile()?.copyId ?? null) : null,
+                          )
+                        }
+                      >
+                        {tr("install")}
+                      </button>
+                    }
+                  >
                     <button
                       type="button"
                       class="btn btn--primary btn--play"
+                      disabled={running()}
+                      onClick={() => void run(() => launchGame(props.game.id))}
+                    >
+                      {running() ? tr("running") : tr(props.game.kind === "app" ? "start" : "play")}
+                    </button>
+                  </Show>
+                  <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>
+                    <button
+                      ref={(el) => (storeMenuButton = el)}
+                      type="button"
+                      class="btn btn--primary play-split__more"
+                      aria-label={tr("chooseHowToPlay")}
+                      data-tooltip={tr("playWithOther")}
+                      aria-haspopup="menu"
+                      aria-expanded={storeMenu() !== null}
                       onClick={() =>
-                        void install(props.game.installed ? (playProfile()?.copyId ?? null) : null)
+                        toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")
                       }
                     >
-                      {tr("install")}
+                      <ChevronDown class="icon" aria-hidden="true" />
                     </button>
-                  }
-                >
-                  <button
-                    type="button"
-                    class="btn btn--primary btn--play"
-                    disabled={running()}
-                    onClick={() => void run(() => launchGame(props.game.id))}
-                  >
-                    {running() ? tr("running") : tr(props.game.kind === "app" ? "start" : "play")}
-                  </button>
-                </Show>
-                <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>
-                  <button
-                    ref={(el) => (storeMenuButton = el)}
-                    type="button"
-                    class="btn btn--primary play-split__more"
-                    aria-label={tr("chooseHowToPlay")}
-                    data-tooltip={tr("playWithOther")}
-                    aria-haspopup="menu"
-                    aria-expanded={storeMenu() !== null}
-                    onClick={() => toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")}
-                  >
-                    <ChevronDown class="icon" aria-hidden="true" />
-                  </button>
-                </Show>
+                  </Show>
+                </div>
+                <GameActionButtons
+                  game={props.game}
+                  labels={actionPlan().labels}
+                  shown={actionPlan().shown}
+                  onMeasure={(widths) => {
+                    actionWidths = widths;
+                    fitTools();
+                  }}
+                />
               </div>
-              <GameActionButtons game={props.game} />
 
-              <dl class="details__stats">
-                <Show when={players()}>
-                  {(count) => (
-                    <div class="details__stat details__stat--players">
-                      <dt>{tr("playingNow")}</dt>
+              {/* Stats and buttons wrap as one block, so the buttons never sit on a line alone. */}
+              <div class="details__meta" ref={(el) => (metaBox = el)}>
+                <dl class="details__stats">
+                  <div class="details__stat">
+                    <dt>{tr("lastPlayed")}</dt>
+                    <dd>{formatRelativeDate(props.game.lastPlayed)}</dd>
+                  </div>
+                  <div class="details__stat">
+                    <dt>{tr("playtime")}</dt>
+                    <dd>{formatPlaytime(props.game.playtimeSeconds)}</dd>
+                  </div>
+                  <Show when={props.game.kind === "game"}>
+                    <div class="details__stat">
+                      <dt>{tr("status")}</dt>
                       <dd>
-                        <span class="players-dot" aria-hidden="true" />
-                        {count().toLocaleString(intlLocale())}
+                        <CompletionPicker game={props.game} />
                       </dd>
                     </div>
-                  )}
-                </Show>
-                <div class="details__stat">
-                  <dt>{tr("lastPlayed")}</dt>
-                  <dd>{formatRelativeDate(props.game.lastPlayed)}</dd>
-                </div>
-                <div class="details__stat">
-                  <dt>{tr("playtime")}</dt>
-                  <dd>{formatPlaytime(props.game.playtimeSeconds)}</dd>
-                </div>
-                <Show when={props.game.kind === "game"}>
-                  <div class="details__stat">
-                    <dt>{tr("status")}</dt>
-                    <dd>
-                      <CompletionPicker game={props.game} />
-                    </dd>
-                  </div>
-                </Show>
-                <div class="details__stat details__stat--stores">
-                  <dt>{combined() ? tr("stores") : tr("store")}</dt>
-                  <dd class="details__stores">
-                    <SourceIcons game={props.game} />
-                    <span>{storeNames(props.game)}</span>
-                  </dd>
-                </div>
-              </dl>
-
-              <div class="details__tools">
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  classList={{ "toggle-btn--on": props.game.favorite }}
-                  aria-pressed={props.game.favorite}
-                  aria-label={tr("favorite")}
-                  data-tooltip={props.game.favorite ? tr("removeFavorite") : tr("addFavorite")}
-                  onClick={() =>
-                    void run(() => updateGame(props.game.id, { favorite: !props.game.favorite }))
-                  }
-                >
-                  <Star class="icon icon--filled-when-on" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  classList={{ "toggle-btn--on": props.game.hidden }}
-                  aria-pressed={props.game.hidden}
-                  aria-label={tr("hidden")}
-                  data-tooltip={props.game.hidden ? tr("showInLibrary") : tr("hideFromLibrary")}
-                  onClick={() =>
-                    void run(() => updateGame(props.game.id, { hidden: !props.game.hidden }))
-                  }
-                >
-                  <Show when={props.game.hidden} fallback={<Eye class="icon" aria-hidden="true" />}>
-                    <EyeOff class="icon" aria-hidden="true" />
                   </Show>
-                </button>
-                <button
-                  type="button"
-                  class="btn"
-                  aria-haspopup="dialog"
-                  data-tooltip={tr("editTitle")}
-                  onClick={() => setEditing("general")}
-                >
-                  <Pencil class="icon" aria-hidden="true" /> {tr("edit")}
-                </button>
-                <button
-                  ref={(el) => (moreButton = el)}
-                  type="button"
-                  class="toggle-btn"
-                  aria-label={tr("moreActions")}
-                  data-tooltip={tr("moreActions")}
-                  aria-haspopup="menu"
-                  aria-expanded={moreMenu() !== null}
-                  onClick={() => toggleAnchored(moreMenu, setMoreMenu, moreButton, "end")}
-                >
-                  <Ellipsis class="icon" aria-hidden="true" />
-                </button>
+                </dl>
+
+                <div class="details__tools" ref={(el) => (toolsBox = el)}>
+                  <Show when={!compactTools()}>
+                    <button
+                      type="button"
+                      class="toggle-btn"
+                      classList={{ "toggle-btn--on": props.game.favorite }}
+                      aria-pressed={props.game.favorite}
+                      aria-label={tr("favorite")}
+                      data-tooltip={props.game.favorite ? tr("removeFavorite") : tr("addFavorite")}
+                      onClick={() =>
+                        void run(() =>
+                          updateGame(props.game.id, { favorite: !props.game.favorite }),
+                        )
+                      }
+                    >
+                      <Star class="icon icon--filled-when-on" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      class="toggle-btn"
+                      classList={{ "toggle-btn--on": props.game.hidden }}
+                      aria-pressed={props.game.hidden}
+                      aria-label={tr("hidden")}
+                      data-tooltip={props.game.hidden ? tr("showInLibrary") : tr("hideFromLibrary")}
+                      onClick={() =>
+                        void run(() => updateGame(props.game.id, { hidden: !props.game.hidden }))
+                      }
+                    >
+                      <Show
+                        when={props.game.hidden}
+                        fallback={<Eye class="icon" aria-hidden="true" />}
+                      >
+                        <EyeOff class="icon" aria-hidden="true" />
+                      </Show>
+                    </button>
+                    <button
+                      type="button"
+                      class="toggle-btn"
+                      aria-haspopup="dialog"
+                      aria-label={tr("edit")}
+                      data-tooltip={tr("editTitle")}
+                      onClick={() => setEditing("general")}
+                    >
+                      <Pencil class="icon" aria-hidden="true" />
+                    </button>
+                  </Show>
+                  <button
+                    ref={(el) => (moreButton = el)}
+                    type="button"
+                    class="toggle-btn"
+                    aria-label={tr("moreActions")}
+                    data-tooltip={tr("moreActions")}
+                    aria-haspopup="menu"
+                    aria-expanded={moreMenu() !== null}
+                    onClick={() => toggleAnchored(moreMenu, setMoreMenu, moreButton, "end")}
+                  >
+                    <Ellipsis class="icon" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -830,6 +1054,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                 <ChipGroup label={tr("tags")} field="tag" values={props.game.tags} plain />
               </Card>
             </Show>
+            <TrailerCard gameId={props.game.id} order={2} poster={heroUrl()} />
             <NewsCard news={news()} />
             <Card title={tr("details")} order={7}>
               <dl class="facts">
@@ -872,6 +1097,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   field="perspective"
                   values={props.game.perspectives}
                 />
+                <Fact label="region" plural="regions" field="region" values={props.game.regions} />
                 <Fact label="theme" plural="themes" field="theme" values={props.game.themes} />
                 <Fact
                   label="ageRating"
@@ -879,6 +1105,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   field="ageRating"
                   values={props.game.ageRatings}
                 />
+                <Show when={props.game.version}>
+                  {(version) => (
+                    <>
+                      <dt>{tr("version")}</dt>
+                      <dd>{version()}</dd>
+                    </>
+                  )}
+                </Show>
                 <Show when={props.game.installSize}>
                   {(size) => (
                     <>

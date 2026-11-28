@@ -275,6 +275,22 @@ export const COLUMNS: readonly ColumnDef[] = [
     text: (g) => list(g.perspectives),
   },
   {
+    id: "regions",
+    get label() {
+      return tr("regions");
+    },
+    size: "md",
+    text: (g) => list(g.regions),
+  },
+  {
+    id: "version",
+    get label() {
+      return tr("version");
+    },
+    size: "sm",
+    text: (g) => g.version ?? EMPTY,
+  },
+  {
     id: "ageRatings",
     get label() {
       return tr("ageRatings");
