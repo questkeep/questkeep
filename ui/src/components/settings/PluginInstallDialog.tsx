@@ -1,3 +1,4 @@
+import LoaderCircle from "lucide-solid/icons/loader-circle";
 import { createSignal, For, Index, Show } from "solid-js";
 import type { PluginPreview } from "../../bindings/PluginPreview";
 import { translator } from "../../i18n";
@@ -48,16 +49,29 @@ interface PluginInstallDialogProps {
   registry?: RegistryExtras;
   plugin: PluginPreview;
   /** `folders`: what the user chose for the plugin's folders (key to path, blank for the default); undefined when nothing was changed. */
-  onInstall: (folders?: Record<string, string>) => void;
+  onInstall: (folders?: Record<string, string>) => void | Promise<void>;
   onClose: () => void;
 }
 
 /**
  * Shows what a chosen plugin is (name, kinds, what its stores may reach) before it is installed.
- * Cancel has the focus, so Enter does not install by accident.
+ * Cancel has the focus, so Enter does not install by accident. While `onInstall` runs (a large
+ * plugin takes a while to compile) the dialog stays open with a spinner in the Install button.
  */
 export function PluginInstallDialog(props: PluginInstallDialogProps) {
   const plugin = () => props.plugin;
+  const [installing, setInstalling] = createSignal(false);
+  const close = () => {
+    if (!installing()) props.onClose();
+  };
+  async function install() {
+    setInstalling(true);
+    try {
+      await props.onInstall(installFolderMap(choices()));
+    } finally {
+      props.onClose();
+    }
+  }
   /** What the user picked for the plugin's folders here; the rest stays as the preview says. */
   const [choices, setChoices] = createSignal<FolderChoices>({});
   const folders = () => plugin().folders.map((folder) => applyFolderChoice(folder, choices()));
@@ -84,7 +98,7 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
   const unreviewed = () => !props.registry && (plugin().stores > 0 || plugin().hasExtension);
 
   return (
-    <Modal title={tr("installTitle")} onClose={props.onClose}>
+    <Modal title={tr("installTitle")} onClose={close}>
       <div class="plugin-preview">
         <div class="account__head">
           <PluginIcon src={plugin().icon} />
@@ -244,17 +258,19 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
         <p class="muted plugin-preview__trust">{tr("installMessage")}</p>
       </div>
       <div class="form__actions">
-        <button type="button" class="btn" data-autofocus onClick={props.onClose}>
+        <button type="button" class="btn" data-autofocus disabled={installing()} onClick={close}>
           {trCommon("cancel")}
         </button>
         <button
           type="button"
           class="btn btn--primary"
-          onClick={() => {
-            props.onClose();
-            props.onInstall(installFolderMap(choices()));
-          }}
+          disabled={installing()}
+          aria-busy={installing()}
+          onClick={() => void install()}
         >
+          <Show when={installing()}>
+            <LoaderCircle class="icon icon--spin" aria-hidden="true" />
+          </Show>
           {tr("installConfirm")}
         </button>
       </div>

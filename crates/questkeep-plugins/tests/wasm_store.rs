@@ -167,6 +167,26 @@ fn example_store_loads_scans_reloads_and_unloads() {
     assert_eq!(info.name, "Example Store");
     assert_eq!(fx.changes.load(Ordering::SeqCst), 1);
 
+    // The machine code is kept, so the next start does not compile the plugin again.
+    let compiled = fx.paths.plugin_compiled_dir().join("example-store");
+    let cached = || -> Vec<(String, std::time::SystemTime)> {
+        std::fs::read_dir(&compiled)
+            .unwrap()
+            .map(|e| e.unwrap())
+            .map(|e| {
+                (
+                    e.file_name().to_string_lossy().into_owned(),
+                    e.metadata().unwrap().modified().unwrap(),
+                )
+            })
+            .collect()
+    };
+    let first = cached();
+    assert_eq!(first.len(), 1);
+    assert!(first[0].0.starts_with("provider.wasm.") && first[0].0.ends_with(".cwasm"));
+    manager.reload("example-store").unwrap();
+    assert_eq!(cached(), first, "a reload should reuse the compiled copy");
+
     // What the app knows without calling the plugin.
     let store = fx.provider("example-store");
     assert_eq!(store.name(), "Example Store");

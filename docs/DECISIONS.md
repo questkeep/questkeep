@@ -772,6 +772,17 @@ Design: `docs/superpowers/specs/2026-11-21-plugin-permissions-design.md`.
 - **Add-game options can open an https page in the browser** (`AddGameTarget::Browser`), for stores whose "add a game" happens on a website. Only `https://` with a host is opened (no `file:`, store URIs or other schemes, which can start programs), and it needs no permission: it opens the user's browser, the plugin gets no web access from it. Afterwards Questkeep watches the installed scan like for the other kinds.
 - **Prism Launcher moved out of the app into the `questkeep/plugin-prism` plugin:** it only reads Prism's own files and starts instances, which the plugin API covers, and it serves few users. The plugin keeps the store id `prism` and the same game ids, so existing entries, sessions and combines match again once it is installed; until then they stay in the library and still start (play actions are stored), but do not sync. The Ctrl+N automation for "New Minecraft instance" was dropped with it, and so were the keystroke helpers in the store API.
 - **`platform/drives.rs` is another small `unsafe` module:** two Win32 calls (`GetLogicalDrives`, `GetDriveTypeW`) with a local buffer, to list local drives for the plugins' file system view.
+- **Compiled plugins are cached** in `<data>/plugin-compiled/<id>/<file>.<sha256 of the wasm>.cwasm`
+  (`Component::serialize`), so only the first load compiles (seconds); later starts deserialize it
+  (milliseconds). A missing or stale copy (another wasmtime version) is compiled again. `Component::deserialize` is `unsafe` (another small `#[allow(unsafe_code)]` spot): it trusts its input as native
+  code. The folder is written only by Questkeep (atomic rename) and not mounted into any plugin;
+  anyone who can write it could equally replace the app's data, so the sandbox boundary (plugin vs.
+  host) is unchanged. wasmtime's own `cache` feature was skipped: it pulls in more dependencies.
+- **Log layers need a max-level hint.** A `filter_fn` layer without `with_max_level_hint` makes the
+  subscriber report TRACE as its most verbose level, so the `log` bridge forwards every record of
+  dependencies into the subscriber (millions from Cranelift while compiling a plugin) only for it to
+  drop them: installing a plugin took 4.4 s in the app but 0.45 s without a subscriber. The activity
+  layer's hint is INFO (its events are INFO and above); keep that true when adding activity events.
 
 ## Plugin registry
 

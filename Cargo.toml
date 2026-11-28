@@ -52,6 +52,48 @@ opt-level = 3
 [profile.dev.package.moxcms]
 opt-level = 3
 
+# Installing or loading a plugin compiles its WebAssembly with Cranelift (wasmtime). Unoptimized that
+# took 2.1 s for a 240 KB plugin, optimized 0.3 s; only the compiler is optimized, the rest of the
+# dev build stays fast to compile.
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+
+[profile.dev.package.cranelift-bitset]
+opt-level = 3
+
+[profile.dev.package.cranelift-control]
+opt-level = 3
+
+[profile.dev.package.cranelift-native]
+opt-level = 3
+
+[profile.dev.package.regalloc2]
+opt-level = 3
+
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+
+[profile.dev.package.wasmparser]
+opt-level = 3
+
+[profile.dev.package.gimli]
+opt-level = 3
+
+[profile.dev.package.object]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true

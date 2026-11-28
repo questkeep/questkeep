@@ -540,7 +540,7 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
             <PluginInstallDialog
               path={path}
               plugin={plugin}
-              onInstall={(folders) => void install(path, folders)}
+              onInstall={(folders) => install(path, folders)}
               onClose={() => setPending(null)}
             />
           );

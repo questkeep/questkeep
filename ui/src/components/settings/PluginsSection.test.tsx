@@ -199,6 +199,29 @@ describe("PluginsSection", () => {
     expect(toasts()).toContain("Installed New Store.");
   });
 
+  it("keeps the install dialog open with a spinner in Install until the plugin is installed", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
+    const installed: { finish?: (plugin: PluginInfo) => void } = {};
+    vi.mocked(api.installPlugin).mockReturnValue(
+      new Promise<PluginInfo>((resolve) => {
+        installed.finish = resolve;
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    await screen.findByText(/Plugins are third-party code/);
+    await fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    const install = await screen.findByRole("button", { name: "Install" });
+    expect(install).toBeDisabled();
+    expect(install).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByText(/Plugins are third-party code/)).toBeInTheDocument();
+    installed.finish?.(makePlugin({ id: "new", name: "New Store" }));
+    await waitFor(() =>
+      expect(screen.queryByText(/Plugins are third-party code/)).not.toBeInTheDocument(),
+    );
+  });
+
   it("shows the icon of the plugin in the install dialog, when it has one", async () => {
     await show();
     vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");

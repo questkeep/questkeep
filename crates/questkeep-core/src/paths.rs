@@ -111,6 +111,12 @@ impl DataPaths {
         self.root.join("plugin-cache")
     }
 
+    /// Plugins' WebAssembly compiled to machine code (one folder per plugin), so starting the app
+    /// does not compile them again. Safe to delete: it is rebuilt on the next load.
+    pub fn plugin_compiled_dir(&self) -> PathBuf {
+        self.root.join("plugin-compiled")
+    }
+
     /// Copies of a plugin's data taken before an update or downgrade replaced it:
     /// `<id>/<old version>/`.
     pub fn plugin_data_backup_dir(&self) -> PathBuf {

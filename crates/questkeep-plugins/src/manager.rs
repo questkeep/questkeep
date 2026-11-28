@@ -443,9 +443,12 @@ impl PluginManager {
         path: &Path,
         folders: &BTreeMap<String, String>,
     ) -> Result<PluginInfo> {
+        let started = std::time::Instant::now();
         let _change = self.inner.change();
+        let waited = started.elapsed();
         let source = std::path::absolute(path).map_err(|e| PluginError::io(path, e))?;
         let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
+        let staged_in = started.elapsed();
         let id = staged.manifest().id.clone();
         let folders = self.check_install_folders(staged.manifest(), folders)?;
         let old_version = self.installed_version(&id);
@@ -459,9 +462,20 @@ impl PluginManager {
         }
         self.record_install(&id, source.display().to_string(), None, folders);
         let saved = self.inner.save();
+        let committed_in = started.elapsed();
         self.inner.load(&id);
+        let loaded_in = started.elapsed();
         self.sync_watch(&id);
         self.inner.changed();
+        tracing::info!(
+            plugin = %id,
+            waited_ms = waited.as_millis() as u64,
+            staged_ms = staged_in.as_millis() as u64,
+            committed_ms = committed_in.as_millis() as u64,
+            loaded_ms = loaded_in.as_millis() as u64,
+            total_ms = started.elapsed().as_millis() as u64,
+            "installed from a folder (times since the start)"
+        );
         note_install(&id, old_version.as_deref(), &new_version, "a folder");
         saved?;
         self.info(&id)
@@ -791,6 +805,9 @@ impl PluginManager {
         self.inner.changed();
         removed?;
         saved?;
+        if let Err(err) = install::remove_dir(&self.inner.paths.plugin_compiled_dir().join(id)) {
+            tracing::warn!(plugin = id, %err, "could not delete the compiled plugin");
+        }
         if let Err(err) = registry::remove_cache(&self.inner.paths, id) {
             tracing::warn!(plugin = id, %err, "could not delete the cached plugin download");
         }
@@ -1121,8 +1138,12 @@ impl Inner {
         };
         let mut providers: Vec<Arc<WasmProvider>> = Vec::new();
         for entry in &manifest.providers {
-            let provider =
-                WasmProvider::load(runtime.clone(), &dir.join(&entry.wasm), sandbox.clone())?;
+            let provider = WasmProvider::load(
+                runtime.clone(),
+                &dir.join(&entry.wasm),
+                &self.paths.plugin_compiled_dir().join(&sandbox.plugin_id),
+                sandbox.clone(),
+            )?;
             let id = provider.id();
             if providers.iter().any(|p| p.id() == id) {
                 return Err(PluginError::Load(format!(

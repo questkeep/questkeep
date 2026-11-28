@@ -131,8 +131,13 @@ fn init_logging(paths: &DataPaths) -> Option<WorkerGuard> {
     };
     let stderr_layer =
         cfg!(debug_assertions).then(|| tracing_subscriber::fmt::layer().with_filter(filter()));
+    // The hint matters: a `filter_fn` without one makes the whole subscriber report TRACE as its most
+    // verbose level, so the `log` bridge forwards every trace record of dependencies (Cranelift and
+    // regalloc2 emit millions while compiling a plugin) into the subscriber, which drops them. That
+    // made installing a plugin ~10x slower (4.4 s instead of 0.45 s). Activity events are INFO and up.
     let activity_layer = activity_layer::ActivityLayer::new(activity_layer::sink()).with_filter(
-        tracing_subscriber::filter::filter_fn(|meta| meta.target() == activity_layer::TARGET),
+        tracing_subscriber::filter::filter_fn(|meta| meta.target() == activity_layer::TARGET)
+            .with_max_level_hint(tracing_subscriber::filter::LevelFilter::INFO),
     );
     let _ = tracing_subscriber::registry()
         .with(file_layer)

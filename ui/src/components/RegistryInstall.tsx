@@ -61,14 +61,14 @@ export function createRegistryInstall(onInstalled?: (plugin: PluginInfo) => void
   const dialog = () => (
     <Show when={pending()}>
       {(chosen) => {
-        // The dialog closes before it confirms, which ends the <Show>: keep the value.
+        // Kept as plain values: the <Show> ends when the dialog closes.
         const { id, version, preview } = chosen();
         return (
           <Portal>
             <PluginInstallDialog
               plugin={preview.preview}
               registry={preview}
-              onInstall={(folders) => void confirm(id, version, folders)}
+              onInstall={(folders) => confirm(id, version, folders)}
               onClose={() => setPending(null)}
             />
           </Portal>

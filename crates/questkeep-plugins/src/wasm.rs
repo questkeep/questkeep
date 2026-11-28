@@ -664,6 +664,66 @@ fn has_event_handler(lower: &str) -> bool {
     })
 }
 
+/// The component for `bytes`. Compiling takes seconds, so the machine code is kept in
+/// `compiled_dir` as `<file>.<sha256 of the wasm>.cwasm` and loaded from there next time; a missing,
+/// stale (another wasmtime version) or unreadable copy is compiled again and replaced.
+fn compile(
+    engine: &Engine,
+    bytes: &[u8],
+    file: &str,
+    compiled_dir: &Path,
+) -> wasmtime::Result<Component> {
+    let name = format!("{file}.{}.cwasm", crate::registry::sha256_hex(bytes));
+    let cached = compiled_dir.join(&name);
+    if let Ok(machine_code) = std::fs::read(&cached) {
+        // SAFETY: the bytes were produced by `Component::serialize` of this app (the file name is
+        // the hash of the wasm it came from) in a folder only Questkeep writes to, and are written
+        // atomically. `deserialize` itself refuses output of another wasmtime version or engine
+        // configuration. Plugins cannot reach this folder: they only see their own folders.
+        #[allow(unsafe_code)]
+        match unsafe { Component::deserialize(engine, &machine_code) } {
+            Ok(component) => return Ok(component),
+            Err(err) => {
+                tracing::debug!(file, %err, "compiled plugin is out of date, compiling again")
+            }
+        }
+    }
+    let started = std::time::Instant::now();
+    let component = Component::new(engine, bytes)?;
+    let compiled_in = started.elapsed();
+    if let Err(err) = store_compiled(&component, compiled_dir, file, &name) {
+        tracing::warn!(file, %err, "could not keep the compiled plugin");
+    }
+    tracing::debug!(
+        file,
+        cranelift_ms = compiled_in.as_millis() as u64,
+        store_ms = (started.elapsed() - compiled_in).as_millis() as u64,
+        "compiled the plugin"
+    );
+    Ok(component)
+}
+
+/// Writes `name` into `dir` (atomically) and removes older compiled copies of `file`.
+fn store_compiled(
+    component: &Component,
+    dir: &Path,
+    file: &str,
+    name: &str,
+) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let temp = dir.join(format!("{name}.tmp"));
+    std::fs::write(&temp, component.serialize().map_err(std::io::Error::other)?)?;
+    std::fs::rename(&temp, dir.join(name))?;
+    let prefix = format!("{file}.");
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let other = entry.file_name().to_string_lossy().into_owned();
+        if other != name && other.starts_with(&prefix) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    Ok(())
+}
+
 struct Live {
     store: Store<HostState>,
     bindings: bindings::Provider,
@@ -696,7 +756,14 @@ pub struct WasmProvider {
 
 impl WasmProvider {
     /// Compiles the component, starts it and asks what it is.
-    pub(crate) fn load(runtime: Arc<Runtime>, wasm: &Path, sandbox: Sandbox) -> Result<Self> {
+    ///
+    /// `compiled_dir` keeps the machine code of this plugin between runs (see [`compile`]).
+    pub(crate) fn load(
+        runtime: Arc<Runtime>,
+        wasm: &Path,
+        compiled_dir: &Path,
+        sandbox: Sandbox,
+    ) -> Result<Self> {
         // Each store of a plugin has its own id, and so its own website session.
         let sandbox = Sandbox {
             store_id: StoreId::default(),
@@ -708,7 +775,8 @@ impl WasmProvider {
             .unwrap_or_default();
         // Read into memory: the installed file stays free to be replaced or deleted.
         let bytes = std::fs::read(wasm).map_err(|e| PluginError::io(wasm, e))?;
-        let component = Component::new(&runtime.engine, &bytes).map_err(|err| {
+        let started = std::time::Instant::now();
+        let component = compile(&runtime.engine, &bytes, &file, compiled_dir).map_err(|err| {
             tracing::warn!(plugin = %sandbox.plugin_id, error = ?err, "invalid store component");
             PluginError::Load(format!(
                 "{file} is not a store plugin for this version of Questkeep (it must be a \
@@ -716,6 +784,7 @@ impl WasmProvider {
                 err.root_cause()
             ))
         })?;
+        let compiled_in = started.elapsed();
         let guard = runtime.track();
         let mut live = instantiate(&runtime, &component, &sandbox).map_err(|err| {
             tracing::warn!(plugin = %sandbox.plugin_id, error = ?err, "store did not start");
@@ -724,6 +793,7 @@ impl WasmProvider {
                 err.root_cause()
             ))
         })?;
+        let started_in = started.elapsed();
         live.store
             .set_epoch_deadline(Runtime::ticks(runtime.limits.quick));
         let described = describe(&mut live).map_err(|err| {
@@ -732,6 +802,13 @@ impl WasmProvider {
                 err.root_cause()
             ))
         })?;
+        tracing::debug!(
+            plugin = %sandbox.plugin_id,
+            compile_ms = compiled_in.as_millis() as u64,
+            instantiate_ms = (started_in - compiled_in).as_millis() as u64,
+            describe_ms = (started.elapsed() - started_in).as_millis() as u64,
+            "loaded {file}"
+        );
 
         let plugin = &sandbox.plugin_id;
         let _ = sandbox.store_id.set(described.id.clone());
