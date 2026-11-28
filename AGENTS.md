@@ -14,7 +14,7 @@ Guide for humans and coding agents working on Questkeep.
 | Auto-format, then check | `pnpm fix` |
 | Update the Rust lockfile (2-day min age) | `pnpm deps:rust` |
 | Remove stale build output from `target/` (needs `cargo install cargo-sweep`) | `pnpm clean:stale` |
-| Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
+| Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary" --slug <words>` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
 | Build the example store plugin (needs `rustup target add wasm32-wasip2`) | `examples/plugins/example-store/build.ps1` |
@@ -25,7 +25,7 @@ Guide for humans and coding agents working on Questkeep.
 
 `pnpm check` runs, in order: rustfmt check, clippy (`-D warnings`), `cargo test --workspace`,
 oxfmt check, oxlint (`--deny-warnings`), `tsc --noEmit`, vitest. In CI (`CI` env set) it also
-fails if `ui/src/bindings` differs from what `cargo test` generated. Run it before every commit. It also runs the release-script tests (`node --test scripts/release/*.test.mjs`).
+fails if `ui/src/bindings` differs from what `cargo test` generated. Run it before every commit. It also runs the release-script tests (`node --test scripts/release/*.test.mjs`) and checks the changeset file names (`changeset.mjs check`).
 Outside CI it ends with `pnpm clean:stale` (artifacts of uninstalled toolchains and anything no
 build used for 7 days, in `target/`, `target/agent` and the example store); without cargo-sweep
 installed that step is skipped, and its failure never fails the checks.
@@ -196,7 +196,9 @@ ui/src/
   `latest` or a prefix). **When you add or remove a tool in `mise.toml`, update that list in the same
   change**; the workflow fails when a pinned tool is missing from it.
 - **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.
-  Docs/CI-only changes need no changeset.
+  Docs/CI-only changes need no changeset. **Before adding or editing a changeset, read
+  `.changeset/README.md`** (wording rules, updating pending changesets your change makes outdated
+  instead of adding a conflicting one, and when an edited changeset should move in the order).
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
   `docs/ROADMAP.md`. In DECISIONS.md, add the entry at the end of the section for its topic, never at
   the end of the file (the last section is not a catch-all); start a new `##` section for a new topic.

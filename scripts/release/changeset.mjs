@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Changeset CLI. Dependency-free (Node 26, `node:` built-ins only).
 //
-//   node scripts/release/changeset.mjs add <major|minor|patch> "<summary>"
+//   node scripts/release/changeset.mjs add <major|minor|patch> "<summary>" [--slug <name>]
 //   node scripts/release/changeset.mjs status
+//   node scripts/release/changeset.mjs check
 //   node scripts/release/changeset.mjs dev-version
 //   node scripts/release/changeset.mjs plan --out-dir <dir> [--github-output]
 //   node scripts/release/changeset.mjs version --write <X.Y.Z>
@@ -11,13 +12,14 @@
 //
 // The current version is the highest `vX.Y.Z` git tag (0.0.0 without tags). See docs/RELEASING.md.
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BUMPS,
+  changesetFileName,
   currentVersionFromTags,
+  isChangesetFileName,
   localCargoPackages,
   nextVersion,
   parseChangeset,
@@ -27,7 +29,6 @@ import {
   setCargoLockVersions,
   setJsonVersion,
   setTomlVersion,
-  sortChangesets,
 } from "./lib.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -53,30 +54,19 @@ function currentVersion() {
 }
 
 /**
- * When a changeset was last modified, in seconds: the time of the last commit that touched it, or
- * the file's mtime while it is uncommitted or changed. Not the mtime alone: a fresh checkout (the
- * Release workflow) gives every file the same one.
+ * Pending changesets as `{ file, bump, body }`, sorted by file name: the `yyyyMMddHHmmss-` prefix
+ * puts them in release-note order. Throws on malformed files.
  */
-function lastModified(file) {
-  const rel = `.changeset/${file}`;
-  const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-  const dirty = git(["status", "--porcelain", "--", rel]) !== "";
-  const committed = dirty ? "" : git(["log", "-1", "--format=%ct", "--", rel]);
-  if (committed) return Number(committed);
-  return Math.floor(fs.statSync(path.join(changesetDir, file)).mtimeMs / 1000);
-}
-
-/** Pending changesets as `{ file, bump, body, modified }`, oldest change first. Throws on malformed files. */
 function pendingChangesets() {
   if (!fs.existsSync(changesetDir)) return [];
-  const changesets = fs
+  return fs
     .readdirSync(changesetDir)
     .filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
+    .sort()
     .map((file) => {
       const text = fs.readFileSync(path.join(changesetDir, file), "utf8");
-      return { file, ...parseChangeset(text, `.changeset/${file}`), modified: lastModified(file) };
+      return { file, ...parseChangeset(text, `.changeset/${file}`) };
     });
-  return sortChangesets(changesets);
 }
 
 function readRel(rel) {
@@ -118,6 +108,12 @@ function printStatus() {
   console.log(`Pending changesets: ${changesets.length}`);
   for (const c of changesets) console.log(`  [${c.bump}] ${c.file}: ${c.body.split("\n")[0]}`);
   console.log(next ? `Next version: ${next}` : "Next version: none (nothing to release)");
+  const unnamed = changesets.filter((c) => !isChangesetFileName(c.file));
+  if (unnamed.length > 0) {
+    console.log(
+      `Warning: not named yyyyMMddHHmmss-<summary>.md (UTC), so out of order: ${unnamed.map((c) => c.file).join(", ")}`,
+    );
+  }
 }
 
 function appendGithubOutput(values) {
@@ -130,14 +126,34 @@ const [command, ...args] = process.argv.slice(2);
 
 switch (command) {
   case "add": {
-    const [bump, ...summary] = args;
-    if (!BUMPS.includes(bump)) fail(`usage: add <${BUMPS.join("|")}> "<summary>"`);
+    const slug = option(args, "slug");
+    const [bump, ...summary] = args.filter((a, i) => a !== "--slug" && args[i - 1] !== "--slug");
+    if (!BUMPS.includes(bump)) fail(`usage: add <${BUMPS.join("|")}> "<summary>" [--slug <name>]`);
     const body = summary.join(" ").trim();
     if (!body) fail("the summary must not be empty");
     fs.mkdirSync(changesetDir, { recursive: true });
-    const file = `${randomBytes(4).toString("hex")}.md`;
-    fs.writeFileSync(path.join(changesetDir, file), `---\nbump: ${bump}\n---\n${body}\n`);
+    const file = changesetFileName(new Date(), slug ?? body);
+    try {
+      fs.writeFileSync(path.join(changesetDir, file), `---\nbump: ${bump}\n---\n${body}\n`, {
+        flag: "wx",
+      });
+    } catch {
+      fail(`.changeset/${file} already exists; pass another --slug`);
+    }
     console.log(`Created .changeset/${file}`);
+    break;
+  }
+  case "check": {
+    // For `pnpm check` (and so CI): every pending changeset parses and has an ordering name.
+    const bad = pendingChangesets()
+      .map((c) => c.file)
+      .filter((f) => !isChangesetFileName(f));
+    if (bad.length > 0) {
+      fail(
+        `changeset names must be yyyyMMddHHmmss-<slug>.md (UTC; 'pnpm changeset add' creates them): ${bad.join(", ")}`,
+      );
+    }
+    console.log("Changeset names ok.");
     break;
   }
   case "status":
@@ -194,5 +210,5 @@ switch (command) {
     break;
   }
   default:
-    fail("usage: changeset.mjs <add|status|dev-version|plan|version|notes|consume> ...");
+    fail("usage: changeset.mjs <add|status|check|dev-version|plan|version|notes|consume> ...");
 }

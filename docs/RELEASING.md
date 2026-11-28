@@ -13,11 +13,12 @@ Add Epic, GOG and Xbox providers.
 ```
 
 ```sh
-pnpm changeset add <major|minor|patch> "<summary>"   # creates .changeset/<random>.md
+pnpm changeset add <major|minor|patch> "<summary>" [--slug <words>]   # creates .changeset/<yyyyMMddHHmmss>-<slug>.md
 pnpm changeset status                                 # current version, pending files, next version
 ```
 
-- Add one per user-visible change. Docs/CI-only changes need none. CI posts a warning (never a
+- Add one per user-visible change, written as `.changeset/README.md` describes (wording, and
+  updating pending changesets a later change makes outdated). Docs/CI-only changes need none. CI posts a warning (never a
   failure) on pull requests that change code without adding one.
 - **Current version** = the highest `vX.Y.Z` git tag (no tag means `0.0.0`).
 - **Next version** = current bumped by the highest pending bump. Pre-1.0 is plain semver: `major`

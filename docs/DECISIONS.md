@@ -207,6 +207,9 @@ Short log of choices made while building. Newest at the bottom of each section.
   changesets will release (`changeset.mjs dev-version`); debug builds read it in
   `questkeep_core::app_version()`, release builds ignore it. A runtime variable instead of editing
   version files means nothing to roll back and no recompile when a changeset is added.
+- **Changeset names carry their order** (`yyyyMMddHHmmss-<slug>.md`, UTC, sorted by name). Git
+  times can't tell a wording fix from a real update (both move the entry) and break in shallow or
+  rebased checkouts; a name the author renames on purpose keeps the order visible and chosen.
 
 ## Linux stores
 
