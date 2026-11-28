@@ -233,6 +233,8 @@ function createAppStore() {
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
   /** The random game dialog (it picks from the open view's games). */
   const [randomOpen, setRandomOpen] = createSignal(false);
+  /** Text a link or `--search` asked Find a game to show; the app opens the bar with it. */
+  const [commandSearch, setCommandSearch] = createSignal<string | null>(null);
   /**
    * The Combine groups dialog: the grouping field, the groups to start with and the merge being
    * edited, if any.
@@ -1477,6 +1479,16 @@ function createAppStore() {
     }
   }
 
+  /** Opens Find a game on the text a `questkeep://search/…` link or `--search` asked for. */
+  async function showSearchRequest() {
+    try {
+      const text = await api.takeSearchRequest();
+      if (typeof text === "string" && text !== "") setCommandSearch(text);
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
   /** Loads initial data and subscribes to core events. Returns a cleanup function. */
   async function init(): Promise<() => void> {
     const unlisteners: (() => void)[] = [];
@@ -1491,6 +1503,7 @@ function createAppStore() {
       listen<api.UpdateInfo>("update-available", (e) => setUpdate(e.payload)).then(keep),
       listen("show-update", () => void showUpdateRequest()).then(keep),
       listen("show-game", () => void showGamePageRequest()).then(keep),
+      listen("search-games", () => void showSearchRequest()).then(keep),
       listen<api.UpdateProgress>("update-progress", (e) => setUpdateProgress(e.payload)).then(keep),
     ]);
     const loads = Promise.allSettled([
@@ -1546,6 +1559,7 @@ function createAppStore() {
     void showNotices();
     void showUpdateRequest();
     void showGamePageRequest();
+    void showSearchRequest();
     // A system notification that arrived before the window listened (or while it was hidden).
     void checkOpenNotifications();
     const onVisible = () => {
@@ -1670,6 +1684,9 @@ function createAppStore() {
     setDuplicatesOpen,
     randomOpen,
     setRandomOpen,
+    commandSearch,
+    setCommandSearch,
+    showSearchRequest,
     mergeDialog,
     setMergeDialog,
     mergeManager,

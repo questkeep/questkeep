@@ -4,10 +4,12 @@ mod activity_layer;
 mod autostart;
 mod backups;
 mod commands;
+mod external;
 mod game_window;
 mod i18n;
 mod install_kind;
 mod plugin_files;
+mod protocol;
 mod signin;
 mod tray;
 mod tray_theme;
@@ -433,6 +435,11 @@ pub fn run() {
     if !cfg!(debug_assertions) {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             note_second_start(app, args.first().map(String::as_str));
+            // A link or --start/--show/--search: the request decides about the window.
+            if let Some(request) = questkeep_core::external::parse_request(&args) {
+                external::handle(app, request);
+                return;
+            }
             // An autostart racing with a manual start must not pop the window up.
             if !tray_logic::parse_launch_args(&args).minimized {
                 window::show_main_window_async(app);
@@ -473,14 +480,23 @@ pub fn run() {
             }
             let settings = state.library.settings();
             let args = tray_logic::parse_launch_args(std::env::args());
+            let request = questkeep_core::external::parse_request(std::env::args());
             // After an update the window comes back as it was, never into the tray.
             let resuming = questkeep_core::resume::pending(&state.library.paths().resume_file());
-            if !resuming && tray_logic::start_in_tray(&settings, args, lifecycle.tray_available()) {
-                tracing::info!("started minimized: staying in the tray");
+            let tray = lifecycle.tray_available();
+            if !resuming
+                && (tray_logic::start_in_tray(&settings, args, tray)
+                    || (tray && external::stays_in_tray(request.as_ref())))
+            {
+                tracing::info!("started minimized or for a game: staying in the tray");
                 lifecycle.set_hidden_to_tray(true);
             } else {
                 window::create_main_window(app.handle())?;
             }
+            if let Some(request) = request {
+                external::handle(app.handle(), request);
+            }
+            protocol::register_on_startup();
             autostart::sync_on_startup(app.handle(), settings.start_with_system);
             backups::backup_on_startup(state.clone());
             spawn_startup_tasks(state);
@@ -611,6 +627,8 @@ pub fn run() {
             commands::available_update,
             commands::take_update_request,
             commands::take_game_page_request,
+            commands::take_search_request,
+            commands::game_links,
             commands::install_update,
             commands::take_resume_state,
             commands::account_status,

@@ -50,6 +50,14 @@ Short log of choices made while building. Newest at the bottom of each section.
   `portable.txt` next to the executable.
 - **Asset protocol scope is granted at runtime** to the resolved images dir only, instead of a
   broad static scope in `tauri.conf.json`.
+- **`questkeep://` is registered by the app itself** at every start of a release build (HKCU
+  `SoftwareClassesquestkeep`, a `.desktop` handler on Linux), not by the deep-link plugin (its
+  current release targets Tauri 3): the portable exe works too, wherever it was moved, and the
+  NSIS uninstaller hook removes the key. Debug builds only register with
+  `QUESTKEEP_REGISTER_PROTOCOL=1`, so a dev build never takes over the installed app's links.
+- **Start links only start installed games**, with their own play action; anything else opens the
+  game's page. Any web page can open a `questkeep://` link (the browser asks first), so a link
+  must never install, uninstall or run anything but the game.
 
 ## Launching and playtime
 

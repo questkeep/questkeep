@@ -9043,3 +9043,17 @@ label[for="quick-launch-add"] {
 .random__installed {
   margin: var(--qk-space-4) 0 0 calc(-1 * var(--qk-space-2));
 }
+.game-id {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  min-width: 0;
+}
+.game-id__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}

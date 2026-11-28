@@ -321,6 +321,29 @@ describe("DetailsPanel", () => {
     );
   });
 
+  it("shows the game ID and copies its ID, start link or start command", async () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    vi.mocked(api.gameLinks).mockResolvedValue({
+      id: "g1",
+      url: "questkeep://start/g1",
+      command: '"/opt/questkeep/questkeep" --start g1',
+    });
+    render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+    expect(screen.getByText("g1", { selector: "code" })).toBeInTheDocument();
+    const button = screen.getByRole("button", {
+      name: "Copy the game ID, start link or start command",
+    });
+    await fireEvent.click(button);
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Copy start link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("questkeep://start/g1"));
+    await fireEvent.click(button);
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Copy start command" }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenLastCalledWith('"/opt/questkeep/questkeep" --start g1'),
+    );
+  });
+
   it("requires a confirm step before removing", async () => {
     vi.mocked(api.removeGame).mockResolvedValue(undefined);
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);

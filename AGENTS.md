@@ -55,6 +55,10 @@ playing a fullscreen game). Use:
 scripts/dev-hidden.ps1 -Portable   # hidden window, DevTools on :9222, low priority, throwaway data
 ```
 
+Add `-AppArgs "--show","<game id>"` (or a `questkeep://` link) to test what a link or the command
+line does on a first start. Never test the hand-over to a running instance by switching on single
+instance in a dev build: it hands over to the user's installed Questkeep (same identifier).
+
 It sets `QUESTKEEP_HIDDEN=1` (debug builds only: no tray icon, the window is created invisible, unfocused and
 off the taskbar), disables WebView2 background throttling so the page keeps rendering, and runs
 cargo/node/the app at below-normal priority with a third of the cores as build jobs. Screenshots
@@ -111,6 +115,7 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
   images/                      cover/background cache (mod.rs; also the cover tiles the tray popup reads) + cover and metadata fetchers (fetcher.rs)
   game_state.rs                games.state_version: brings derived data (cover tiles) up to date in the background after start
   events.rs                    EventBus + CoreEvent
+  external.rs                  questkeep:// links and --start/--show/--search: parsing, a game's links
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
   programs/                    installed programs for Add game (Apps list + Start menu, lnk.rs
                                reads .lnk files)
@@ -120,6 +125,9 @@ src-tauri/src/                 thin shell: commands.rs (one wrapper per command)
   signin.rs                    store login windows and the hidden store-session window, both
                                driven by the store's LoginWindow description
   tray.rs                      tray icon and native menu; hands the popup its data
+  external.rs                  carries out link and command-line requests (and the tray's launches
+                               and game pages): start, game page, search
+  protocol.rs                  registers questkeep:// for the current user at start (release builds)
   game_window.rs               minimizing/hiding the window while a game runs, bringing it back,
                                system notifications while the window is in the background
   updates.rs                   update check after start, the found update, installing it

@@ -37,6 +37,7 @@ import type { GameEdits } from "../bindings/GameEdits";
 import type { ImageOption } from "../bindings/ImageOption";
 import type { ImageSlot } from "../bindings/ImageSlot";
 import type { ImageSource } from "../bindings/ImageSource";
+import type { GameLinks } from "../bindings/GameLinks";
 import type { ImportExclusion } from "../bindings/ImportExclusion";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { ProfileInput } from "../bindings/ProfileInput";
@@ -377,6 +378,10 @@ export const availableUpdate = () => invoke<UpdateInfo | null>("available_update
 export const takeUpdateRequest = () => invoke<boolean>("take_update_request");
 /** The game whose page the tray asked to show (`show-game` event), once. */
 export const takeGamePageRequest = () => invoke<string | null>("take_game_page_request");
+/** The text a `questkeep://search/…` link or `--search` asked Find a game to show, once. */
+export const takeSearchRequest = () => invoke<string | null>("take_search_request");
+/** A game's ID, start link and start command, for the game page's copy menu. */
+export const gameLinks = (id: string) => invoke<GameLinks>("game_links", { id });
 /** Download progress of an installing update (`update-progress` event). */
 export interface UpdateProgress {
   downloaded: number;

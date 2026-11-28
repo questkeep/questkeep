@@ -187,13 +187,19 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
   const [compact, setCompact] = createSignal(false);
   const [floating, setFloating] = createSignal(false);
   let bar: CommandBarHandle | undefined;
+  let floatingBar: CommandBarHandle | undefined;
   let center: HTMLDivElement | undefined;
   let searchButton: HTMLButtonElement | undefined;
 
   props.commandRef?.({
-    focus: () => {
-      if (compact()) setFloating(true);
-      else bar?.focus();
+    focus: (text) => {
+      if (!compact()) {
+        bar?.focus(text);
+        return;
+      }
+      setFloating(true);
+      // The popup's bar exists once it is shown.
+      if (text !== undefined) queueMicrotask(() => floatingBar?.focus(text));
     },
   });
 
@@ -429,6 +435,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           <Show when={floating()}>
             <div class="titlebar__command-popup">
               <CommandBar
+                ref={(handle) => (floatingBar = handle)}
                 autoFocus
                 appMenu={appEntries}
                 onDismiss={() => {

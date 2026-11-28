@@ -97,6 +97,13 @@ export function App() {
   const [sizes, setSizes] = createSignal(DEFAULT_SIZES);
   let keywordFilter: KeywordFilterHandle | undefined;
   let commandBar: CommandBarHandle | undefined;
+  // A `questkeep://search/…` link or `--search`: Find a game opens on its text.
+  createEffect(() => {
+    const text = store.commandSearch();
+    if (text === null) return;
+    store.setCommandSearch(null);
+    commandBar?.focus(text);
+  });
 
   // Wide window: the panel can dock beside the library; narrow: it overlays it as a flyout.
   const split = () => isSplitWidth(contentWidth(), breakpoint());

@@ -37,6 +37,7 @@ uuid = "1.28.0"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Registry"] }
 questkeep-tray-popup = { path = "../crates/questkeep-tray-popup" }
+winreg = "0.56.0"
 
 [lints]
 workspace = true

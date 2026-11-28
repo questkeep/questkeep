@@ -10,7 +10,9 @@ param(
   [switch]$Portable,
   # Demo data for screenshots (see docs/screenshots.md): implies -Portable; sign-ins stay in
   # memory, so no keyring account shows.
-  [switch]$Demo
+  [switch]$Demo,
+  # Arguments for the app itself, e.g. -AppArgs "--show","<game id>" to test links and --start.
+  [string[]]$AppArgs = @()
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -48,7 +50,7 @@ try {
     $env:QUESTKEEP_APP_VERSION = (node scripts/release/changeset.mjs dev-version).Trim()
   }
   Write-Host "Dev build presents version $env:QUESTKEEP_APP_VERSION"
-  pnpm tauri dev
+  if ($AppArgs.Count -gt 0) { pnpm tauri dev -- -- @AppArgs } else { pnpm tauri dev }
 } finally {
   Pop-Location
 }

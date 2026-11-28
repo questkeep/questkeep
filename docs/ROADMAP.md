@@ -124,6 +124,7 @@ popup's More menu, and hidden games in Explore.
 - Removing a store game can keep it out of later syncs ("Don't import again when syncing" in the Remove confirmation, ticked by default); Settings > Stores and accounts lists the excluded games with Import again. Removing a combined game removes all of its store copies.
 - Ctrl+K runs commands too: under the games, up to three matching commands (go to a page, view, plugin page or settings page, everything in the Questkeep menu such as Sync all or Sync › Steam, notifications, the selected game's action scripts).
 - Random game: the dice in the toolbar (or "Pick a random game" in Ctrl+K) picks a game from what the open view shows, only installed ones unless unticked, with Play, Open page and Pick another (every game once before repeats).
+- Start games from outside: `questkeep://start/<id>` (also `show` and `search`) and `--start <id>` (`--show`, `--search`); the game page shows the game ID with a copy menu for the ID, the start link and the start command. Start links only start installed games.
 
 ## Next
 
@@ -137,8 +138,8 @@ popup's More menu, and hidden games in Explore.
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
 - **Small gaps**: region, version and manual (path or URL) fields.
-- **URI protocol, CLI start and desktop shortcuts**: `questkeep://` start/show game/search,
-  `--start <id>`; enables Stream Deck, Steam shortcuts and launcher integrations.
+- **Desktop shortcuts**: create a desktop or Start menu shortcut for a game (with its icon) that
+  runs the start command.
 - **Multiple play actions per game**: file, URL, script and emulator actions, play and non-play
   (e.g. a config tool); the groundwork for emulation.
 - **Logos and trailers**: a logo image kind (Steam, SteamGridDB) and trailers on the game page;

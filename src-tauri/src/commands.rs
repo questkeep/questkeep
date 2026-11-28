@@ -958,11 +958,26 @@ pub fn take_update_request(updates: State<'_, Updates>) -> bool {
     updates.take_show_request()
 }
 
-/// The game whose page the tray asked the window to show (middle click or "Open game page" in
-/// the tray popup), once.
+/// The game whose page the tray or a link asked the window to show (middle click or "Open game
+/// page" in the tray popup, `questkeep://show/<id>`), once.
 #[tauri::command]
 pub fn take_game_page_request() -> Option<String> {
-    crate::tray::take_game_page_request().map(|id| id.to_string())
+    crate::external::take_game_page_request().map(|id| id.to_string())
+}
+
+/// The text a link or `--search` asked Find a game to show, once.
+#[tauri::command]
+pub fn take_search_request() -> Option<String> {
+    crate::external::take_search_request()
+}
+
+/// A game's ID, start link and start command (the running executable with `--start`), for the
+/// game page's copy menu.
+#[tauri::command]
+pub fn game_links(id: String) -> CmdResult<questkeep_core::external::GameLinks> {
+    let id = parse_id(&id).map_err(|err| err.to_string())?;
+    let exe = std::env::current_exe().map_err(|err| err.to_string())?;
+    Ok(questkeep_core::external::game_links(id, &exe))
 }
 
 /// What the window showed before an update restarted the app (JSON from the UI), once.

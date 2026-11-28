@@ -2,7 +2,11 @@ import ArrowUpToLine from "lucide-solid/icons/arrow-up-to-line";
 import ActivityIcon from "lucide-solid/icons/activity";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import Combine from "lucide-solid/icons/combine";
+import Copy from "lucide-solid/icons/copy";
 import Ellipsis from "lucide-solid/icons/ellipsis";
+import Hash from "lucide-solid/icons/hash";
+import Link from "lucide-solid/icons/link";
+import SquareTerminal from "lucide-solid/icons/square-terminal";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import ExternalLink from "lucide-solid/icons/external-link";
@@ -58,10 +62,12 @@ import {
 import {
   gameAchievements,
   gameActivity,
+  gameLinks,
   gameNews,
   gamePlayerCount,
   launchProfiles,
 } from "../lib/api";
+import { errorMessage } from "../lib/errors";
 import { intlLocale, translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
 import { hasStoreCopy } from "../lib/removal";
@@ -250,6 +256,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
 
   const [storeMenu, setStoreMenu] = createSignal<PopoverAnchor | null>(null);
   const [moreMenu, setMoreMenu] = createSignal<PopoverAnchor | null>(null);
+  /** The copy menu of the game ID row: the ID, the start link or the start command. */
+  const [idMenu, setIdMenu] = createSignal<PopoverAnchor | null>(null);
   const [copyMenu, setCopyMenu] = createSignal<{ copy: GameCopy; anchor: PopoverAnchor } | null>(
     null,
   );
@@ -257,6 +265,35 @@ export function DetailsPanel(props: DetailsPanelProps) {
   const [editingSessions, setEditingSessions] = createSignal(false);
   let storeMenuButton: HTMLButtonElement | undefined;
   let moreButton: HTMLButtonElement | undefined;
+  let idButton: HTMLButtonElement | undefined;
+
+  async function copyLink(kind: "id" | "url" | "command") {
+    try {
+      const links = await gameLinks(props.game.id);
+      await navigator.clipboard.writeText(links[kind]);
+      store.pushToast("info", tr("copied"));
+    } catch (failure) {
+      store.pushToast("error", errorMessage(failure));
+    }
+  }
+
+  const idEntries = (): MenuEntry[] => [
+    {
+      label: tr("copyId"),
+      icon: () => <Hash class="icon" aria-hidden="true" />,
+      onSelect: () => void copyLink("id"),
+    },
+    {
+      label: tr("copyLink"),
+      icon: () => <Link class="icon" aria-hidden="true" />,
+      onSelect: () => void copyLink("url"),
+    },
+    {
+      label: tr("copyCommand"),
+      icon: () => <SquareTerminal class="icon" aria-hidden="true" />,
+      onSelect: () => void copyLink("command"),
+    },
+  ];
   const copyButtons = new Map<string, HTMLButtonElement>();
 
   const running = () => store.isRunning(props.game.id);
@@ -859,6 +896,27 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     {trSessions("edit")}
                   </button>
                 </dd>
+                <dt>{tr("gameId")}</dt>
+                <dd class="game-id">
+                  <code class="game-id__value" data-tooltip={props.game.id}>
+                    {props.game.id}
+                  </code>
+                  <button
+                    ref={(el) => (idButton = el)}
+                    type="button"
+                    class="icon-btn icon-btn--small"
+                    aria-label={tr("copyGameId")}
+                    data-tooltip={tr("copyGameId")}
+                    aria-haspopup="menu"
+                    aria-expanded={idMenu() !== null}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setIdMenu(idMenu() ? null : { rect, align: "start" });
+                    }}
+                  >
+                    <Copy class="icon" aria-hidden="true" />
+                  </button>
+                </dd>
               </dl>
             </Card>
           </div>
@@ -941,6 +999,20 @@ export function DetailsPanel(props: DetailsPanelProps) {
               if (returnFocus) moreButton?.focus();
             }}
             entries={moreEntries()}
+          />
+        )}
+      </Show>
+      <Show when={idMenu()}>
+        {(anchor) => (
+          <Menu
+            anchor={anchor()}
+            label={tr("copyGameId")}
+            inside={() => [idButton]}
+            onClose={(returnFocus) => {
+              setIdMenu(null);
+              if (returnFocus) idButton?.focus();
+            }}
+            entries={idEntries()}
           />
         )}
       </Show>

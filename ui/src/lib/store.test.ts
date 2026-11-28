@@ -149,6 +149,17 @@ describe("store", () => {
     expect(api.getGame).toHaveBeenCalledTimes(1);
   });
 
+  it("hands a search from a link to Find a game, once", async () => {
+    vi.mocked(api.takeSearchRequest)
+      .mockResolvedValueOnce("hollow knight")
+      .mockResolvedValueOnce(null);
+    await store.showSearchRequest();
+    expect(store.commandSearch()).toBe("hollow knight");
+    store.setCommandSearch(null);
+    await store.showSearchRequest();
+    expect(store.commandSearch()).toBeNull();
+  });
+
   it("reloads plugins, stores and the game list on pluginsChanged", async () => {
     vi.mocked(api.listPlugins).mockResolvedValue([makePlugin({ id: "p" })]);
     vi.mocked(api.listProviders).mockResolvedValue([makeProvider({ id: "p" })]);

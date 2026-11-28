@@ -108,9 +108,9 @@ const RECENT_COUNT = 5;
 
 const optionId = (index: number) => `command-result-${index}`;
 
-/** What the app's Ctrl+K shortcut needs. */
+/** What the app's Ctrl+K shortcut needs; `text` opens the bar on a search (a link). */
 export interface CommandBarHandle {
-  focus: () => void;
+  focus: (text?: string) => void;
 }
 
 /**
@@ -170,9 +170,15 @@ export function CommandBar(props: {
   let seq = 0;
 
   props.ref?.({
-    focus: () => {
+    focus: (value) => {
       input?.focus();
-      show();
+      if (value === undefined) {
+        show();
+        return;
+      }
+      setText(value);
+      setOpen(true);
+      void load(value);
     },
   });
 

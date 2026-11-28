@@ -25,6 +25,9 @@ use tauri::{AppHandle, Manager, Wry};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::external::launch;
+#[cfg(windows)]
+use crate::external::open_game_page;
 use crate::i18n::{self, Lang};
 use crate::window::{self, Lifecycle};
 
@@ -480,31 +483,6 @@ impl questkeep_tray_popup::PopupHost for PopupHost {
     }
 }
 
-/// A game page the tray asked the window to show, kept until the window takes it (a window
-/// that waited in the tray is built first and asks once it has loaded).
-static GAME_PAGE: Mutex<Option<Uuid>> = Mutex::new(None);
-/// Tells a loaded window that [`GAME_PAGE`] has a game for it.
-#[cfg(windows)]
-const SHOW_GAME_EVENT: &str = "show-game";
-
-/// The game page the tray asked for since the last call, if any.
-pub fn take_game_page_request() -> Option<Uuid> {
-    GAME_PAGE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .take()
-}
-
-/// Brings the window to the front on the game's page.
-#[cfg(windows)]
-fn open_game_page(app: &AppHandle, id: Uuid) {
-    use tauri::Emitter;
-    *GAME_PAGE.lock().unwrap_or_else(PoisonError::into_inner) = Some(id);
-    window::show_main_window(app);
-    // A window that is already loaded hears the event; a new one asks when it has loaded.
-    let _ = app.emit(SHOW_GAME_EVENT, ());
-}
-
 #[cfg(windows)]
 fn popup_data(app: &AppHandle) -> questkeep_tray_popup::PopupData {
     use questkeep_tray_popup::{LauncherTarget, PopupData, PopupGame, PopupGames, PopupLauncher};
@@ -590,28 +568,6 @@ fn on_menu_event(app: &AppHandle, id: &str) {
             }
         }
     }
-}
-
-/// Launches a game like the `launch_game` command, with a launch profile or its default; a
-/// failure is logged and, if the window is open, shown there as an error toast.
-fn launch(app: &AppHandle, id: Uuid, profile: Option<Uuid>) {
-    let Some(state) = app.try_state::<Arc<AppState>>() else {
-        return;
-    };
-    let state = Arc::clone(&state);
-    std::thread::spawn(move || {
-        let result = state
-            .library
-            .launch_target(id, profile)
-            .and_then(|game| state.launcher.launch(&game));
-        if let Err(err) = result {
-            tracing::warn!(%err, %id, "launching from the tray failed");
-            state.library.events().publish(CoreEvent::GameError {
-                id,
-                message: err.to_string(),
-            });
-        }
-    });
 }
 
 /// Opens a store's launcher like the `open_launcher` command; a failure is logged.
