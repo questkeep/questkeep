@@ -15,8 +15,23 @@ import {
   setCargoLockVersions,
   setJsonVersion,
   setTomlVersion,
+  sortChangesets,
   updaterPlatforms,
 } from "./lib.mjs";
+
+test("sortChangesets orders by last modification, ties by file name", () => {
+  const input = [
+    { file: "aa.md", modified: 300 },
+    { file: "ff.md", modified: 100 },
+    { file: "cc.md", modified: 200 },
+    { file: "bb.md", modified: 200 },
+  ];
+  assert.deepEqual(
+    sortChangesets(input).map((c) => c.file),
+    ["ff.md", "bb.md", "cc.md", "aa.md"],
+  );
+  assert.equal(input[0].file, "aa.md");
+});
 
 test("parseSemver is strict", () => {
   assert.deepEqual(parseSemver("1.22.3"), { major: 1, minor: 22, patch: 3 });

@@ -85,7 +85,12 @@ export function nextVersion(current, changesets) {
 
 const HEADINGS = { major: "Major changes", minor: "Minor changes", patch: "Patch changes" };
 
-/** Markdown release notes grouped by bump, one bullet per changeset. */
+/** Changesets ordered by `modified` (oldest first), ties by file name. Returns a new array. */
+export function sortChangesets(changesets) {
+  return [...changesets].sort((a, b) => a.modified - b.modified || a.file.localeCompare(b.file));
+}
+
+/** Markdown release notes grouped by bump, one bullet per changeset, in the given order. */
 export function renderNotes(changesets) {
   const sections = [];
   for (const bump of BUMPS) {

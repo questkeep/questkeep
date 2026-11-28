@@ -27,6 +27,7 @@ import {
   setCargoLockVersions,
   setJsonVersion,
   setTomlVersion,
+  sortChangesets,
 } from "./lib.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -51,17 +52,31 @@ function currentVersion() {
   return currentVersionFromTags(out.split(/\r?\n/).filter(Boolean));
 }
 
-/** Pending changesets as `{ file, bump, body }`, sorted by file name. Throws on malformed files. */
+/**
+ * When a changeset was last modified, in seconds: the time of the last commit that touched it, or
+ * the file's mtime while it is uncommitted or changed. Not the mtime alone: a fresh checkout (the
+ * Release workflow) gives every file the same one.
+ */
+function lastModified(file) {
+  const rel = `.changeset/${file}`;
+  const git = (args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const dirty = git(["status", "--porcelain", "--", rel]) !== "";
+  const committed = dirty ? "" : git(["log", "-1", "--format=%ct", "--", rel]);
+  if (committed) return Number(committed);
+  return Math.floor(fs.statSync(path.join(changesetDir, file)).mtimeMs / 1000);
+}
+
+/** Pending changesets as `{ file, bump, body, modified }`, oldest change first. Throws on malformed files. */
 function pendingChangesets() {
   if (!fs.existsSync(changesetDir)) return [];
-  return fs
+  const changesets = fs
     .readdirSync(changesetDir)
     .filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
-    .sort()
     .map((file) => {
       const text = fs.readFileSync(path.join(changesetDir, file), "utf8");
-      return { file, ...parseChangeset(text, `.changeset/${file}`) };
+      return { file, ...parseChangeset(text, `.changeset/${file}`), modified: lastModified(file) };
     });
+  return sortChangesets(changesets);
 }
 
 function readRel(rel) {
