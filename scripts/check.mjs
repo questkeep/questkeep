@@ -18,6 +18,7 @@ const steps = [
       ]
     : []),
   ["release scripts", "node", ["--test", "scripts/release/*.test.mjs"], root],
+  ["changeset names", "node", ["scripts/release/changeset.mjs", "check"], root],
   ["rustfmt", "cargo", ["fmt", "--all", "--check"], root],
   ["clippy", "cargo", ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], root],
   ["cargo test", "cargo", ["test", "--workspace"], root],

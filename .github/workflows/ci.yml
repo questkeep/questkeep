@@ -193,5 +193,5 @@ jobs:
           elif printf '%s\n' "$changed" | grep -Eq '^\.changeset/.+\.md$'; then
             echo "Changeset found."
           else
-            echo "::warning title=No changeset::This pull request changes code but adds no changeset. If the change is user-visible, run 'pnpm changeset add <major|minor|patch> \"summary\"' (see docs/RELEASING.md)."
+            echo "::warning title=No changeset::This pull request changes code but adds no changeset. If the change is user-visible, run 'pnpm changeset add <major|minor|patch> \"summary\" --slug <words>' (see .changeset/README.md)."
           fi

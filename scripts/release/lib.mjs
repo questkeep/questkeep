@@ -85,7 +85,32 @@ export function nextVersion(current, changesets) {
 
 const HEADINGS = { major: "Major changes", minor: "Minor changes", patch: "Patch changes" };
 
-/** Markdown release notes grouped by bump, one bullet per changeset. */
+const CHANGESET_NAME = /^\d{14}-[a-z0-9]+(-[a-z0-9]+)*\.md$/;
+
+/** Whether a changeset file follows `yyyyMMddHHmmss-<slug>.md`, the name that orders it. */
+export function isChangesetFileName(file) {
+  return CHANGESET_NAME.test(file);
+}
+
+/**
+ * The file name for a new changeset: the UTC time as `yyyyMMddHHmmss`, then up to six words of
+ * `text` (the summary or a chosen slug) in lowercase ASCII, joined by `-`.
+ */
+export function changesetFileName(date, text) {
+  const stamp = date.toISOString().replace(/\D/g, "").slice(0, 14);
+  const words = text
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/ß/g, "ss")
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 6);
+  const slug = words.join("-").slice(0, 50).replace(/-+$/, "") || "change";
+  return `${stamp}-${slug}.md`;
+}
+
+/** Markdown release notes grouped by bump, one bullet per changeset, in the given order. */
 export function renderNotes(changesets) {
   const sections = [];
   for (const bump of BUMPS) {

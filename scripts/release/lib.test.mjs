@@ -16,7 +16,27 @@ import {
   setJsonVersion,
   setTomlVersion,
   updaterPlatforms,
+  changesetFileName,
+  isChangesetFileName,
 } from "./lib.mjs";
+
+test("changesetFileName puts the UTC time before a short slug", () => {
+  const date = new Date(Date.UTC(2026, 10, 28, 9, 5, 7));
+  assert.equal(
+    changesetFileName(date, 'Random game: the dice in the library toolbar (or "Pick")'),
+    "20261128090507-random-game-the-dice-in-the.md",
+  );
+  assert.equal(changesetFileName(date, "Größere Überschrift"), "20261128090507-grossere-uberschrift.md");
+  assert.equal(changesetFileName(date, "…"), "20261128090507-change.md");
+  assert.equal(changesetFileName(date, "x".repeat(80)).length, "20261128090507-".length + 50 + 3);
+});
+
+test("isChangesetFileName accepts only timestamped names", () => {
+  assert.ok(isChangesetFileName("20261128090507-random-game.md"));
+  for (const bad of ["e8c260ac.md", "2026112809-x.md", "20261128090507-.md", "20261128090507-A.md"]) {
+    assert.ok(!isChangesetFileName(bad), bad);
+  }
+});
 
 test("parseSemver is strict", () => {
   assert.deepEqual(parseSemver("1.22.3"), { major: 1, minor: 22, patch: 3 });

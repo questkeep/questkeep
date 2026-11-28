@@ -47,7 +47,8 @@ fn https_host(url: &str) -> Option<String> {
 fn default_name(action: &PlayAction) -> String {
     let target = action.target.trim();
     match action.kind {
-        ActionKind::File => Path::new(target)
+        // Both separators on every system: a library from a Windows backup keeps its `\` paths.
+        ActionKind::File => Path::new(target.rsplit(['/', '\\']).next().unwrap_or(target))
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .filter(|s| !s.is_empty())
